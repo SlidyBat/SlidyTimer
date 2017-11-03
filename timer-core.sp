@@ -34,6 +34,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 {
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
 	CreateNative( "Timer_StopTimer", Native_StopTimer );
+	CreateNative( "Timer_FinishTimer", Native_FinishTiemr );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
 	RegPluginLibrary( "timer-core" );
@@ -153,4 +154,9 @@ public int Native_GetDatabase( Handle handler, int numParams )
 public int Native_StopTimer( Handle handler, int numParams )
 {
 	StartTimer( GetNativeCell( 1 ) );
+}
+
+public int Native_FinishTimer( Handle handler, int numParams )
+{
+	FinishTimer( GetNativeCell( 1 ) );
 }

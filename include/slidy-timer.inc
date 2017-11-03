@@ -84,6 +84,22 @@ forward void Timer_OnExitZone( int client, int zone_id, ZoneType zoneType, ZoneT
 native void Timer_GetDatabase( Database& handle );
 
 /**
+ * Stops clients timer
+ *
+ * @param client					Client index.
+ * @noreturn
+ */
+native void Timer_StopTimer( int client );
+
+/**
+ * Finishes client timer, as it would when client enters end zone/finishes map
+ *
+ * @param client					Client index.
+ * @noreturn
+ */
+native void Timer_FinishTimer( int client );
+
+/**
  * Gets zone type client is currently in
  *
  * @param client					Client index.
@@ -113,8 +129,10 @@ public SharedPlugin __pl_slidy_timer =
 #if !defined REQUIRE_PLUGIN
 public void __pl_slidy_timer_SetNTVOptional()
 {
-	MarkNativeAsOptional("Timer_GetDatabase");
-	MarkNativeAsOptional("Timer_GetClientZoneType");
-	MarkNativeAsOptional("Timer_GetClientZoneTrack");
+	MarkNativeAsOptional( "Timer_GetDatabase" );
+	MarkNativeAsOptional( "Timer_FinishTimer" );
+	MarkNativeAsOptional( "Timer_StopTimer" );
+	MarkNativeAsOptional( "Timer_GetClientZoneType" );
+	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
 }
 #endif
