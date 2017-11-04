@@ -8,6 +8,14 @@
 
 #define TIMER_INTERVAL 0.1
 
+enum
+{
+	GlowSprite,
+	HaloSprite,
+	BlueLightning,
+	TOTAL_SPRITES
+}
+
 /* Forwards */
 Handle      g_hForward_OnEnterZone;
 Handle      g_hForward_OnExitZone;
@@ -19,11 +27,15 @@ char        g_cCurrentMap[PLATFORM_MAX_PATH];
 
 bool        g_bZoning[MAXPLAYERS + 1];
 int         g_iZoningStage[MAXPLAYERS + 1];
+ZoneTrack   g_ztCurrentSelectedTrack[MAXPLAYERS + 1];
 float       g_fZonePointCache[MAXPLAYERS + 1][2][3];
 
 bool        g_bSnapToWall[MAXPLAYERS + 1] = { true, ... };
+bool        g_bZoneEyeAngle[MAXPLAYERS + 1];
 
 int         g_nZoningPlayers;
+
+int         g_Sprites[TOTAL_SPRITES];
 
 ArrayList   g_aZones;
 
@@ -67,21 +79,29 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	return APLRes_Success;
 }
 
-public void OnClientDisconnnect( int client )
-{
-	StopZoning( client );
-	g_bSnapToWall[client] = true;
-}
-
 public void OnMapStart()
 {
 	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
+	
+	g_Sprites[GlowSprite] = PrecacheModel( "materials/sprites/blueglow1.vmt" );
+	g_Sprites[HaloSprite] = PrecacheModel( "materials/sprites/glow01.vmt" );
+	g_Sprites[BlueLightning] = PrecacheModel( "materials/sprites/trails/bluelightningscroll3.vmt" );
+	
+	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vmt" );
+	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vtf" );
 }
 
 public void OnMapEnd()
 {
 	g_aZones.Clear();
 	g_bLoaded = false;
+}
+
+public void OnClientDisconnnect( int client )
+{
+	StopZoning( client );
+	g_bSnapToWall[client] = true;
+	g_bZoneEyeAngle[client] = false;
 }
 
 void StartZoning( int client )
@@ -152,7 +172,13 @@ void OpenCreateZoneMenu( int client )
 	}
 	else
 	{
-		// zone saving
+		Format( buffer, sizeof( buffer ), "Select Track: %s\n \n", g_cZoneTrackNames[g_ztCurrentSelectedTrack[client]] );
+		menu.AddItem( "track", buffer );
+		
+		for( int i = 0; i < view_as<int>( TOTAL_ZONE_TYPES ); i++ )
+		{
+			menu.AddItem( g_cZoneTypeNames[i], g_cZoneTypeNames[i] );
+		}
 	}
 }
 
@@ -164,11 +190,118 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 		{
 			GetClientAbsOrigin( param1, g_fZonePointCache[param1][g_iZoningStage[param1]] );
 			g_iZoningStage[param1]++;
+			
+			OpenCreateZoneMenu( param1 );
+		}
+		else
+		{
+			switch( param2 )
+			{
+				case 0: // Clicked "Select Track"
+				{
+					g_ztCurrentSelectedTrack[param1]++;
+					
+					if( g_ztCurrentSelectedTrack[param1] == TOTAL_ZONE_TRACKS )
+					{
+						g_ztCurrentSelectedTrack[param1] = ZT_Main;
+					}
+					
+					OpenCreateZoneMenu( param1 );
+				}
+				default:
+				{
+					any zone[ZONE_DATA];
+					
+					zone[ZD_ZoneType] = view_as<ZoneType>( param2 - 1 );
+					zone[ZD_ZoneTrack] = g_ztCurrentSelectedTrack[param1];
+					
+					for( int i = 0; i < 3; i++ )
+					{
+						zone[ZD_x1 + i] = g_fZonePointCache[param1][0][i];
+						zone[ZD_x2 + i] = g_fZonePointCache[param1][1][i];
+					}
+					
+					// SQL_AddZone( zone );
+					// TODO: implement zone saving to db
+					g_iZoningStage[param1] = 0;
+					OpenCreateZoneMenu( param1 );
+				}
+			}
+			
 		}
 	}
 	else if( action == MenuAction_End )
 	{
+		StopZoning( param1 );
 		delete menu;
+	}
+}
+
+void GetZoningPoint( int client, float pos[3] )
+{
+	if( g_bZoneEyeAngle[client] )
+	{
+		GetEyeAnglePosition( client, pos );
+	}
+	else
+	{
+		GetClientAbsOrigin( client, pos );
+	}
+
+	SnapToGrid( pos, 1.0 ); // SNAPS TO GRID, MIGHT MAKE SETTING LATER
+	
+	// TODO: maybe implement zone to edge
+
+	if( g_bSnapToWall[client] )
+	{
+		GetWallSnapPosition( client, pos );
+	}
+}
+
+public void SnapToGrid( float pos[3], float gridsnap )
+{
+	for( int i = 0; i < 2; i++ )
+	{
+		pos[i] = RoundFloat( pos[i] / gridsnap ) * gridsnap;
+	}
+}
+
+public void GetEyeAnglePosition( int client, float pos[3] )
+{
+	float eyePos[3], angles[3];
+
+	GetClientEyeAngles( client, angles );
+	GetClientEyePosition( client, eyePos );
+
+	TR_TraceRayFilter( eyePos, angles, MASK_SOLID, RayType_Infinite, TraceRay_NoClient, client );
+
+	if( TR_DidHit( INVALID_HANDLE ) )
+	{
+		TR_GetEndPosition( pos );
+	}
+}
+
+public bool TraceRay_NoClient( int entity, int contentsMask, any data )
+{
+	return ( entity != data && !IsValidClient( data ) );
+}
+
+public void GetWallSnapPosition( int client, float pos[3] )
+{
+	float end[3];
+	
+	for( int i = 0; i < 4; i++ )
+	{
+		end = pos;
+		end[i / 2] += ( i % 2 ) ? -23.0 : 23.0;
+
+		TR_TraceRayFilter( pos, end, MASK_SOLID, RayType_EndPoint, TraceRay_NoClient, client );
+
+		if( TR_DidHit() )
+		{
+			TR_GetEndPosition( end );
+			pos[i / 2] = end[i / 2];
+		}
 	}
 }
 
@@ -261,19 +394,9 @@ stock void ClearZones()
 	}
 }
 
-stock void DrawZone( any zone[ZONE_DATA], int client = 0 )
+stock void DrawZoneFromPoints( float points[8][3], int color[4] = { 255, 178, 0, 255 }, int client = 0 )
 {
-	float points[8][3];
-	
-	for( int i = 0; i < 3; i++ )
-	{
-		points[0][i] = zone[i];
-		points[7][i] = zone[i + 3];
-	}
-	
 	CreateZonePoints( points );
-	
-	// int color[] = { 255, 178, 0, 255 };
 	
 	for( int i = 0 , i2 = 3; i2 >= 0; i += i2-- )
 	{
@@ -281,8 +404,7 @@ stock void DrawZone( any zone[ZONE_DATA], int client = 0 )
 		{
 			if( j != 7 - i )
 			{
-				// TE_SetupBeamPoints( points[i], points[j], g_Sprites[0], g_Sprites[1], 0, 0, 1.0, 5.0, 5.0, 0, 0.0, color, 0);
-				// TODO: load zone sprites
+				TE_SetupBeamPoints( points[i], points[j], g_Sprites[BlueLightning], g_Sprites[HaloSprite], 0, 0, 1.0, 5.0, 5.0, 0, 0.0, color, 0);
 				
 				if(0 < client <= MaxClients)
 				{
@@ -295,6 +417,19 @@ stock void DrawZone( any zone[ZONE_DATA], int client = 0 )
 			}
 		}
 	}
+}
+
+stock void DrawZone( any zone[ZONE_DATA], int color[4] = { 255, 178, 0, 255 }, int client = 0 )
+{
+	float points[8][3];
+	
+	for( int i = 0; i < 3; i++ )
+	{
+		points[0][i] = zone[i];
+		points[7][i] = zone[i + 3];
+	}
+	
+	DrawZoneFromPoints( points, color, client );
 }
 
 
@@ -374,8 +509,46 @@ public Action Timer_Zones( Handle timer, any data )
 		{
 			if( g_bZoning[i] )
 			{
-				// DrawZoningPoints( i );
-				// TODO: implement function to draw points for players that are zoning
+				if( g_iZoningStage[i] == 0 )
+				{
+					float pos[3];
+					GetZoningPoint( i, pos );
+
+					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 0.1, 100 );
+					TE_SendToClient( i );
+				}
+				else if( g_iZoningStage[i] == 1 )
+				{
+					float pos[3];
+					GetZoningPoint( i, pos );
+					pos[2] += 150.0;
+					
+					float points[8][3];
+					points[0] = g_fZonePointCache[i][0];
+					points[7] = pos;
+					
+					DrawZoneFromPoints( points, { 255, 255, 102, 255 } );
+					
+					TE_SetupGlowSprite( g_fZonePointCache[i][0], g_Sprites[GlowSprite], 0.1, 0.1, 100 );
+					TE_SendToClient( i );
+					
+					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 0.1, 100 );
+					TE_SendToClient( i );
+				}
+				else
+				{
+					float points[8][3];
+					points[0] = g_fZonePointCache[i][0];
+					points[7] = g_fZonePointCache[i][1];
+					
+					DrawZoneFromPoints( points, { 255, 255, 102, 255 } );
+					
+					TE_SetupGlowSprite( g_fZonePointCache[i][0], g_Sprites[GlowSprite], 0.1, 0.1, 100 );
+					TE_SendToClient( i );
+					
+					TE_SetupGlowSprite( g_fZonePointCache[i][1], g_Sprites[GlowSprite], 0.1, 0.1, 100 );
+					TE_SendToClient( i );
+				}
 			}
 		}
 	}
