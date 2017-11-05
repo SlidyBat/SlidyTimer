@@ -13,6 +13,7 @@ enum
 	GlowSprite,
 	HaloSprite,
 	BlueLightning,
+	Barrel,
 	TOTAL_SPRITES
 }
 
@@ -53,7 +54,6 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	CreateTimer( TIMER_INTERVAL, Timer_Zones, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE ); // creates timer that handles zone drawing
 	g_aZones = new ArrayList( ZONE_DATA ); // arraylist that holds all current map zone data
 	
 	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
@@ -61,10 +61,17 @@ public void OnPluginStart()
 	// Commands
 	RegAdminCmd( "sm_zone", Command_Zone, ADMFLAG_CHANGEMAP );
 	RegAdminCmd( "sm_zones", Command_Zone, ADMFLAG_CHANGEMAP );
+	RegConsoleCmd( "sm_test", Command_Test );
 	
 	// Forwards
 	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+
+	if( LibraryExists( "timer-core" ) )
+	{
+		Timer_GetDatabase( g_hDatabase );
+		SetSQLInfo();
+	}
 }
 
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
@@ -79,6 +86,15 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	return APLRes_Success;
 }
 
+public void OnLibraryAdded( const char[] name )
+{
+	if(StrEqual(name, "timer-core"))
+	{
+		Timer_GetDatabase( g_hDatabase );
+		SetSQLInfo();
+	}
+}
+
 public void OnMapStart()
 {
 	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
@@ -86,9 +102,12 @@ public void OnMapStart()
 	g_Sprites[GlowSprite] = PrecacheModel( "materials/sprites/blueglow1.vmt" );
 	g_Sprites[HaloSprite] = PrecacheModel( "materials/sprites/glow01.vmt" );
 	g_Sprites[BlueLightning] = PrecacheModel( "materials/sprites/trails/bluelightningscroll3.vmt" );
+	g_Sprites[Barrel] = PrecacheModel( "models/props/de_train/barrel.mdl" );
 	
 	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vmt" );
 	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vtf" );
+	
+	CreateTimer( TIMER_INTERVAL, Timer_DrawZones, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE );
 }
 
 public void OnMapEnd()
@@ -106,9 +125,12 @@ public void OnClientDisconnnect( int client )
 
 void StartZoning( int client )
 {
-	g_bZoning[client] = true;
-	g_nZoningPlayers++;
-	g_iZoningStage[client] = 0;
+	if( g_bZoning[client] == false )
+	{
+		g_bZoning[client] = true;
+		g_nZoningPlayers++;
+		g_iZoningStage[client] = 0;
+	}
 	
 	OpenCreateZoneMenu( client );
 }
@@ -145,7 +167,7 @@ void OpenZonesMenu( int client )
 	char buffer[128];
 	Menu menu = new Menu( ZonesMenuHandler );
 	
-	Format( buffer, sizeof( buffer ), "%s - Zones menu" );
+	Format( buffer, sizeof( buffer ), "Timer - Zones menu" );
 	menu.SetTitle( buffer );
 	
 	menu.AddItem( "add", "Create zone" );
@@ -204,6 +226,8 @@ void OpenCreateZoneMenu( int client )
 			menu.AddItem( zonename, zonename );
 		}
 	}
+	
+	menu.Display( client, MENU_TIME_FOREVER );
 }
 
 public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int param2 )
@@ -212,7 +236,13 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 	{
 		if( g_iZoningStage[param1] < 2 )
 		{
-			GetClientAbsOrigin( param1, g_fZonePointCache[param1][g_iZoningStage[param1]] );
+			GetZoningPoint( param1, g_fZonePointCache[param1][g_iZoningStage[param1]] );
+			
+			if( g_iZoningStage[param1] == 1 )
+			{
+				g_fZonePointCache[param1][1][2] += 150.0;
+			}
+			
 			g_iZoningStage[param1]++;
 			
 			OpenCreateZoneMenu( param1 );
@@ -246,9 +276,12 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 			
 		}
 	}
-	else if( action == MenuAction_End )
+	else if( action == MenuAction_Cancel )
 	{
 		StopZoning( param1 );
+	}
+	else if( action == MenuAction_End )
+	{
 		delete menu;
 	}
 }
@@ -435,7 +468,7 @@ stock void DrawZoneFromPoints( float points[8][3], int color[4] = { 255, 178, 0,
 		{
 			if( j != 7 - i )
 			{
-				TE_SetupBeamPoints( points[i], points[j], g_Sprites[BlueLightning], g_Sprites[HaloSprite], 0, 0, 1.0, 5.0, 5.0, 0, 0.0, color, 0);
+				TE_SetupBeamPoints( points[i], points[j], g_Sprites[BlueLightning], g_Sprites[HaloSprite], 0, 0, 0.1, 5.0, 5.0, 0, 0.0, color, 0);
 				
 				if(0 < client <= MaxClients)
 				{
@@ -456,8 +489,8 @@ stock void DrawZone( any zone[ZONE_DATA], int color[4] = { 255, 178, 0, 255 }, i
 	
 	for( int i = 0; i < 3; i++ )
 	{
-		points[0][i] = zone[i];
-		points[7][i] = zone[i + 3];
+		points[0][i] = zone[ZD_x1 + i];
+		points[7][i] = zone[ZD_x2 + i];
 	}
 	
 	DrawZoneFromPoints( points, color, client );
@@ -529,10 +562,17 @@ public Action Command_Zone( int client, int args ) // TODO: determine if players
 	return Plugin_Handled;
 }
 
+public Action Command_Test( int client, int args ) // TODO: determine if players should be permitted to zone before zones have been loaded
+{
+	PrintZones();
+	
+	return Plugin_Handled;
+}
+
 
 /* Timers */
 
-public Action Timer_Zones( Handle timer, any data )
+public Action Timer_DrawZones( Handle timer, any data )
 {
 	if( g_nZoningPlayers > 0 )
 	{
@@ -616,11 +656,36 @@ public void OnDatabaseLoaded()
 {
 	Timer_GetDatabase( g_hDatabase );
 	SQL_CreateTables();
-	SQL_LoadZones();
+}
+
+public Action CheckForSQLInfo( Handle timer, any data )
+{
+	return SetSQLInfo();
+}
+
+Action SetSQLInfo()
+{
+	if( g_hDatabase == null )
+	{
+		Timer_GetDatabase( g_hDatabase );
+		CreateTimer( 0.5, CheckForSQLInfo );
+	}
+	else
+	{
+		SQL_CreateTables();
+		return Plugin_Stop;
+	}
+
+	return Plugin_Continue;
 }
 
 void SQL_CreateTables()
 {
+	if( g_bLoaded )
+	{
+		return;
+	}
+	
 	Transaction txn = SQL_CreateTransaction();
 	
 	char query[512];
@@ -628,7 +693,7 @@ void SQL_CreateTables()
 	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` (mapname CHAR(128) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
 	txn.AddQuery( query );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname CHAR(128) NOT NULL, uid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `uid`, `subindex`, `style`, `zonegroup`));" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname CHAR(128) NOT NULL, uid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `uid`, `subindex`, `style`, `zonetrack`));" );
 	txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
@@ -648,7 +713,7 @@ void SQL_LoadZones()
 {
 	char query[512];
 	
-	Format( query, sizeof( query ), "SELECT (zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) FROM `t_zones` WHERE mapname = '%s' ORDER BY `zoneid` ASC", g_cCurrentMap );
+	Format( query, sizeof( query ), "SELECT zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z FROM `t_zones` WHERE mapname = '%s' ORDER BY `zoneid` ASC", g_cCurrentMap );
 	g_hDatabase.Query( LoadZones_Callback, query, _, DBPrio_High );
 }
 
@@ -656,14 +721,13 @@ public void LoadZones_Callback( Database db, DBResultSet results, const char[] e
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (LogLoadZonesCallback) - %s", error );
+		LogError( "[SQL ERROR] (LoadZonesCallback) - %s", error );
 		return;
 	}
 	
 	if( results.RowCount > 0 )
 	{
 		ClearZones();
-		// any zone[ZONE_DATA];
 
 		while( results.FetchRow() )
 		{
@@ -703,15 +767,17 @@ void SQL_InsertZone( float pointA[3], float pointB[3], ZoneType zoneType, ZoneTr
 		}
 	}
 	
-	if( zoneType >= Zone_Checkpoint )
+	int id = GetZoneID( zoneType, zoneTrack );
+	PrintToServer( "%i", id );
+	
+	if( zoneType >= Zone_Checkpoint || id == -1 )
 	{
 		// insert the zone
-		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapname, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%s', '0', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%i')", g_cCurrentMap, subindex, view_as<int>( zoneType ), view_as<int>( zoneTrack ), pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
+		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapname, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%s', '0', '%i', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f')", g_cCurrentMap, subindex, view_as<int>( zoneType ), view_as<int>( zoneTrack ), pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
 	}
 	else
 	{
 		// replace current zone
-		int id = GetZoneID( zoneType, zoneTrack );
 		Format( query, sizeof( query ), "UPDATE `t_zones` SET a_x = '%.3f', a_y = '%.3f', a_z = '%.3f', b_x = '%.3f', b_y = '%.3f', b_z = '%.3f' WHERE zoneid = '%i'", pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2], id );
 	}
 	
@@ -728,7 +794,7 @@ public void InsertZone_Callback( Database db, DBResultSet results, const char[] 
 	
 	ClearZones();
 	SQL_LoadZones();
-}
+}	
 
 /* Stocks */
 
@@ -739,6 +805,22 @@ stock void CreateZonePoints( float point[8][3] )
 		for( int j = 0; j < 3; j++ )
 		{
 			point[i][j] = point[((i >> (2-j)) & 1) * 7][j];
+		}
+	}
+}
+
+stock void PrintZones()
+{
+	for( int i = 0; i < g_aZones.Length; i++ )
+	{
+		any zone[ZONE_DATA];
+		g_aZones.GetArray( i, zone );
+		
+		for( int j = 0; j < ZONE_DATA; j++ )
+		{
+			char buffer[512];
+			Format( buffer, sizeof( buffer ), "%i", zone[j] );
+			PrintToServer( buffer );
 		}
 	}
 }

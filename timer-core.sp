@@ -34,7 +34,6 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 {
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
 	CreateNative( "Timer_StopTimer", Native_StopTimer );
-	CreateNative( "Timer_FinishTimer", Native_FinishTiemr );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
 	RegPluginLibrary( "timer-core" );
@@ -66,26 +65,52 @@ void StopTimer( int client )
 
 void FinishTimer( int client )
 {
-	//float time = g_nPlayerFrames[client] * g_fFrameTime;
-	StopTimer( client );
-	//ZoneTrack track = Timer_GetClientZoneTrack( client );
+	if( !IsValidClient( client ) )
+	{
+		return;
+	}
 	
-	// save time for track
+	char sTime[64];
+	float time = g_nPlayerFrames[client] * g_fFrameTime;
+	Timer_FormatTime( time, sTime, sizeof( sTime ) );
+	
+	StopTimer( client );
+	
+	ZoneTrack track = Timer_GetClientZoneTrack( client );
+	char sZoneTrack[64];
+	Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
+	
+	char buffer[256];
+	Format( buffer, sizeof( buffer ), "[Timer] %N finished on %s timer in %ss", client, sZoneTrack, sTime );
+	PrintToChatAll( buffer );
 }
 
-public void OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack zoneTrack, int subindex )
+public void Timer_OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack zoneTrack, int subindex )
 {
-	if( zoneType == Zone_Start )
+	switch( zoneType )
 	{
-		StartTimer( client );
-	}
-	else if( zoneType == Zone_End && !g_bTimerPaused[client] && Timer_GetClientZoneTrack( client ) == zoneTrack )
-	{
-		FinishTimer( client );
-	}
-	else if( zoneType == Zone_Cheatzone && g_bTimerRunning[client] )
-	{
-		StopTimer( client );
+		case Zone_Start:
+		{
+			StartTimer( client );
+		}
+		case Zone_End:
+		{
+			if( !g_bTimerPaused[client] && Timer_GetClientZoneTrack( client ) == zoneTrack )
+			{
+				FinishTimer( client );
+			}
+		}
+		case Zone_Checkpoint:
+		{
+			// TODO: implement some checkpoint stuff MUCH LATER
+		}
+		case Zone_Cheatzone:
+		{
+			if( g_bTimerRunning[client] )
+			{
+				StopTimer( client );
+			}
+		}
 	}
 }
 
@@ -119,10 +144,11 @@ void SQL_CreateTables()
 	
 	char query[512];
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_players` ( uid INT NOT NULL AUTO_INCREMENT, steamid VARCHAR( 64 ) NOT NULL, lastname VARCHAR( 128 ) NOT NULL, lastserver VARCHAR( 8 ) NOT NULL, firstconnect INT( 16 ) NOT NULL, lastconnect INT( 16 ) NOT NULL, prestigetokens INT NOT NULL, season INT NOT NULL, vip INT( 3 ) NOT NULL, vipend INT NOT NULL, PRIMARY KEY ( `uid` ) );" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_players` ( uid INT NOT NULL AUTO_INCREMENT, steamid VARCHAR( 64 ) NOT NULL, lastname VARCHAR( 128 ) NOT NULL, firstconnect INT( 16 ) NOT NULL, lastconnect INT( 16 ) NOT NULL, PRIMARY KEY ( `uid` ) );" );
 	txn.AddQuery( query );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_records` ( mapname VARCHAR( 128 ) NOT NULL, uid INT NOT NULL, time INT( 8 ) NOT NULL, sync FLOAT NOT NULL, strafesync FLOAT NOT NULL, jumps INT NOT NULL, strafes INT NOT NULL, style INT NOT NULL, zonegroup INT NOT NULL, server VARCHAR( 18 ) NOT NULL, timestamp INT( 16 ) NOT NULL, PRIMARY KEY ( `mapname`, `uid`, `style`, `zonegroup` ) );" );
+	// Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_records` ( mapname VARCHAR( 128 ) NOT NULL, uid INT NOT NULL, time INT( 8 ) NOT NULL, sync FLOAT NOT NULL, strafesync FLOAT NOT NULL, jumps INT NOT NULL, strafes INT NOT NULL, style INT NOT NULL, zonegroup INT NOT NULL, server VARCHAR( 18 ) NOT NULL, timestamp INT( 16 ) NOT NULL, PRIMARY KEY ( `mapname`, `uid`, `style`, `zonegroup` ) );" );
+	// put more thought into how you want to do this
 	txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
@@ -154,9 +180,4 @@ public int Native_GetDatabase( Handle handler, int numParams )
 public int Native_StopTimer( Handle handler, int numParams )
 {
 	StartTimer( GetNativeCell( 1 ) );
-}
-
-public int Native_FinishTimer( Handle handler, int numParams )
-{
-	FinishTimer( GetNativeCell( 1 ) );
 }
