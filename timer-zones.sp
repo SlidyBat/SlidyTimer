@@ -370,6 +370,21 @@ stock void AddZone( const any zone[ZONE_DATA] )
 	}
 }
 
+stock int GetZoneID( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
+{
+	for( int i = 0; i < g_aZones.Length; i++ )
+	{
+		if( g_aZones.Get( i, ZD_ZoneType ) == zoneType
+			&& g_aZones.Get( i, ZD_ZoneTrack ) == zoneTrack
+			&& g_aZones.Get( i, ZD_ZoneSubindex ) == subindex )
+		{
+			return g_aZones.Get( i, ZD_ZoneId );
+		}
+	}
+	
+	return -1;
+}
+
 stock void ClearZones()
 {
 	if( g_aZones.Length )
@@ -594,10 +609,10 @@ void SQL_CreateTables()
 	
 	char query[512];
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` ( mapname VARCHAR( 128 ) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, zonetype INT NOT NULL, zonegroup INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, checkpointid INT NOT NULL, PRIMARY KEY ( `zoneid` ) );" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` (mapname VARCHAR( 128 ) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
 	txn.AddQuery( query );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` ( mapname VARCHAR( 128 ) NOT NULL, uid INT NOT NULL, checkpointid INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonegroup INT NOT NULL, PRIMARY KEY ( `mapname`, `uid`, `checkpointid`, `style`, `zonegroup` ) );" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname VARCHAR( 128 ) NOT NULL, uid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `uid`, `subindex`, `style`, `zonegroup`));" );
 	txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
@@ -653,6 +668,49 @@ public void LoadZones_Callback( Database db, DBResultSet results, const char[] e
 	}
 	
 	g_bLoaded = true;
+}
+
+void SQL_InsertZone( float pointA[3], float pointB[3], ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
+{
+	char query[512];
+	
+	// swap zones to ensure bottom point is pointA and top point is pointB
+	if( pointA[2] > pointB[2] )
+	{
+		float temp;
+		for( int i = 0; i < 3; i++ )
+		{
+			temp = pointA[i];
+			pointA[i] = pointB[i];
+			pointB[i] = temp;
+		}
+	}
+	
+	if( zoneType >= Zone_Checkpoint )
+	{
+		// insert the zone
+		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapname, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%s', '0', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%i')", g_cCurrentMap, subindex, view_as<int>( zoneType ), view_as<int>( zoneTrack ), pointsA[0], pointsA[1], pointsA[2], pointsB[0], pointsB[1], pointB[2] );
+	}
+	else
+	{
+		// replace current zone
+		int id = GetZoneID( zoneType, zoneTrack, subindex );
+		Format( query, sizeof( query ), "UPDATE `t_zones` SET a_x = '%.3f', a_y = '%.3f', a_z = '%.3f', b_x = '%.3f', b_y = '%.3f', b_z = '%.3f'", pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
+	}
+	
+	g_hDatabase.Query( InsertZoneCallback, query, _, DBPrio_High );
+}
+
+public void LoadZones_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (LoadZonesCallback) - %s", error );
+		return;
+	}
+	
+	ClearZones();
+	SQL_LoadZones();
 }
 
 /* Stocks */
