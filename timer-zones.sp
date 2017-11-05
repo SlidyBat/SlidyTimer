@@ -193,12 +193,15 @@ void OpenCreateZoneMenu( int client )
 	}
 	else
 	{
-		Format( buffer, sizeof( buffer ), "Select Track: %s\n \n", g_cZoneTrackNames[g_ztCurrentSelectedTrack[client]] );
+		char zonename[64];
+		Timer_GetZoneTrackName( g_ztCurrentSelectedTrack[client], zonename, sizeof( zonename ) );
+		Format( buffer, sizeof( buffer ), "Select Track: %s\n \n", zonename );
 		menu.AddItem( "track", buffer );
 		
 		for( int i = 0; i < view_as<int>( TOTAL_ZONE_TYPES ); i++ )
 		{
-			menu.AddItem( g_cZoneTypeNames[i], g_cZoneTypeNames[i] );
+			Timer_GetZoneTypeName( view_as<ZoneType>( i ), zonename, sizeof( zonename ) );
+			menu.AddItem( zonename, zonename );
 		}
 	}
 }

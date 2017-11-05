@@ -12,14 +12,30 @@ enum ZoneType
 	Zone_Start,
 	Zone_End,
 	Zone_Checkpoint,
-	Zone_Cheatzone
+	Zone_Cheatzone,
+	TOTAL_ZONE_TYPES
 }
+
+static char g_cZoneTypeNames[][] =
+{
+	"Start Zone",
+	"End Zone",
+	"Checkpoint",
+	"Cheatzone"
+};
 
 enum ZoneTrack
 {
-	Main,
-	Bonus
+	ZT_Main,
+	ZT_Bonus,
+	TOTAL_ZONE_TRACKS
 }
+
+static char g_cZoneTrackNames[][] =
+{
+	"Main",
+	"Bonus"
+};
 
 enum
 {
@@ -41,6 +57,53 @@ stock bool IsValidClient(int client, bool bAlive = false) // when bAlive is fals
 	return (client >= 1 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && !IsClientSourceTV(client) && (!bAlive || IsPlayerAlive(client)));
 }
 
+// from shavits because im not doing this
+stock void TimerFormatTime( float time, char[] newtime, int newtimesize, bool precise = true )
+{
+	float fTempTime = time;
+
+	if( fTempTime < 0.0 )
+	{
+		fTempTime = -fTempTime;
+	}
+
+	int iRounded = RoundToFloor( fTempTime );
+	float fSeconds = ( iRounded % 60 ) + fTempTime - iRounded;
+
+	char sSeconds[8];
+	FormatEx( sSeconds, 8, precise ? "%s%.03f" : "%s%.01f", ( fSeconds < 0.0 ) ? "-" : "", fSeconds );
+
+	if( fTempTime < 60.0 )
+	{
+		strcopy( newtime, newtimesize, sSeconds );
+	}
+	else
+	{
+		int iMinutes = ( iRounded / 60 );
+
+		if( fTempTime < 3600.0 )
+		{
+			FormatEx( newtime, newtimesize, "%s%d:%s%s", ( time < 0.0 )? "-" : "", iMinutes, ( fSeconds < 10 )? "0" : "", sSeconds );
+		}
+		else
+		{
+			iMinutes %= 60;
+			int iHours = ( iRounded / 3600 );
+
+			FormatEx( newtime, newtimesize, "%s%d:%s%d:%s%s", ( time < 0.0 ) ? "-" : "", iHours, ( iMinutes < 10 ) ? "0" : "", iMinutes, ( fSeconds < 10 )? "0" : "", sSeconds );
+		}
+	}
+}
+
+stock void Timer_GetZoneTypeName( ZoneType zoneType, char[] buffer, int maxlen )
+{
+	strcopy( buffer, maxlen, g_cZoneTypeNames[view_as<int>( zoneType )] );
+}
+
+stock void Timer_GetZoneTrackName( ZoneTrack zoneTrack, char[] buffer, int maxlen )
+{
+	strcopy( buffer, maxlen, g_cZoneTrackNames[view_as<int>( zoneTrack )] );
+}
 
 /**
  * Called when Database handle has been loaded by core timer plugin
@@ -84,22 +147,6 @@ forward void Timer_OnExitZone( int client, int zone_id, ZoneType zoneType, ZoneT
 native void Timer_GetDatabase( Database& handle );
 
 /**
- * Stops clients timer
- *
- * @param client					Client index.
- * @noreturn
- */
-native void Timer_StopTimer( int client );
-
-/**
- * Finishes client timer, as it would when client enters end zone/finishes map
- *
- * @param client					Client index.
- * @noreturn
- */
-native void Timer_FinishTimer( int client );
-
-/**
  * Gets zone type client is currently in
  *
  * @param client					Client index.
@@ -129,10 +176,8 @@ public SharedPlugin __pl_slidy_timer =
 #if !defined REQUIRE_PLUGIN
 public void __pl_slidy_timer_SetNTVOptional()
 {
-	MarkNativeAsOptional( "Timer_GetDatabase" );
-	MarkNativeAsOptional( "Timer_FinishTimer" );
-	MarkNativeAsOptional( "Timer_StopTimer" );
-	MarkNativeAsOptional( "Timer_GetClientZoneType" );
-	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
+	MarkNativeAsOptional("Timer_GetDatabase");
+	MarkNativeAsOptional("Timer_GetClientZoneType");
+	MarkNativeAsOptional("Timer_GetClientZoneTrack");
 }
 #endif
