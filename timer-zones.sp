@@ -231,10 +231,11 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 				}
 				default:
 				{
-					zoneType = view_as<ZoneType>( param2 - 1 );
-					zoneTrack = g_ztCurrentSelectedTrack[param1];
+					ZoneType zoneType = view_as<ZoneType>( param2 - 1 );
+					ZoneTrack zoneTrack = g_ztCurrentSelectedTrack[param1];
 					
-					SQL_InsertZone( g_fZonePointCache[param1][0], g_fZonePointCache[param1][1], zoneType, zoneTrack, GetZoneTypeCount( zoneType ) );
+					int subindex = ( zoneType >= Zone_Checkpoint ) ? GetZoneTypeCount( zoneType ) : 0;
+					SQL_InsertZone( g_fZonePointCache[param1][0], g_fZonePointCache[param1][1], zoneType, zoneTrack, subindex );
 					g_iZoningStage[param1] = 0;
 					OpenCreateZoneMenu( param1 );
 				}
@@ -329,13 +330,13 @@ stock void AddZone( const any zone[ZONE_DATA] )
 		SetEntityModel( entity, "models/props/de_train/barrel.mdl" );
 
 		char name[128];
-		Format( C_buffer, 512, "%i: Timer_Zone", index );
+		Format( name, sizeof( name ), "%i: Timer_Zone", index );
 
-		DispatchKeyValue( I_Entity, "spawnflags", "257" );
-		DispatchKeyValue( I_Entity, "StartDisabled", "0" );
-		DispatchKeyValue( I_Entity, "targetname", name );
+		DispatchKeyValue( entity, "spawnflags", "257" );
+		DispatchKeyValue( entity, "StartDisabled", "0" );
+		DispatchKeyValue( entity, "targetname", name );
 
-		if( DispatchSpawn( entity ) )
+		if( DispatchSpawn(entity) )
 		{
 			ActivateEntity( entity );
 			
@@ -345,8 +346,8 @@ stock void AddZone( const any zone[ZONE_DATA] )
 			
 			for( int i = 0; i < 3; i++ )
 			{
-				pointA[i] = zone[x1 + i];
-				pointB[i] = zone[x1 + i + 3];
+				pointA[i] = zone[ZD_x1 + i];
+				pointB[i] = zone[ZD_x2 + i];
 				midpoint[i] = ( pointA[i] + pointB[i] ) / 2.0;
 			}
 			midpoint[2] = pointA[2];
@@ -702,19 +703,19 @@ void SQL_InsertZone( float pointA[3], float pointB[3], ZoneType zoneType, ZoneTr
 	if( zoneType >= Zone_Checkpoint )
 	{
 		// insert the zone
-		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapname, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%s', '0', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%i')", g_cCurrentMap, subindex, view_as<int>( zoneType ), view_as<int>( zoneTrack ), pointsA[0], pointsA[1], pointsA[2], pointsB[0], pointsB[1], pointB[2] );
+		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapname, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%s', '0', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%i')", g_cCurrentMap, subindex, view_as<int>( zoneType ), view_as<int>( zoneTrack ), pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
 	}
 	else
 	{
 		// replace current zone
-		int id = GetZoneID( zoneType, zoneTrack, subindex );
-		Format( query, sizeof( query ), "UPDATE `t_zones` SET a_x = '%.3f', a_y = '%.3f', a_z = '%.3f', b_x = '%.3f', b_y = '%.3f', b_z = '%.3f'", pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
+		int id = GetZoneID( zoneType, zoneTrack );
+		Format( query, sizeof( query ), "UPDATE `t_zones` SET a_x = '%.3f', a_y = '%.3f', a_z = '%.3f', b_x = '%.3f', b_y = '%.3f', b_z = '%.3f' WHERE zoneid = '%i'", pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2], id );
 	}
 	
-	g_hDatabase.Query( InsertZoneCallback, query, _, DBPrio_High );
+	g_hDatabase.Query( InsertZone_Callback, query, _, DBPrio_High );
 }
 
-public void LoadZones_Callback( Database db, DBResultSet results, const char[] error, any data )
+public void InsertZone_Callback( Database db, DBResultSet results, const char[] error, any data )
 {
 	if( results == null )
 	{
