@@ -119,7 +119,28 @@ void StopZoning( int client )
 	g_nZoningPlayers--;
 }
 
-public void OpenZonesMenu( int client )
+int GetZoneTypeCount( ZoneType zoneType )
+{
+	int length = g_aZones.Length;
+	
+	if( !length )
+	{
+		return 0;
+	}
+	
+	int count = 0;
+	for( int i = 0; i < length; i++ )
+	{
+		if( g_aZones.Get( i, ZD_ZoneType ) == zoneType )
+		{
+			count++;
+		}
+	}
+	
+	return count;
+}
+
+void OpenZonesMenu( int client )
 {
 	char buffer[128];
 	Menu menu = new Menu( ZonesMenuHandler );
@@ -210,19 +231,10 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 				}
 				default:
 				{
-					any zone[ZONE_DATA];
+					zoneType = view_as<ZoneType>( param2 - 1 );
+					zoneTrack = g_ztCurrentSelectedTrack[param1];
 					
-					zone[ZD_ZoneType] = view_as<ZoneType>( param2 - 1 );
-					zone[ZD_ZoneTrack] = g_ztCurrentSelectedTrack[param1];
-					
-					for( int i = 0; i < 3; i++ )
-					{
-						zone[ZD_x1 + i] = g_fZonePointCache[param1][0][i];
-						zone[ZD_x2 + i] = g_fZonePointCache[param1][1][i];
-					}
-					
-					// SQL_AddZone( zone );
-					// TODO: implement zone saving to db
+					SQL_InsertZone( g_fZonePointCache[param1][0], g_fZonePointCache[param1][1], zoneType, zoneTrack, GetZoneTypeCount( zoneType ) );
 					g_iZoningStage[param1] = 0;
 					OpenCreateZoneMenu( param1 );
 				}
@@ -609,10 +621,10 @@ void SQL_CreateTables()
 	
 	char query[512];
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` (mapname VARCHAR( 128 ) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` (mapname CHAR(128) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
 	txn.AddQuery( query );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname VARCHAR( 128 ) NOT NULL, uid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `uid`, `subindex`, `style`, `zonegroup`));" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname CHAR(128) NOT NULL, uid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `uid`, `subindex`, `style`, `zonegroup`));" );
 	txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
@@ -632,7 +644,7 @@ void SQL_LoadZones()
 {
 	char query[512];
 	
-	Format( query, sizeof( query ), "SELECT * FROM `t_zones` WHERE mapname = '%s' ORDER BY `zonied` ASC", g_cCurrentMap );
+	Format( query, sizeof( query ), "SELECT (zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) FROM `t_zones` WHERE mapname = '%s' ORDER BY `zoneid` ASC", g_cCurrentMap );
 	g_hDatabase.Query( LoadZones_Callback, query, _, DBPrio_High );
 }
 
@@ -651,19 +663,20 @@ public void LoadZones_Callback( Database db, DBResultSet results, const char[] e
 
 		while( results.FetchRow() )
 		{
-			/* id,
-			index, // index used for zone types that can have more than one of same zone, ie. checkpoint/anticheat
-			Float:x1,
-			Float:y1,
-			Float:z1,
-			Float:x2,
-			Float:y2,
-			Float:z2,
-			ZoneType:type,
-			ZoneTrack:track
-			ZONE_DATA */
+			any zone[ZONE_DATA];
 			
-			// TODO: figure out how zones should be loaded
+			zone[ZD_ZoneId] = results.FetchInt( 0 );
+			zone[ZD_ZoneSubindex] = results.FetchInt( 1 );
+			zone[ZD_ZoneType] = view_as<ZoneType>( results.FetchInt( 2 ) );
+			zone[ZD_ZoneTrack] = view_as<ZoneType>( results.FetchInt( 3 ) );
+			zone[ZD_x1] = results.FetchFloat( 4 );
+			zone[ZD_y1] = results.FetchFloat( 5 );
+			zone[ZD_z1] = results.FetchFloat( 6 );
+			zone[ZD_x2] = results.FetchFloat( 7 );
+			zone[ZD_y2] = results.FetchFloat( 8 );
+			zone[ZD_z2] = results.FetchFloat( 9 );
+			
+			AddZone( zone );
 		}
 	}
 	
