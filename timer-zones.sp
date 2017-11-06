@@ -67,6 +67,8 @@ public void OnPluginStart()
 	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 
+	HookEvent( "round_start", Hook_RoundStartPost, EventHookMode_Post );
+	
 	if( LibraryExists( "timer-core" ) )
 	{
 		Timer_GetDatabase( g_hDatabase );
@@ -307,7 +309,7 @@ void GetZoningPoint( int client, float pos[3] )
 	}
 }
 
-public void SnapToGrid( float pos[3], float gridsnap )
+void SnapToGrid( float pos[3], float gridsnap )
 {
 	for( int i = 0; i < 2; i++ )
 	{
@@ -315,27 +317,7 @@ public void SnapToGrid( float pos[3], float gridsnap )
 	}
 }
 
-public void GetEyeAnglePosition( int client, float pos[3] )
-{
-	float eyePos[3], angles[3];
-
-	GetClientEyeAngles( client, angles );
-	GetClientEyePosition( client, eyePos );
-
-	TR_TraceRayFilter( eyePos, angles, MASK_SOLID, RayType_Infinite, TraceRay_NoClient, client );
-
-	if( TR_DidHit( INVALID_HANDLE ) )
-	{
-		TR_GetEndPosition( pos );
-	}
-}
-
-public bool TraceRay_NoClient( int entity, int contentsMask, any data )
-{
-	return ( entity != data && !IsValidClient( data ) );
-}
-
-public void GetWallSnapPosition( int client, float pos[3] )
+void GetWallSnapPosition( int client, float pos[3] )
 {
 	float end[3];
 	
@@ -354,11 +336,8 @@ public void GetWallSnapPosition( int client, float pos[3] )
 	}
 }
 
-stock void AddZone( const any zone[ZONE_DATA] )
+stock void AddZoneEntity( const any zone[ZONE_DATA], int index )
 {
-	int index = g_aZones.Length;
-	g_aZones.PushArray( zone );
-
 	int entity = CreateEntityByName( "trigger_multiple" );
 
 	if( IsValidEntity( entity ) )
@@ -419,6 +398,14 @@ stock void AddZone( const any zone[ZONE_DATA] )
 	}
 }
 
+stock void AddZone( const any zone[ZONE_DATA] )
+{
+	int index = g_aZones.Length;
+	g_aZones.PushArray( zone );
+
+	AddZoneEntity( zone, index );
+}
+
 stock int GetZoneID( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
 {
 	for( int i = 0; i < g_aZones.Length; i++ )
@@ -434,31 +421,51 @@ stock int GetZoneID( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
 	return -1;
 }
 
+stock void ClearZoneEntities()
+{
+	char name[512];
+	
+	for( int i = MaxClients + 1; i <= GetMaxEntities(); i++ )
+	{
+		if( IsValidEdict( i ) && IsValidEntity( i ) )
+		{
+			if( GetEntPropString( i, Prop_Data, "m_iName", name, sizeof( name ) ) )
+			{
+				if( StrContains( name, "Timer_Zone" ) > -1 )
+				{
+					AcceptEntityInput( i, "Kill" );
+				}
+			}
+		}
+	}
+}
+
+stock void ReloadZoneEntities()
+{
+	if( g_aZones.Length )
+	{
+		ClearZoneEntities();
+		
+		for( int i = 0; i < g_aZones.Length; i++ )
+		{
+			any zone[ZONE_DATA];
+			g_aZones.GetArray( i, zone );
+			
+			AddZoneEntity( zone, i );
+		}
+	}
+}
+
 stock void ClearZones()
 {
 	if( g_aZones.Length )
 	{
-		char name[512];
-	
-		for( int i = MaxClients + 1; i <= GetMaxEntities(); i++ )
-		{
-			if( IsValidEdict( i ) && IsValidEntity( i ) )
-			{
-				if( GetEntPropString( i, Prop_Data, "m_iName", name, sizeof( name ) ) )
-				{
-					if( StrContains( name, "Timer_Zone" ) > -1 )
-					{
-						AcceptEntityInput( i, "Kill" );
-					}
-				}
-			}
-		}
-		
+		ClearZoneEntities();
 		g_aZones.Clear();
 	}
 }
 
-stock void DrawZoneFromPoints( float points[8][3], int color[4] = { 255, 178, 0, 255 }, int client = 0 )
+stock void DrawZoneFromPoints( float points[8][3], const int color[4] = { 255, 178, 0, 255 }, int client = 0 )
 {
 	CreateZonePoints( points );
 	
@@ -483,7 +490,7 @@ stock void DrawZoneFromPoints( float points[8][3], int color[4] = { 255, 178, 0,
 	}
 }
 
-stock void DrawZone( any zone[ZONE_DATA], int color[4] = { 255, 178, 0, 255 }, int client = 0 )
+stock void DrawZone( const any zone[ZONE_DATA], const int color[4] = { 255, 178, 0, 255 }, int client = 0 )
 {
 	float points[8][3];
 	
@@ -498,6 +505,13 @@ stock void DrawZone( any zone[ZONE_DATA], int color[4] = { 255, 178, 0, 255 }, i
 
 
 /* Hooks */
+
+public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroadcast )
+{
+	ReloadZoneEntities(); // re-hook zones because hooks disappear on round start
+
+	// TODO: spawn clients here
+}
 
 public Action Entity_StartTouch( int caller, int activator )
 {
@@ -807,6 +821,26 @@ stock void CreateZonePoints( float point[8][3] )
 			point[i][j] = point[((i >> (2-j)) & 1) * 7][j];
 		}
 	}
+}
+
+public void GetEyeAnglePosition( int client, float pos[3] )
+{
+	float eyePos[3], angles[3];
+
+	GetClientEyeAngles( client, angles );
+	GetClientEyePosition( client, eyePos );
+
+	TR_TraceRayFilter( eyePos, angles, MASK_SOLID, RayType_Infinite, TraceRay_NoClient, client );
+
+	if( TR_DidHit( INVALID_HANDLE ) )
+	{
+		TR_GetEndPosition( pos );
+	}
+}
+
+public bool TraceRay_NoClient( int entity, int contentsMask, any data )
+{
+	return ( entity != data && !IsValidClient( data ) );
 }
 
 stock void PrintZones()
