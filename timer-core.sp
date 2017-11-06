@@ -53,7 +53,10 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnClientPutInServer( int client )
 {
-	sv_autobunnyhopping.ReplicateToClient( client, g_bAutoBhop[client] ? "1" : "0" );
+	if( !IsFakeClient( client ) )
+	{
+		sv_autobunnyhopping.ReplicateToClient( client, g_bAutoBhop[client] ? "1" : "0" );
+	}
 }
 
 public void OnPlayerRunCmd( int client, int& buttons )
@@ -119,7 +122,6 @@ public void Timer_OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack 
 	{
 		case Zone_Start:
 		{
-			StartTimer( client );
 		}
 		case Zone_End:
 		{
@@ -138,6 +140,26 @@ public void Timer_OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack 
 			{
 				StopTimer( client );
 			}
+		}
+	}
+}
+
+public void Timer_OnExitZone( int client, int id, ZoneType zoneType, ZoneTrack zoneTrack, int subindex )
+{
+	switch( zoneType )
+	{
+		case Zone_Start:
+		{
+			StartTimer( client );
+		}
+		case Zone_End:
+		{
+		}
+		case Zone_Checkpoint:
+		{
+		}
+		case Zone_Cheatzone:
+		{
 		}
 	}
 }
