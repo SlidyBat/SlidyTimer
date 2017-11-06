@@ -20,10 +20,17 @@ int         g_nPlayerFrames[MAXPLAYERS + 1];
 bool        g_bTimerRunning[MAXPLAYERS + 1]; // whether client timer is running or not, regardless of if its paused
 bool        g_bTimerPaused[MAXPLAYERS + 1];
 
+ConVar      sv_autobunnyhopping
+bool        g_bAutoBhop[MAXPLAYERS + 1];
+bool        g_bNoclip[MAXPLAYERS + 1];
+
 public void OnPluginStart()
 {
 	/* Forwards */
 	g_hForward_OnDatabaseReady = CreateGlobalForward( "Timer_OnDatabaseReady", ET_Event );
+	
+	/* Commands */
+	RegConsoleCmd( "sm_nc", Command_Noclip );
 	
 	SQL_DBConnect();
 	
@@ -37,15 +44,36 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
 	RegPluginLibrary( "timer-core" );
+	
+	sv_autobunnyhopping = FindConVar( "sv_autobunnyhopping" );
+	sv_autobunnyhopping.BoolValue = false;
 
 	return APLRes_Success;
 }
 
+public void OnClientPutInServer( int client )
+{
+	sv_autobunnyhopping.ReplicateToClient( client, g_bAutoBhop[client] ? "1" : "0" );
+}
+
 public void OnPlayerRunCmd( int client, int& buttons )
 {
-	if( g_bTimerRunning[client] && !g_bTimerPaused[client] )
+	if( IsValidClient( client, true ) )
 	{
-		g_nPlayerFrames[client]++;
+		if( g_bTimerRunning[client] && !g_bTimerPaused[client] )
+		{
+			g_nPlayerFrames[client]++;
+		}
+		
+		if( buttons & IN_JUMP )
+		{
+			if( !( GetEntityMoveType( client ) & MOVETYPE_LADDER )
+				&& !( GetEntityFlags( client ) & FL_ONGROUND )
+				&& ( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
+			{
+				buttons &= ~IN_JUMP;
+			}
+		}
 	}
 }
 
@@ -167,6 +195,23 @@ public void SQL_OnCreateTableFailure( Database db, any data, int numQueries, con
 void SQL_LoadPlayerData()
 {
 	// TODO: decide what to do here
+}
+
+
+/* Commands */
+
+public Action Command_Noclip( int client, int args )
+{
+	g_bNoclip[client] = !g_bNoclip[client];
+	
+	if( g_bNoclip[client] )
+	{
+		SetEntityMoveType( client, MOVETYPE_NOCLIP );
+	}
+	else
+	{
+		SetEntityMoveType( client, MOVETYPE_WALK );
+	}
 }
 
 
