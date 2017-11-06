@@ -57,8 +57,34 @@ stock bool IsValidClient(int client, bool bAlive = false) // when bAlive is fals
 	return (client >= 1 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && !IsClientSourceTV(client) && (!bAlive || IsPlayerAlive(client)));
 }
 
+stock void Timer_GetZoneColour( ZoneType zoneType, ZoneTrack zoneTrack, int colour[4] )
+{
+	colour[3] = 255;
+	switch( zoneType )
+	{
+		case Zone_Start:
+		{
+			colour[1] = 255;
+		}
+		case Zone_End:
+		{
+			colour[0] = 255;
+		}
+		case Zone_Checkpoint:
+		{
+			colour[0] = 255;
+			colour[1] = 178;
+		}
+	}
+	
+	if( zoneTrack == ZT_Bonus )
+	{
+		colour[2] = 255;
+	}
+}
+
 // from shavits because im not doing this
-stock void TimerFormatTime( float time, char[] newtime, int newtimesize, bool precise = true )
+stock void Timer_FormatTime( float time, char[] newtime, int newtimesize, bool precise = true )
 {
 	float fTempTime = time;
 
@@ -162,9 +188,17 @@ native ZoneType Timer_GetClientZoneType( int client );
  */
 native ZoneTrack Timer_GetClientZoneTrack( int client );
 
+/**
+ * Stops client timer
+ *
+ * @param client					Client index.
+ * @noreturn
+ */
+native void Timer_StopTimer( int client );
+
 public SharedPlugin __pl_slidy_timer =
 {
-	name = "slidy-timer",
+	name = "timer-core",
 	file = "timer-core.smx",
 #if defined REQUIRE_PLUGIN
 	required = 1
@@ -176,8 +210,9 @@ public SharedPlugin __pl_slidy_timer =
 #if !defined REQUIRE_PLUGIN
 public void __pl_slidy_timer_SetNTVOptional()
 {
-	MarkNativeAsOptional("Timer_GetDatabase");
-	MarkNativeAsOptional("Timer_GetClientZoneType");
-	MarkNativeAsOptional("Timer_GetClientZoneTrack");
+	MarkNativeAsOptional( "Timer_GetDatabase" );
+	MarkNativeAsOptional( "Timer_GetClientZoneType" );
+	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
+	MarkNativeAsOptional( "Timer_StopTimer" );
 }
 #endif

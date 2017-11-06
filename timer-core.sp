@@ -224,5 +224,5 @@ public int Native_GetDatabase( Handle handler, int numParams )
 
 public int Native_StopTimer( Handle handler, int numParams )
 {
-	StartTimer( GetNativeCell( 1 ) );
+	StopTimer( GetNativeCell( 1 ) );
 }
