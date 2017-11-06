@@ -1,4 +1,5 @@
 #include <sourcemod>
+#include <sdkhooks>
 #include <slidy-timer>
 #include <cstrike>
 
@@ -19,6 +20,22 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	SetConVars();
+}
+
+public void OnClientPostAdminCheck( int client )
+{
+	SDKHook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
+}
+
+public void OnClientDisconnect( int client )
+{
+	SDKUnhook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
+}
+
+public Action Hook_OnTakeDamageCallback( int victim, int& attacker, int& inflictor, float& damage, int& damagetype )
+{
+	damage = 0.0;
+	return Plugin_Handled;
 }
 
 public Action Command_Spec( int client, int args )
