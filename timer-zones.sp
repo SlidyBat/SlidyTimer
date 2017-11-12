@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
+#include <cstrike>
 #include <slidy-timer>
 
 #define TIMER_INTERVAL 0.1
@@ -39,6 +40,7 @@ int         g_nZoningPlayers;
 int         g_Sprites[TOTAL_SPRITES];
 
 ArrayList   g_aZones;
+ArrayList   g_aZoneSpawnCache;
 
 ZoneType    g_PlayerCurrentZoneType[MAXPLAYERS + 1];
 ZoneTrack   g_PlayerCurrentZoneTrack[MAXPLAYERS + 1];
@@ -55,6 +57,7 @@ public Plugin myinfo =
 public void OnPluginStart()
 {
 	g_aZones = new ArrayList( ZONE_DATA ); // arraylist that holds all current map zone data
+	g_aZoneSpawnCache = new ArrayList( 3 );
 	
 	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
 	
@@ -62,6 +65,13 @@ public void OnPluginStart()
 	RegAdminCmd( "sm_zone", Command_Zone, ADMFLAG_CHANGEMAP );
 	RegAdminCmd( "sm_zones", Command_Zone, ADMFLAG_CHANGEMAP );
 	RegConsoleCmd( "sm_test", Command_Test );
+	
+	RegConsoleCmd( "sm_r", Command_Restart );
+	RegConsoleCmd( "sm_restart", Command_Restart );
+	RegConsoleCmd( "sm_start", Command_Restart );
+	RegConsoleCmd( "sm_b", Command_Bonus );
+	RegConsoleCmd( "sm_bonus", Command_Bonus );
+	
 	
 	// Forwards
 	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
@@ -71,7 +81,7 @@ public void OnPluginStart()
 	
 	if( LibraryExists( "timer-core" ) )
 	{
-		Timer_GetDatabase( g_hDatabase );
+		g_hDatabase = Timer_GetDatabase();
 		SetSQLInfo();
 	}
 }
@@ -79,8 +89,9 @@ public void OnPluginStart()
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	// zone natives
-	CreateNative("Timer_GetClientZoneType", Native_GetClientZoneType);
-	CreateNative("Timer_GetClientZoneTrack", Native_GetClientZoneTrack);
+	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
+	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
+	CreateNative( "Timer_TeleportClientToZone", Native_TeleportClientToZone );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
 	RegPluginLibrary("timer-zones");
@@ -92,7 +103,7 @@ public void OnLibraryAdded( const char[] name )
 {
 	if(StrEqual(name, "timer-core"))
 	{
-		Timer_GetDatabase( g_hDatabase );
+		g_hDatabase = Timer_GetDatabase();
 		SetSQLInfo();
 	}
 }
@@ -115,6 +126,7 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	g_aZones.Clear();
+	g_aZoneSpawnCache.Clear();
 	g_bLoaded = false;
 }
 
@@ -199,6 +211,34 @@ public int ZonesMenuHandler( Menu menu, MenuAction action, int param1, int param
 	{
 		delete menu;
 	}
+}
+
+void TeleportClientToZone( int client, ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
+{
+	int index = GetZoneIndex( zoneType, zoneTrack, subindex );
+	
+	if( index == -1 )
+	{
+		char sZoneType[64], sZoneTrack[64];
+		Timer_GetZoneTypeName( zoneType, sZoneType, sizeof( sZoneType ) );
+		Timer_GetZoneTrackName( zoneTrack, sZoneTrack, sizeof( sZoneTrack ) );
+		PrintToChat( client, "[Timer] %s %s zone does not exist", sZoneTrack, sZoneType );
+		
+		return;
+	}
+	
+	if( GetClientTeam( client ) == CS_TEAM_SPECTATOR )
+	{
+		ChangeClientTeam( client, CS_TEAM_CT );
+	}
+	
+	float spawn[3];
+	g_aZoneSpawnCache.GetArray( index, spawn );
+	
+	Timer_StopTimer( client );
+	g_PlayerCurrentZoneType[client] = ZoneType;
+	g_PlayerCurrentZoneTrack[client] = ZoneTrack;
+	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
 }
 
 void OpenCreateZoneMenu( int client )
@@ -402,11 +442,20 @@ stock void AddZone( const any zone[ZONE_DATA] )
 {
 	int index = g_aZones.Length;
 	g_aZones.PushArray( zone );
+	
+	float spawn[3];
+	
+	for( int i = 0; i < 3; i++ )
+	{
+		spawn[i] = ( view_as<float>( zone[ZD_x1 + i] ) + view_as<float>( zone[ZD_x2 + i] ) ) / 2.0;
+	}
+	spawn[2] = view_as<float>( zone[ZD_z1] ) + 10.0;
+	g_aZoneSpawnCache.PushArray( spawn );
 
 	AddZoneEntity( zone, index );
 }
 
-stock int GetZoneID( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
+stock int GetZoneID( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 ) // database id
 {
 	for( int i = 0; i < g_aZones.Length; i++ )
 	{
@@ -415,6 +464,21 @@ stock int GetZoneID( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 )
 			&& g_aZones.Get( i, ZD_ZoneSubindex ) == subindex )
 		{
 			return g_aZones.Get( i, ZD_ZoneId );
+		}
+	}
+	
+	return -1;
+}
+
+stock int GetZoneIndex( ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 ) // array index
+{
+	for( int i = 0; i < g_aZones.Length; i++ )
+	{
+		if( g_aZones.Get( i, ZD_ZoneType ) == zoneType
+			&& g_aZones.Get( i, ZD_ZoneTrack ) == zoneTrack
+			&& g_aZones.Get( i, ZD_ZoneSubindex ) == subindex )
+		{
+			return i;
 		}
 	}
 	
@@ -462,6 +526,7 @@ stock void ClearZones()
 	{
 		ClearZoneEntities();
 		g_aZones.Clear();
+		g_aZoneSpawnCache.Clear();
 	}
 }
 
@@ -490,7 +555,7 @@ stock void DrawZoneFromPoints( float points[8][3], const int color[4] = { 255, 1
 	}
 }
 
-stock void DrawZone( const any zone[ZONE_DATA], const int color[4] = { 255, 178, 0, 255 }, int client = 0 )
+stock void DrawZone( const any zone[ZONE_DATA], int client = 0 )
 {
 	float points[8][3];
 	
@@ -500,7 +565,10 @@ stock void DrawZone( const any zone[ZONE_DATA], const int color[4] = { 255, 178,
 		points[7][i] = zone[ZD_x2 + i];
 	}
 	
-	DrawZoneFromPoints( points, color, client );
+	int colour[4];
+	Timer_GetZoneColour( zone[ZD_ZoneType], zone[ZD_ZoneTrack], colour );
+	
+	DrawZoneFromPoints( points, colour, client );
 }
 
 
@@ -510,7 +578,13 @@ public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroa
 {
 	ReloadZoneEntities(); // re-hook zones because hooks disappear on round start
 
-	// TODO: spawn clients here
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsValidClient( i, true ) )
+		{
+			TeleportClientToZone( i, Zone_Start, ZT_Main );
+		}
+	}
 }
 
 public Action Entity_StartTouch( int caller, int activator )
@@ -526,7 +600,7 @@ public Action Entity_StartTouch( int caller, int activator )
 		int index = StringToInt( zoneIndex );
 		ZoneType zoneType = view_as<ZoneType>( g_aZones.Get( index, view_as<int>( ZD_ZoneType ) ) );
 		ZoneTrack zoneTrack = view_as<ZoneTrack>( g_aZones.Get( index, view_as<int>( ZD_ZoneTrack ) ) );
-
+		
 		Call_StartForward( g_hForward_OnEnterZone );
 		Call_PushCell( activator );
 		Call_PushCell( g_aZones.Get( index, ZD_ZoneId ) );
@@ -536,7 +610,11 @@ public Action Entity_StartTouch( int caller, int activator )
 		Call_Finish();
 		
 		g_PlayerCurrentZoneType[activator] = zoneType;
-		g_PlayerCurrentZoneTrack[activator] = zoneTrack;
+		
+		if( zoneType == Zone_Start )
+		{
+			g_PlayerCurrentZoneTrack[activator] = zoneTrack;
+		}
 	}
 }
 
@@ -572,6 +650,26 @@ public Action Entity_EndTouch( int caller, int activator )
 public Action Command_Zone( int client, int args ) // TODO: determine if players should be permitted to zone before zones have been loaded
 {
 	OpenZonesMenu( client );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Restart( int client, int args )
+{
+	if( IsValidClient( client ) )
+	{		
+		TeleportClientToZone( client, Zone_Start, ZT_Main );
+	}
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Bonus( int client, int args )
+{
+	if( IsValidClient( client ) )
+	{	
+		TeleportClientToZone( client, Zone_Start, ZT_Bonus );
+	}
 	
 	return Plugin_Handled;
 }
@@ -663,12 +761,17 @@ public int Native_GetClientZoneTrack(Handle handler, int numParams)
 	return view_as<int>( g_PlayerCurrentZoneTrack[GetNativeCell( 1 )] );
 }
 
+public int Native_GetClientZoneTrack(Handle handler, int numParams)
+{
+	TeleportClientToZone( GetNativeCell( 1 ), view_as<ZoneType>( GetNativeCell( 2 ) ), view_as<ZoneTrack>( GetNativeCell( 3 ) ), GetNativeCell( 4 ) );
+}
+
 
 /* Database stuff */
 
 public void OnDatabaseLoaded()
 {
-	Timer_GetDatabase( g_hDatabase );
+	g_hDatabase = Timer_GetDatabase();
 	SQL_CreateTables();
 }
 
@@ -681,7 +784,7 @@ Action SetSQLInfo()
 {
 	if( g_hDatabase == null )
 	{
-		Timer_GetDatabase( g_hDatabase );
+		g_hDatabase = Timer_GetDatabase();
 		CreateTimer( 0.5, CheckForSQLInfo );
 	}
 	else
@@ -782,7 +885,6 @@ void SQL_InsertZone( float pointA[3], float pointB[3], ZoneType zoneType, ZoneTr
 	}
 	
 	int id = GetZoneID( zoneType, zoneTrack );
-	PrintToServer( "%i", id );
 	
 	if( zoneType >= Zone_Checkpoint || id == -1 )
 	{
