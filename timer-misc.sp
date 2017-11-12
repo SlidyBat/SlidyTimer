@@ -264,6 +264,7 @@ stock void SetConVars()
 	convar = FindConVar( "bot_quota_mode" );
 	convar.SetString( "normal" );
 	
+	convar = FindConVar( "bot_quota" );
 	convar.IntValue = 0;
 
 	convar = FindConVar( "bot_join_after_player" );
