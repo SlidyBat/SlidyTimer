@@ -3,9 +3,9 @@
 
 public Plugin myinfo = 
 {
-	name = "Slidy's Timer - Zones component",
+	name = "Slidy's Timer - Core component",
 	author = "SlidyBat",
-	description = "Zones component of Slidy's Timer",
+	description = "Core component of Slidy's Timer",
 	version = TIMER_PLUGIN_VERSION,
 	url = ""
 }
@@ -241,7 +241,7 @@ public Action Command_Noclip( int client, int args )
 
 public int Native_GetDatabase( Handle handler, int numParams )
 {
-	SetNativeCellRef( 1, g_hDatabase );
+	return view_as<int>( CloneHandle( g_hDatabase ) );
 }
 
 public int Native_StopTimer( Handle handler, int numParams )
