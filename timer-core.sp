@@ -34,6 +34,7 @@ int			g_nPlayerJumps[MAXPLAYERS + 1];
 int			g_nPlayerStrafes[MAXPLAYERS + 1];
 int			g_iPlayerSSJ[MAXPLAYERS + 1];
 int			g_nPlayerSyncedFrames[MAXPLAYERS + 1];
+int			g_nPlayerAirFrames[MAXPLAYERS + 1];
 int			g_nPlayerAirStrafeFrames[MAXPLAYERS + 1];
 
 ConVar		sv_autobunnyhopping;
@@ -48,6 +49,9 @@ public void OnPluginStart()
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
+	
+	/* Hooks */
+	HookEvent( "player_jump", HookEvent_PlayerJump );
 	
 	SQL_DBConnect();
 	
@@ -97,17 +101,60 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 	SQL_LoadRecords( client );
 }
 
-public void OnPlayerRunCmd( int client, int& buttons )
+public void OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
 {
 	if( IsValidClient( client, true ) )
-	{
+	{	
+		static int lastButtons[MAXPLAYERS + 1];
+		static float lastYaw[MAXPLAYERS + 1];
+		
+		float fDeltaYaw = angles[1] - lastYaw[client];
+		NormalizeAngle( fDeltaYaw );
+		
+		bool bButtonError = false;
+		
+		
+		// sanity check, if player pressing buttons but not moving then somethings wrong
+		if( ( ( buttons & IN_FORWARD ) || ( buttons & IN_BACK ) ) && ( vel[0] == 0.0 ) )
+		{
+			bButtonError = true;
+		}
+		else if( ( ( buttons & IN_MOVELEFT ) || ( buttons & IN_MOVERIGHT ) ) && ( vel[1] == 0.0 ) )
+		{
+			bButtonError = true;
+		}
 		
 		if( g_bTimerRunning[client] && !g_bTimerPaused[client] )
 		{
 			g_nPlayerFrames[client]++;
+			
+			if( !( GetEntityFlags( client ) & FL_ONGROUND ) )
+			{
+				g_nPlayerAirFrames[client]++;
+				
+				if( fDeltaYaw != 0.0 )
+				{
+					g_nPlayerAirStrafeFrames[client]++;
+				}
+				
+				if( ( fDeltaYaw > 0.0 && ( buttons & IN_MOVELEFT ) && !( buttons & IN_MOVERIGHT ) ) ||
+					( fDeltaYaw < 0.0 && ( buttons & IN_MOVERIGHT ) && !( buttons & IN_MOVELEFT ) ) )
+				{
+					g_nPlayerSyncedFrames[client]++;
+				}
+			}
+			
+			if( !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+			{
+				g_nPlayerStrafes[client]++;
+			}
+			else if( !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+			{
+				g_nPlayerStrafes[client]++;
+			}
 		}
 		
-		if( buttons & IN_JUMP )
+		if( g_bAutoBhop[client] && buttons & IN_JUMP )
 		{
 			if( !( GetEntityMoveType( client ) & MOVETYPE_LADDER )
 				&& !( GetEntityFlags( client ) & FL_ONGROUND )
@@ -116,6 +163,15 @@ public void OnPlayerRunCmd( int client, int& buttons )
 				buttons &= ~IN_JUMP;
 			}
 		}
+		
+		if( bButtonError )
+		{
+			vel[0] = 0.0;
+			vel[1] = 0.0;
+		}
+		
+		lastButtons[client] = buttons;
+		lastYaw[client] = angles[1];
 	}
 }
 
@@ -128,6 +184,7 @@ void ClearPlayerData( int client )
 	g_iPlayerSSJ[client] = 0;
 	g_nPlayerSyncedFrames[client] = 0;
 	g_nPlayerAirStrafeFrames[client] = 0;
+	g_nPlayerAirFrames[client] = 0;
 }
 
 
@@ -235,6 +292,17 @@ public void Timer_OnExitZone( int client, int id, ZoneType zoneType, ZoneTrack z
 	}
 }
 
+public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBroadcast )
+{
+	int client = GetClientOfUserId( event.GetInt( "userid" ) );
+	if( g_bTimerRunning[client] && !g_bTimerPaused[client] ) // TODO: consider making this a function (and possibly native)
+	{	
+		if( ++g_nPlayerJumps[client] == 6 )
+		{
+			g_iPlayerSSJ[client] = RoundFloat( GetClientSpeed( client ) );
+		}
+	}
+}
 
 /* Database stuff */
 
@@ -438,8 +506,8 @@ public void LoadRecords_Callback( Database db, DBResultSet results, const char[]
 
 void SQL_InsertRecord( int client, ZoneTrack track, int style, float time )
 {
-	float sync = float( g_nPlayerSyncedFrames[client] ) / g_nPlayerFrames[client];
-	float strafetime = float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerFrames[client];
+	float sync = float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client];
+	float strafetime = float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client];
 	
 	g_PlayerRecordData[client][track][style][RD_Timestamp] = GetTime();
 	g_PlayerRecordData[client][track][style][RD_Time] = time;
@@ -478,8 +546,8 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 
 void SQL_UpdateRecord( int client, ZoneTrack track, int style, float time )
 {
-	float sync = float( g_nPlayerSyncedFrames[client] ) / g_nPlayerFrames[client];
-	float strafetime = float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerFrames[client];
+	float sync = float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client];
+	float strafetime = float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client];
 	
 	g_PlayerRecordData[client][track][style][RD_Timestamp] = GetTime();
 	g_PlayerRecordData[client][track][style][RD_Time] = time;
