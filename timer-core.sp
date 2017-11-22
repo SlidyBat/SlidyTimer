@@ -10,19 +10,21 @@ public Plugin myinfo =
 	url = ""
 }
 
-Database    g_hDatabase;
+Database		g_hDatabase;
 
-float       g_fFrameTime;
+float		g_fFrameTime;
 
-Handle      g_hForward_OnDatabaseReady;
+Handle		g_hForward_OnDatabaseReady;
 
-int         g_nPlayerFrames[MAXPLAYERS + 1];
-bool        g_bTimerRunning[MAXPLAYERS + 1]; // whether client timer is running or not, regardless of if its paused
-bool        g_bTimerPaused[MAXPLAYERS + 1];
+int			g_ClientPlayerID[MAXPLAYERS + 1];
 
-ConVar      sv_autobunnyhopping
-bool        g_bAutoBhop[MAXPLAYERS + 1];
-bool        g_bNoclip[MAXPLAYERS + 1];
+int			g_nPlayerFrames[MAXPLAYERS + 1];
+bool			g_bTimerRunning[MAXPLAYERS + 1]; // whether client timer is running or not, regardless of if its paused
+bool			g_bTimerPaused[MAXPLAYERS + 1];
+
+ConVar		sv_autobunnyhopping
+bool			g_bAutoBhop[MAXPLAYERS + 1];
+bool			g_bNoclip[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
@@ -56,6 +58,14 @@ public void OnClientPutInServer( int client )
 	if( !IsFakeClient( client ) )
 	{
 		sv_autobunnyhopping.ReplicateToClient( client, g_bAutoBhop[client] ? "1" : "0" );
+	}
+}
+
+public void OnClientPostAdminCheck( int client )
+{
+	if( !IsFakeClient( client ) )
+	{
+		SQL_LoadPlayerID( client );
 	}
 }
 
@@ -194,24 +204,103 @@ void SQL_CreateTables()
 	
 	char query[512];
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_players` ( uid INT NOT NULL AUTO_INCREMENT, steamid VARCHAR( 64 ) NOT NULL, lastname VARCHAR( 128 ) NOT NULL, firstconnect INT( 16 ) NOT NULL, lastconnect INT( 16 ) NOT NULL, PRIMARY KEY ( `uid` ) );" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_players` ( playerid INT NOT NULL AUTO_INCREMENT, steamid CHAR( 32 ) NOT NULL, lastname CHAR( 64 ) NOT NULL, firstconnect INT( 16 ) NOT NULL, lastconnect INT( 16 ) NOT NULL, PRIMARY KEY ( `playerid` ) );" );
 	txn.AddQuery( query );
 	
-	// Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_records` ( mapname VARCHAR( 128 ) NOT NULL, uid INT NOT NULL, time INT( 8 ) NOT NULL, sync FLOAT NOT NULL, strafesync FLOAT NOT NULL, jumps INT NOT NULL, strafes INT NOT NULL, style INT NOT NULL, zonegroup INT NOT NULL, server VARCHAR( 18 ) NOT NULL, timestamp INT( 16 ) NOT NULL, PRIMARY KEY ( `mapname`, `uid`, `style`, `zonegroup` ) );" );
+	// Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_records` ( mapname VARCHAR( 128 ) NOT NULL, playerid INT NOT NULL, time INT( 8 ) NOT NULL, sync FLOAT NOT NULL, strafesync FLOAT NOT NULL, jumps INT NOT NULL, strafes INT NOT NULL, style INT NOT NULL, zonegroup INT NOT NULL, server VARCHAR( 18 ) NOT NULL, timestamp INT( 16 ) NOT NULL, PRIMARY KEY ( `mapname`, `playerid`, `style`, `zonegroup` ) );" );
 	// put more thought into how you want to do this
-	txn.AddQuery( query );
+	//txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
 }
 
 public void SQL_OnCreateTableSuccess( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
 {
-	SQL_LoadPlayerData();
+	//SQL_LoadPlayerData();
 }
 
 public void SQL_OnCreateTableFailure( Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData )
 {
 	SetFailState( "[SQL ERROR] (SQL_CreateTables) - %s", error );
+}
+
+void SQL_LoadPlayerID( int client )
+{
+	char steamid[32];
+	GetClientAuthId( client, AuthId_Steam2, steamid, sizeof( steamid ) );
+	
+	char query[128];
+	Format( query, sizeof( query ), "SELECT playerid FROM `t_players` WHERE steamid = '%s'", steamid );
+	
+	g_hDatabase.Query( LoadPlayerID_Callback, query, GetClientUserId( client ), DBPrio_High );
+}
+
+public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[] error, int uid )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (LoadPlayerID_Callback) - %s", error );
+		return;
+	}
+	
+	int client = GetClientOfUserId( uid );
+	
+	if( !IsValidClient( client ) ) // client no longer valid since id loaded :(
+	{
+		return;
+	}
+	
+	if( results.RowCount ) // playerid already exists, this is returning user
+	{
+		if( results.FetchRow() )
+		{
+			char[] name = new char[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
+			GetClientName( client, name, sizeof( name ) );
+			g_hDatabase.Escape( name, sizeof( name ), name );
+			
+			g_ClientPlayerID[client] = results.FetchInt( 0 );
+			
+			// update info
+			char query[256];
+			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i' WHERE uid = '%i';", name, GetTime(), g_ClientPlayerID[client] );
+			
+			g_hDatabase.Query( UpdatePlayerInfo_Callback, query, uid, DBPrio_Normal );
+		}
+	}
+	else  // new user
+	{
+		int timestamp = GetTime();
+		
+		char[] name = new char[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
+		GetClientName( client, name, sizeof( name ) );
+		g_hDatabase.Escape( name, sizeof( name ), name );
+		
+		char steamid[32];
+		GetClientAuthId( client, AuthId_Steam2, steamid, sizeof( steamid ) );
+
+		char query[256];
+		Format( query, sizeof( query ), "INSERT INTO `t_players` VALUES ( 0, '%s', '%s', '%i', '%i' );", steamid, name, timestamp, timestamp );
+		
+		g_hDatabase.Query( InsertPlayerInfo_Callback, query, uid, DBPrio_High );
+	}
+}
+
+public void UpdatePlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
+		return;
+	}
+}
+
+public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
+		return;
+	}
 }
 
 void SQL_LoadPlayerData()
