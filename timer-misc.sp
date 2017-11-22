@@ -47,7 +47,6 @@ public void OnClientDisconnect( int client )
 
 public Action Hook_OnTakeDamageCallback( int victim, int& attacker, int& inflictor, float& damage, int& damagetype )
 {
-	damage = 0.0;
 	return Plugin_Handled;
 }
 
@@ -64,7 +63,7 @@ public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBr
 	{
 		SetEntProp( client, Prop_Data, "m_CollisionGroup", COLLISION_GROUP_DEBRIS_TRIGGER );
 		
-		if( IsValidClient( client ) )
+		if( IsValidClient( client ) && !IsFakeClient( client ) )
 		{
 			RequestFrame( HideRadar, client );
 
