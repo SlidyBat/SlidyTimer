@@ -183,6 +183,7 @@ forward void Timer_OnExitZone( int client, int zone_id, ZoneType zoneType, ZoneT
  * @noreturn
  */
 native void Timer_GetDatabase( Database& handle );
+native Database Timer_GetDatabase();
 
 /**
  * Gets zone type client is currently in
