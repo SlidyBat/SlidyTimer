@@ -4,6 +4,8 @@
 #include <sourcemod>
 #include <slidy-timer>
 
+#define MAX_WR_CACHE 50
+
 public Plugin myinfo = 
 {
 	name = "Slidy's Timer - Core component",
@@ -23,6 +25,7 @@ Handle		g_hForward_OnClientLoaded;
 
 int			g_ClientPlayerID[MAXPLAYERS + 1];
 
+any			g_WRCacheRecordData[MAX_WR_CACHE][TOTAL_ZONE_TRACKS][MAX_STYLES][RecordData];
 any			g_PlayerRecordData[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES][RecordData];
 
 int			g_PlayerCurrentStyle[MAXPLAYERS + 1];
@@ -51,6 +54,7 @@ public void OnPluginStart()
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
 	RegConsoleCmd( "sm_pb", Command_PB );
+	RegConsoleCmd( "sm_wr", Command_WR );
 	
 	/* Hooks */
 	HookEvent( "player_jump", HookEvent_PlayerJump );
@@ -77,6 +81,19 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 public void OnMapStart()
 {
 	GetCurrentMap( g_cMapName, sizeof( g_cMapName ) );
+	
+	for( int i = 0; i < MAX_WR_CACHE; i++ )
+	{
+		for( int j = 0; j < view_as<int>( TOTAL_ZONE_TRACKS ); j++ )
+		{
+			for( int k = 0; k < MAX_STYLES; k++ )
+			{
+				g_WRCacheRecordData[i][j][k][RD_Time] = 0.0;
+			}
+		}
+	}
+	
+	SQL_CacheRecords();
 }
 
 public void OnClientPutInServer( int client )
@@ -102,6 +119,7 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 		for( int j = 0; j < MAX_STYLES; j++ )
 		{
 			g_PlayerRecordData[client][i][j][RD_PlayerID] = playerid;
+			GetClientName( client, g_PlayerRecordData[client][i][j][RD_Name], MAX_NAME_LENGTH );
 		}
 	}
 	
@@ -593,6 +611,42 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 	}
 }
 
+void SQL_CacheRecords()
+{
+	char query[256];
+	Format( query, sizeof( query ), "SELECT r.track, r.style, p.lastname, r.timestamp, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
+									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
+									WHERE mapname = '%s'\
+									ORDER BY r.time ASC \
+									LIMIT 50", g_cMapName, MAX_WR_CACHE );
+	
+	g_hDatabase.Query( CacheRecords_Callback, query, _, DBPrio_High );
+}
+
+public void CacheRecords_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (CacheRecords_Callback) - %s", error );
+		return;
+	}
+	
+	for( int i = 0; results.FetchRow(); i++ )
+	{
+		int track = results.FetchInt( 0 );
+		int style = results.FetchInt( 1 );
+		
+		results.FetchString( 2, g_WRCacheRecordData[i][track][style][RD_Name], MAX_NAME_LENGTH );
+		g_WRCacheRecordData[i][track][style][RD_Timestamp] = results.FetchInt( 3 );
+		g_WRCacheRecordData[i][track][style][RD_Time] = results.FetchFloat( 4 );
+		g_WRCacheRecordData[i][track][style][RD_Jumps] = results.FetchInt( 5 );
+		g_WRCacheRecordData[i][track][style][RD_Strafes] = results.FetchInt( 6 );
+		g_WRCacheRecordData[i][track][style][RD_Sync] = results.FetchFloat( 7 );
+		g_WRCacheRecordData[i][track][style][RD_StrafeTime] = results.FetchFloat( 8 );
+		g_WRCacheRecordData[i][track][style][RD_SSJ] = results.FetchInt( 9 );
+	}
+}
+
 /* Commands */
 
 public Action Command_Noclip( int client, int args )
@@ -616,66 +670,72 @@ public Action Command_PB( int client, int args )
 	return Plugin_Handled;
 }
 
-void ShowStats( int client, any recordData[RecordData] )
+public Action Command_WR( int client, int args )
 {
-	char query[256];
-	Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE playerid = '%i'", recordData[RD_PlayerID] );
+	char buffer[256];
 	
-	DataPack pack = new DataPack();
-	pack.WriteCell( GetClientUserId( client ) );
+	Menu menu = new Menu( WRMenu_Handler );
 	
-	for( int i = 0; i < sizeof( recordData ); i++ )
+	Format( buffer, sizeof( buffer ), "%s Leaderboard", g_cMapName );
+	menu.SetTitle( buffer );
+	
+	char sTime[32], info[8];
+	
+	for( int i = 0; i < MAX_WR_CACHE; i++ )
 	{
-		pack.WriteCell( recordData[i] );
-	}
-	
-	g_hDatabase.Query( ShowStats_Callback, query, pack, DBPrio_Low );
-}
-
-public void ShowStats_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
-{
-	if( results == null )
-	{
-		LogError( "[SQL ERROR] (ShowStats_Callback) - %s", error );
-		return;
-	}
-	
-	if( results.FetchRow() )
-	{
-		pack.Reset();
-		int client = GetClientOfUserId( pack.ReadCell() );
-		
-		any recordData[RecordData];
-		for( int i = 0; i < sizeof( recordData ); i++ )
+		if( g_WRCacheRecordData[i][0][0][RD_Time] == 0.0 )
 		{
-			recordData[i] = pack.ReadCell();
+			break;
 		}
 		
-		char name[MAX_NAME_LENGTH];
-		results.FetchString( 0, name, sizeof( name ) );
+		Timer_FormatTime( g_WRCacheRecordData[i][0][0][RD_Time], sTime, sizeof( sTime ) );
+		Format( buffer, sizeof( buffer), "[#%i] - %s (%s)", i + 1, g_WRCacheRecordData[i][0][0][RD_Name], sTime );
 		
-		Menu menu = new Menu( RecordInfo_Handler );
+		IntToString( i, info, sizeof( info ) );
 		
-		char date[128];
-		FormatTime( date, sizeof( date ), "%d/%m/%Y - %H:%M:%S", recordData[RD_Timestamp] );
-		char sTime[64];
-		Timer_FormatTime( recordData[RD_Time], sTime, sizeof( sTime ) );
-		
-		char buffer[512];
-		Format( buffer, sizeof( buffer ), "Record Info - %s \n", name );
-		menu.SetTitle( buffer );
-		
-		Format( buffer, sizeof( buffer ), "Details:\n \n" );
-		Format( buffer, sizeof( buffer ), "%s%s - %s\n \n", buffer, g_cMapName, date );
-		Format( buffer, sizeof( buffer ), "%sTime: %s\n", buffer, sTime );
-		Format( buffer, sizeof( buffer ), "%sJumps: %i\n", buffer, recordData[RD_Jumps] );
-		Format( buffer, sizeof( buffer ), "%sStrafes: %i (%.2f)\n", buffer, recordData[RD_Strafes], recordData[RD_Sync] );
-		Format( buffer, sizeof( buffer ), "%sStrafe Time %: %.2f\n \n", buffer, recordData[RD_StrafeTime] );
-		Format( buffer, sizeof( buffer ), "%sSSJ: %i\n", buffer, recordData[RD_SSJ] );
-		menu.AddItem( "stats", buffer );
-		
-		menu.Display( client, MENU_TIME_FOREVER );
+		menu.AddItem( info, buffer );
 	}
+	
+	menu.Display( client, MENU_TIME_FOREVER );
+	
+	return Plugin_Handled;
+}
+
+public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		ShowStats( param1, g_WRCacheRecordData[param2][0][0] );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+void ShowStats( int client, any recordData[RecordData] )
+{
+	Menu menu = new Menu( RecordInfo_Handler );
+		
+	char date[128];
+	FormatTime( date, sizeof( date ), "%d/%m/%Y - %H:%M:%S", recordData[RD_Timestamp] );
+	char sTime[64];
+	Timer_FormatTime( recordData[RD_Time], sTime, sizeof( sTime ) );
+	
+	char buffer[512];
+	Format( buffer, sizeof( buffer ), "Record Info \n \n" );
+	menu.SetTitle( buffer );
+	
+	Format( buffer, sizeof( buffer ), "Player: %s\n \n", recordData[RD_Name] );
+	Format( buffer, sizeof( buffer ), "%s%s (%s)\n \n", buffer, g_cMapName, date );
+	Format( buffer, sizeof( buffer ), "%sTime: %s\n", buffer, sTime );
+	Format( buffer, sizeof( buffer ), "%sJumps: %i\n", buffer, recordData[RD_Jumps] );
+	Format( buffer, sizeof( buffer ), "%sStrafes: %i (%.2f)\n", buffer, recordData[RD_Strafes], recordData[RD_Sync] );
+	Format( buffer, sizeof( buffer ), "%sStrafe Time %: %.2f\n \n", buffer, recordData[RD_StrafeTime] );
+	Format( buffer, sizeof( buffer ), "%sSSJ: %i\n", buffer, recordData[RD_SSJ] );
+	menu.AddItem( "stats", buffer );
+	
+	menu.Display( client, MENU_TIME_FOREVER );
 }
 
 public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int param2 )
