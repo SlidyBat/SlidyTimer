@@ -140,6 +140,17 @@ stock void Timer_GetZoneTrackName( ZoneTrack zoneTrack, char[] buffer, int maxle
 forward void Timer_OnDatabaseReady();
 
 /**
+ * Called when client has been loaded by core timer plugin and been provided a playerid
+ *
+ * @param client					Client index of player
+ * @param playerid					playerid of client (useful for identifying client in db)
+ * @param newplayer					bool that identifies whether or not this is the players first time on server
+ *
+ * @noreturn
+ */
+forward void Timer_OnClientLoaded( int client, int playerid, bool newplayer );
+
+/**
  * Called when a client enters a zone
  *
  * @param client					Client index of player that entered zone

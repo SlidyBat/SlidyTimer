@@ -15,6 +15,7 @@ Database		g_hDatabase;
 float		g_fFrameTime;
 
 Handle		g_hForward_OnDatabaseReady;
+Handle		g_hForward_OnClientLoaded;
 
 int			g_ClientPlayerID[MAXPLAYERS + 1];
 
@@ -30,6 +31,7 @@ public void OnPluginStart()
 {
 	/* Forwards */
 	g_hForward_OnDatabaseReady = CreateGlobalForward( "Timer_OnDatabaseReady", ET_Event );
+	g_hForward_OnClientLoaded = CreateGlobalForward( "Timer_OnClientLoaded", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
@@ -292,6 +294,14 @@ public void UpdatePlayerInfo_Callback( Database db, DBResultSet results, const c
 		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
 		return;
 	}
+	
+	int client = GetClientOfUserId( uid );
+	
+	Call_StartForward( g_hForward_OnClientLoaded );
+	Call_PushCell( client );
+	Call_PushCell( g_ClientPlayerID[client] );
+	Call_PushCell( false );
+	Call_Finish();
 }
 
 public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
@@ -301,6 +311,14 @@ public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const c
 		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
 		return;
 	}
+	
+	int client = GetClientOfUserId( uid );
+	
+	Call_StartForward( g_hForward_OnClientLoaded );
+	Call_PushCell( client );
+	Call_PushCell( g_ClientPlayerID[client] );
+	Call_PushCell( true );
+	Call_Finish();
 }
 
 void SQL_LoadPlayerData()
