@@ -256,9 +256,9 @@ public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[
 	{
 		if( results.FetchRow() )
 		{
-			char[] name = new char[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
+			char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
 			GetClientName( client, name, sizeof( name ) );
-			g_hDatabase.Escape( name, sizeof( name ), name );
+			g_hDatabase.Escape( name, name, sizeof( name ) );
 			
 			g_ClientPlayerID[client] = results.FetchInt( 0 );
 			
@@ -273,9 +273,9 @@ public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[
 	{
 		int timestamp = GetTime();
 		
-		char[] name = new char[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
+		char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
 		GetClientName( client, name, sizeof( name ) );
-		g_hDatabase.Escape( name, sizeof( name ), name );
+		g_hDatabase.Escape( name, name, sizeof( name ) );
 		
 		char steamid[32];
 		GetClientAuthId( client, AuthId_Steam2, steamid, sizeof( steamid ) );
@@ -321,10 +321,10 @@ public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const c
 	Call_Finish();
 }
 
-void SQL_LoadPlayerData()
-{
+//void SQL_LoadPlayerData()
+//{
 	// TODO: decide what to do here
-}
+//}
 
 
 /* Commands */
