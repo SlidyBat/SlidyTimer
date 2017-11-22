@@ -121,6 +121,8 @@ public void OnMapStart()
 	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vtf" );
 	
 	CreateTimer( TIMER_INTERVAL, Timer_DrawZones, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE );
+	
+	SQL_LoadZones();
 }
 
 public void OnMapEnd()
@@ -761,11 +763,10 @@ public int Native_GetClientZoneTrack(Handle handler, int numParams)
 	return view_as<int>( g_PlayerCurrentZoneTrack[GetNativeCell( 1 )] );
 }
 
-public int Native_GetClientZoneTrack(Handle handler, int numParams)
+public int Native_TeleportClientToZone(Handle handler, int numParams)
 {
 	TeleportClientToZone( GetNativeCell( 1 ), view_as<ZoneType>( GetNativeCell( 2 ) ), view_as<ZoneTrack>( GetNativeCell( 3 ) ), GetNativeCell( 4 ) );
 }
-
 
 /* Database stuff */
 
@@ -838,7 +839,7 @@ public void LoadZones_Callback( Database db, DBResultSet results, const char[] e
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (LoadZonesCallback) - %s", error );
+		LogError( "[SQL ERROR] (LoadZones_Callback) - %s", error );
 		return;
 	}
 	
@@ -904,7 +905,7 @@ public void InsertZone_Callback( Database db, DBResultSet results, const char[] 
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (LoadZonesCallback) - %s", error );
+		LogError( "[SQL ERROR] (InsertZone_Callback) - %s", error );
 		return;
 	}
 	

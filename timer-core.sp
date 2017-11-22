@@ -16,8 +16,9 @@ public Plugin myinfo =
 Database		g_hDatabase;
 
 float		g_fFrameTime;
+char			g_cMapName[PLATFORM_MAX_PATH];
 
-Handle		g_hForward_OnDatabaseReady;
+Handle		g_hForward_OnDatabaseLoaded;
 Handle		g_hForward_OnClientLoaded;
 
 int			g_ClientPlayerID[MAXPLAYERS + 1];
@@ -38,13 +39,13 @@ int			g_nPlayerAirFrames[MAXPLAYERS + 1];
 int			g_nPlayerAirStrafeFrames[MAXPLAYERS + 1];
 
 ConVar		sv_autobunnyhopping;
-bool			g_bAutoBhop[MAXPLAYERS + 1];
+bool			g_bAutoBhop[MAXPLAYERS + 1] = { true, ... };
 bool			g_bNoclip[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
 	/* Forwards */
-	g_hForward_OnDatabaseReady = CreateGlobalForward( "Timer_OnDatabaseReady", ET_Event );
+	g_hForward_OnDatabaseLoaded = CreateGlobalForward( "Timer_OnDatabaseLoaded", ET_Event );
 	g_hForward_OnClientLoaded = CreateGlobalForward( "Timer_OnClientLoaded", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	
 	/* Commands */
@@ -70,6 +71,11 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	sv_autobunnyhopping.BoolValue = false;
 
 	return APLRes_Success;
+}
+
+public void OnMapStart()
+{
+	GetCurrentMap( g_cMapName, sizeof( g_cMapName ) );
 }
 
 public void OnClientPutInServer( int client )
@@ -98,6 +104,7 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 		}
 	}
 	
+	ClearPlayerData( client );
 	SQL_LoadRecords( client );
 }
 
@@ -232,10 +239,12 @@ void FinishTimer( int client )
 	if( g_PlayerRecordData[client][track][style][RD_Time] == 0.0 ) // new time
 	{
 		SQL_InsertRecord( client, track, style, time );
+		PrintToChatAll( "NEW PB!!!" );
 	}
 	else if( time < g_PlayerRecordData[client][track][style][RD_Time] ) // new pb
 	{
 		SQL_UpdateRecord( client, track, style, time );
+		PrintToChatAll( "NEW PB!!!" );
 	}
 }
 
@@ -321,7 +330,7 @@ void SQL_DBConnect()
 	// support unicode names
 	g_hDatabase.SetCharset( "utf8" );
 
-	Call_StartForward( g_hForward_OnDatabaseReady );
+	Call_StartForward( g_hForward_OnDatabaseLoaded );
 	Call_Finish();
 	
 	SQL_CreateTables();
@@ -406,7 +415,7 @@ public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[
 			
 			// update info
 			char query[256];
-			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i' WHERE uid = '%i';", name, GetTime(), g_ClientPlayerID[client] );
+			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i' WHERE playerid = '%i';", name, GetTime(), g_ClientPlayerID[client] );
 			
 			g_hDatabase.Query( UpdatePlayerInfo_Callback, query, uid, DBPrio_Normal );
 		}
@@ -465,11 +474,8 @@ public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const c
 
 void SQL_LoadRecords( int client )
 {
-	char mapname[PLATFORM_MAX_PATH];
-	GetCurrentMap( mapname, sizeof( mapname ) );
-	
 	char query[256];
-	Format( query, sizeof( query ), "SELECT track, style, timestamp, time, jumps, strafes, sync, strafetime, ssj FROM `t_records` WHERE playerid = '%i' AND mapname = '%s'", g_ClientPlayerID[client], mapname );
+	Format( query, sizeof( query ), "SELECT track, style, timestamp, time, jumps, strafes, sync, strafetime, ssj FROM `t_records` WHERE playerid = '%i' AND mapname = '%s'", g_ClientPlayerID[client], g_cMapName );
 	
 	g_hDatabase.Query( LoadRecords_Callback, query, GetClientUserId( client ), DBPrio_High );
 }
@@ -506,8 +512,10 @@ public void LoadRecords_Callback( Database db, DBResultSet results, const char[]
 
 void SQL_InsertRecord( int client, ZoneTrack track, int style, float time )
 {
-	float sync = float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client];
-	float strafetime = float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client];
+	// avoid dividing by 0
+	
+	float sync = ( g_nPlayerAirStrafeFrames[client] == 0.0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client];
+	float strafetime = ( g_nPlayerAirFrames[client] == 0.0 ) ? 0.0   : float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client];
 	
 	g_PlayerRecordData[client][track][style][RD_Timestamp] = GetTime();
 	g_PlayerRecordData[client][track][style][RD_Time] = time;
@@ -518,9 +526,10 @@ void SQL_InsertRecord( int client, ZoneTrack track, int style, float time )
 	g_PlayerRecordData[client][track][style][RD_SSJ] = g_iPlayerSSJ[client];
 	
 	char query[256];
-	Format( query, sizeof( query ), "INSERT INTO `t_records` (track, style, timestamp, time, jumps, strafes, sync, strafetime, ssj) \
-													VALUES (%i, %i, %i, %f, %i, %i, %f, %f, %i) \
-													WHERE playerid = '%i'",
+	Format( query, sizeof( query ), "INSERT INTO `t_records` (mapname, playerid, track, style, timestamp, time, jumps, strafes, sync, strafetime, ssj) \
+													VALUES ('%s', '%i', '%i', '%i', '%i', '%.5f', '%i', '%i', '%.2f', '%.2f', '%i')",
+													g_cMapName,
+													g_ClientPlayerID[client],
 													view_as<int>( Timer_GetClientZoneTrack( client ) ),
 													g_PlayerCurrentStyle[client],
 													GetTime(),
@@ -529,8 +538,7 @@ void SQL_InsertRecord( int client, ZoneTrack track, int style, float time )
 													g_nPlayerStrafes[client],
 													sync,
 													strafetime,
-													g_iPlayerSSJ[client],
-													g_ClientPlayerID[client]);
+													g_iPlayerSSJ[client]);
 	
 	g_hDatabase.Query( InsertRecord_Callback, query, _, DBPrio_High );
 }
@@ -559,7 +567,7 @@ void SQL_UpdateRecord( int client, ZoneTrack track, int style, float time )
 	
 	char query[256];
 	Format( query, sizeof( query ), "UPDATE `t_records` SET timestamp = '%s', time = '%f', jumps = '%i', strafes = '%i', sync = '%f', strafetime = '%f', ssj = '%i') \
-													WHERE playerid = '%s' AND track = '%i' AND style = '%i'",
+													WHERE playerid = '%s' AND track = '%i' AND style = '%i' AND mapname = '%s'",
 													GetTime(),
 													time,
 													g_nPlayerJumps[client],
@@ -569,7 +577,8 @@ void SQL_UpdateRecord( int client, ZoneTrack track, int style, float time )
 													g_iPlayerSSJ[client],
 													g_ClientPlayerID[client],
 													view_as<int>( track ),
-													style );
+													style,
+													g_cMapName );
 	
 	g_hDatabase.Query( UpdateRecord_Callback, query, _, DBPrio_High );
 }
@@ -604,7 +613,7 @@ public Action Command_Noclip( int client, int args )
 
 public int Native_GetDatabase( Handle handler, int numParams )
 {
-	return view_as<int>( CloneHandle( g_hDatabase ) );
+	return view_as<int>( CloneHandle( g_hDatabase, handler ) );
 }
 
 public int Native_StopTimer( Handle handler, int numParams )
