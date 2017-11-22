@@ -274,6 +274,7 @@ void SQL_CreateTables()
 	txn.AddQuery( query );
 	
 	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_records` ( mapname CHAR( 128 ) NOT NULL, \
+																			playerid INT NOT NULL, \
 																			timestamp INT( 16 ) NOT NULL, \
 																			time FLOAT NOT NULL, \
 																			track INT NOT NULL, \
