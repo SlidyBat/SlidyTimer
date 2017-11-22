@@ -5,6 +5,7 @@
 
 #define TIMER_PLUGIN_VERSION "0.1"
 #define MENU_PREFIX "Timer"
+#define MAX_STYLES 1 // for now, until i actually implement them
 
 enum ZoneType
 {
@@ -51,6 +52,18 @@ enum
 	ZoneType:ZD_ZoneType,
 	ZoneTrack:ZD_ZoneTrack,
 	ZONE_DATA
+}
+
+enum RecordData
+{
+	RD_PlayerID,
+	RD_Timestamp,
+	Float:RD_Time,
+	RD_Jumps,
+	RD_Strafes,
+	Float:RD_Sync,
+	Float:RD_StrafeTime,
+	RD_SSJ
 }
 
 stock bool IsValidClient(int client, bool bAlive = false) // when bAlive is false = technical checks, when it's true = gameplay checks
@@ -182,7 +195,6 @@ forward void Timer_OnExitZone( int client, int zone_id, ZoneType zoneType, ZoneT
  * @param handle					A handle of type Database passed in by reference to clone database into
  * @noreturn
  */
-native void Timer_GetDatabase( Database& handle );
 native Database Timer_GetDatabase();
 
 /**
