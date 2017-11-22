@@ -50,6 +50,7 @@ public void OnPluginStart()
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
+	RegConsoleCmd( "sm_pb", Command_PB );
 	
 	/* Hooks */
 	HookEvent( "player_jump", HookEvent_PlayerJump );
@@ -608,6 +609,82 @@ public Action Command_Noclip( int client, int args )
 	}
 }
 
+public Action Command_PB( int client, int args )
+{
+	ShowStats( client, g_PlayerRecordData[client][0][0] );
+	
+	return Plugin_Handled;
+}
+
+void ShowStats( int client, any recordData[RecordData] )
+{
+	char query[256];
+	Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE playerid = '%i'", recordData[RD_PlayerID] );
+	
+	DataPack pack = new DataPack();
+	pack.WriteCell( GetClientUserId( client ) );
+	
+	for( int i = 0; i < sizeof( recordData ); i++ )
+	{
+		pack.WriteCell( recordData[i] );
+	}
+	
+	g_hDatabase.Query( ShowStats_Callback, query, pack, DBPrio_Low );
+}
+
+public void ShowStats_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (ShowStats_Callback) - %s", error );
+		return;
+	}
+	
+	if( results.FetchRow() )
+	{
+		pack.Reset();
+		int client = GetClientOfUserId( pack.ReadCell() );
+		
+		any recordData[RecordData];
+		for( int i = 0; i < sizeof( recordData ); i++ )
+		{
+			recordData[i] = pack.ReadCell();
+		}
+		
+		char name[MAX_NAME_LENGTH];
+		results.FetchString( 0, name, sizeof( name ) );
+		
+		Menu menu = new Menu( RecordInfo_Handler );
+		
+		char date[128];
+		FormatTime( date, sizeof( date ), "%d/%m/%Y - %H:%M:%S", recordData[RD_Timestamp] );
+		char sTime[64];
+		Timer_FormatTime( recordData[RD_Time], sTime, sizeof( sTime ) );
+		
+		char buffer[512];
+		Format( buffer, sizeof( buffer ), "Record Info - %s \n", name );
+		menu.SetTitle( buffer );
+		
+		Format( buffer, sizeof( buffer ), "Details:\n \n" );
+		Format( buffer, sizeof( buffer ), "%s%s - %s\n \n", buffer, g_cMapName, date );
+		Format( buffer, sizeof( buffer ), "%sTime: %s\n", buffer, sTime );
+		Format( buffer, sizeof( buffer ), "%sJumps: %i\n", buffer, recordData[RD_Jumps] );
+		Format( buffer, sizeof( buffer ), "%sStrafes: %i (%.2f)\n", buffer, recordData[RD_Strafes], recordData[RD_Sync] );
+		Format( buffer, sizeof( buffer ), "%sStrafe Time %: %.2f\n \n", buffer, recordData[RD_StrafeTime] );
+		Format( buffer, sizeof( buffer ), "%sSSJ: %i\n", buffer, recordData[RD_SSJ] );
+		menu.AddItem( "stats", buffer );
+		
+		menu.Display( client, MENU_TIME_FOREVER );
+	}
+}
+
+public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
 
 /* Natives */
 
