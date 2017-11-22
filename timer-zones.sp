@@ -810,7 +810,7 @@ void SQL_CreateTables()
 	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` (mapname CHAR(128) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
 	txn.AddQuery( query );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname CHAR(128) NOT NULL, uid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `uid`, `subindex`, `style`, `zonetrack`));" );
+	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname CHAR(128) NOT NULL, playerid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `playerid`, `subindex`, `style`, `zonetrack`));" );
 	txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );

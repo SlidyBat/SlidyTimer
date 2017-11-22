@@ -26,6 +26,7 @@ static char g_cZoneTypeNames[][] =
 
 enum ZoneTrack
 {
+	ZT_None = -1,
 	ZT_Main,
 	ZT_Bonus,
 	TOTAL_ZONE_TRACKS
@@ -196,6 +197,17 @@ native ZoneTrack Timer_GetClientZoneTrack( int client );
  */
 native void Timer_StopTimer( int client );
 
+/**
+ * Stops client timer
+ *
+ * @param client					Client index.
+ * @param zoneType					Type of desired zone.
+ * @param zoneTrack					Track of desired zone.
+ * @param subindex					Optional subindex of desired zone, for checkpoints/anticheat.
+ * @noreturn
+ */
+native void Timer_TeleportClientToZone( int client, ZoneType zoneType, ZoneTrack zoneTrack, int subindex = 0 );
+
 public SharedPlugin __pl_slidy_timer =
 {
 	name = "timer-core",
@@ -214,5 +226,6 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetClientZoneType" );
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
+	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 }
 #endif
