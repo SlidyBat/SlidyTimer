@@ -5,7 +5,7 @@
 
 #define TIMER_PLUGIN_VERSION "0.1"
 #define MENU_PREFIX "Timer"
-#define MAX_STYLES 1 // for now, until i actually implement them
+#define MAX_STYLES 24 // for now, until i actually implement them
 
 enum ZoneType
 {
@@ -54,9 +54,38 @@ enum
 	ZONE_DATA
 }
 
+enum StyleSettings
+{
+	String:StyleName[64],
+	String:StylePrefix[16],
+	String:Aliases[512],
+	String:SpecialId[16],
+	bool:Ranked,
+	bool:AutoBhop,
+	bool:StartBhop,
+	Float:Gravity,
+	Float:Timescale,
+	Float:MaxSpeed,
+	Fov,
+	bool:Sync,
+	bool:PreventLeft,
+	bool:PreventRight,
+	bool:PreventForward,
+	bool:PreventBack,
+	bool:CountLeft,
+	bool:CountRight,
+	bool:CountForward,
+	bool:CountBack,
+	bool:HSW,
+	Float:PreSpeed,
+	StyleId,
+	Float:ExpMultiplier
+};
+
 enum RecordData
 {
 	RD_PlayerID,
+	String:RD_Name[MAX_NAME_LENGTH],
 	RD_Timestamp,
 	Float:RD_Time,
 	RD_Jumps,
@@ -150,7 +179,7 @@ stock void Timer_GetZoneTrackName( ZoneTrack zoneTrack, char[] buffer, int maxle
  *
  * @noreturn
  */
-forward void Timer_OnDatabaseReady();
+forward void Timer_OnDatabaseLoaded();
 
 /**
  * Called when client has been loaded by core timer plugin and been provided a playerid
