@@ -72,6 +72,8 @@ public void OnPluginStart()
 	RegConsoleCmd( "sm_b", Command_Bonus );
 	RegConsoleCmd( "sm_bonus", Command_Bonus );
 	
+	AddCommandListener( Command_JoinTeam, "jointeam" );
+	
 	
 	// Forwards
 	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
@@ -229,9 +231,9 @@ void TeleportClientToZone( int client, ZoneType zoneType, ZoneTrack zoneTrack, i
 		return;
 	}
 	
-	if( GetClientTeam( client ) == CS_TEAM_SPECTATOR )
+	if( !IsPlayerAlive( client ) )
 	{
-		ChangeClientTeam( client, CS_TEAM_CT );
+		CS_RespawnPlayer( client );
 	}
 	
 	float spawn[3];
@@ -240,6 +242,7 @@ void TeleportClientToZone( int client, ZoneType zoneType, ZoneTrack zoneTrack, i
 	Timer_StopTimer( client );
 	g_PlayerCurrentZoneType[client] = ZoneType;
 	g_PlayerCurrentZoneTrack[client] = ZoneTrack;
+	
 	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
 }
 
@@ -660,6 +663,10 @@ public Action Command_Restart( int client, int args )
 {
 	if( IsValidClient( client ) )
 	{		
+		if( !IsPlayerAlive( client ) )
+		{
+			ChangeClientTeam( client, CS_TEAM_T );
+		}
 		TeleportClientToZone( client, Zone_Start, ZT_Main );
 	}
 	
@@ -670,9 +677,33 @@ public Action Command_Bonus( int client, int args )
 {
 	if( IsValidClient( client ) )
 	{	
+		if( !IsPlayerAlive( client ) )
+		{
+			ChangeClientTeam( client, CS_TEAM_T );
+		}
 		TeleportClientToZone( client, Zone_Start, ZT_Bonus );
 	}
 	
+	return Plugin_Handled;
+}
+
+public Action Command_JoinTeam( int client, const char[] command, int args )
+{
+	if( !IsValidClient( client ) )
+		return Plugin_Continue;
+	
+	char arg[32];
+	int value;
+
+	GetCmdArg( 1, arg, 32 );
+	value = StringToInt( arg );
+	ChangeClientTeam( client, value );
+
+	if( value > 1 )
+	{
+		TeleportClientToZone( client, Zone_Start, ZT_Main );
+	}
+
 	return Plugin_Handled;
 }
 

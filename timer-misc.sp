@@ -19,9 +19,12 @@ public void OnPluginStart()
 {
 	RegConsoleCmd( "sm_spec", Command_Spec );
 	
+	HookEvent( "game_end", HookEvent_GameEnd, EventHookMode_Pre );
+	
 	HookEvent( "player_spawn", HookEvent_PlayerSpawn, EventHookMode_Post );
 	HookEvent( "player_connect", HookEvent_PlayerConnect, EventHookMode_Pre );
 	HookEvent( "player_disconnect", HookEvent_PlayerDisconnect, EventHookMode_Pre );
+	HookEvent( "player_team", HookEvent_PlayerTeam, EventHookMode_Pre );
 	
 	HookUserMessage( GetUserMessageId( "TextMsg" ), UserMsg_TextMsg, true );
 	HookUserMessage( GetUserMessageId( "SayText2" ), UserMsg_SayText2, true );
@@ -43,6 +46,32 @@ public void OnClientPostAdminCheck( int client )
 public void OnClientDisconnect( int client )
 {
 	SDKUnhook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
+}
+
+public Action CS_OnTerminateRound( float& delay, CSRoundEndReason& reason )
+{
+	int timeleft;
+	GetMapTimeLeft( timeleft );
+	
+	if( timeleft <= 0 )
+	{
+		return Plugin_Continue;
+	}
+
+	return Plugin_Handled;
+}
+
+public Action HookEvent_GameEnd( Event E_Event, char[] C_Name, bool B_DontBroadcast )
+{
+	int timeleft;
+	GetMapTimeLeft( timeleft );
+	
+	if( timeleft <= 0 )
+	{
+		return Plugin_Continue;
+	}
+
+	return Plugin_Handled;
 }
 
 public Action Hook_OnTakeDamageCallback( int victim, int& attacker, int& inflictor, float& damage, int& damagetype )
@@ -96,6 +125,14 @@ public Action HookEvent_PlayerDisconnect( Event event, const char[] name, bool d
 	PrintToChatAll( buffer ); // TODO: maybe implement a timer print to chat that creates a SayText2 usermsg, so message appears in console
 
 	return Plugin_Handled;
+}
+
+public Action HookEvent_PlayerTeam( Event event, const char[] name, bool dontBroadcast )
+{
+	dontBroadcast = true;
+	event.BroadcastDisabled = true;
+
+	return Plugin_Changed
 }
 
 public Action UserMsg_TextMsg( UserMsg msg_id, Protobuf msg, const int[] players, int playersNum, bool reliable, bool init )
