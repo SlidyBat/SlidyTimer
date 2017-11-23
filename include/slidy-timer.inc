@@ -95,9 +95,34 @@ enum RecordData
 	RD_SSJ
 }
 
-stock bool IsValidClient(int client, bool bAlive = false) // when bAlive is false = technical checks, when it's true = gameplay checks
+stock bool IsValidClient( int client, bool bAlive = false ) // when bAlive is false = technical checks, when it's true = gameplay checks
 {
-	return (client >= 1 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && !IsClientSourceTV(client) && (!bAlive || IsPlayerAlive(client)));
+	return (client > 0 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && (!bAlive || IsPlayerAlive(client)));
+}
+
+stock float GetClientSpeedSq( int client )
+{	
+	float x = GetEntPropFloat( client, Prop_Send, "m_vecVelocity[0]" );
+	float y = GetEntPropFloat( client, Prop_Send, "m_vecVelocity[1]" );
+	
+	return x*x + y*y;
+}
+
+stock float GetClientSpeed( int client )
+{
+	return SquareRoot( GetClientSpeedSq( client ) );
+}
+
+stock void NormalizeAngle( float& ang )
+{
+	if( ang > 180 )
+	{
+		ang -= 360;
+	}
+	else if( ang <= -180 )
+	{
+		ang += 360;
+	}
 }
 
 stock void Timer_GetZoneColour( ZoneType zoneType, ZoneTrack zoneTrack, int colour[4] )
