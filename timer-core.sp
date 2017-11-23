@@ -3,6 +3,7 @@
 
 #include <sourcemod>
 #include <slidy-timer>
+#include <sdktools>
 
 #define MAX_WR_CACHE 50
 
@@ -26,8 +27,14 @@ Handle		g_hForward_OnClientLoaded;
 int			g_ClientPlayerID[MAXPLAYERS + 1];
 
 ArrayList    g_aMapRecords[TOTAL_ZONE_TRACKS][MAX_STYLES];
-any			g_PlayerRecordData[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES][RecordData];
 
+any			g_StyleSettings[MAX_STYLES][StyleSettings];
+StringMap	g_smStyleCommands;
+int			g_iTotalStyles;
+Menu			g_mStylesMenu;
+
+/* Player Data */
+any			g_PlayerRecordData[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES][RecordData];
 int			g_PlayerCurrentStyle[MAXPLAYERS + 1];
 int			g_nPlayerFrames[MAXPLAYERS + 1];
 bool			g_bTimerRunning[MAXPLAYERS + 1]; // whether client timer is running or not, regardless of if its paused
@@ -42,7 +49,6 @@ int			g_nPlayerAirFrames[MAXPLAYERS + 1];
 int			g_nPlayerAirStrafeFrames[MAXPLAYERS + 1];
 
 ConVar		sv_autobunnyhopping;
-bool			g_bAutoBhop[MAXPLAYERS + 1] = { true, ... };
 bool			g_bNoclip[MAXPLAYERS + 1];
 
 public void OnPluginStart()
@@ -53,8 +59,14 @@ public void OnPluginStart()
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
+	
+	RegConsoleCmd( "sm_style", Command_Styles );
+	RegConsoleCmd( "sm_styles", Command_Styles );
+	
 	RegConsoleCmd( "sm_pb", Command_PB );
+	RegConsoleCmd( "sm_bpb", Command_Bonus_PB );
 	RegConsoleCmd( "sm_wr", Command_WR );
+	RegConsoleCmd( "sm_bwr", Command_Bonus_WR );
 	
 	/* Hooks */
 	HookEvent( "player_jump", HookEvent_PlayerJump );
@@ -88,6 +100,11 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnMapStart()
 {
+	if( !LoadStyles() )
+	{
+		SetFailState( "Failed to find sourcemod/configs/Timer/timer-styles.cfg, make sure it exists and is properly filled." );
+	}
+
 	GetCurrentMap( g_cMapName, sizeof( g_cMapName ) );
 	
 	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
@@ -99,14 +116,6 @@ public void OnMapStart()
 	}
 	
 	SQL_CacheRecords();
-}
-
-public void OnClientPutInServer( int client )
-{
-	if( !IsFakeClient( client ) )
-	{
-		sv_autobunnyhopping.ReplicateToClient( client, g_bAutoBhop[client] ? "1" : "0" );
-	}
 }
 
 public void OnClientPostAdminCheck( int client )
@@ -132,10 +141,13 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 	SQL_LoadRecords( client );
 }
 
-public void OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
+public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
 {
 	if( IsValidClient( client, true ) )
 	{	
+		static any styleSettings[StyleSettings];
+		styleSettings = g_StyleSettings[g_PlayerCurrentStyle[client]];
+		
 		static int lastButtons[MAXPLAYERS + 1];
 		static float lastYaw[MAXPLAYERS + 1];
 		
@@ -175,23 +187,63 @@ public void OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3]
 				}
 			}
 			
-			if( !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+			if( styleSettings[CountLeft] && !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
 			{
 				g_nPlayerStrafes[client]++;
 			}
-			else if( !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+			else if( styleSettings[CountRight] && !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+			{
+				g_nPlayerStrafes[client]++;
+			}
+			else if( styleSettings[CountForward] && !( lastButtons[client] & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
+			{
+				g_nPlayerStrafes[client]++;
+			}
+			else if( styleSettings[CountBack] && !( lastButtons[client] & IN_BACK ) && ( buttons & IN_BACK ) )
 			{
 				g_nPlayerStrafes[client]++;
 			}
 		}
 		
-		if( g_bAutoBhop[client] && buttons & IN_JUMP )
+		if( buttons & IN_JUMP )
 		{
 			if( !( GetEntityMoveType( client ) & MOVETYPE_LADDER )
 				&& !( GetEntityFlags( client ) & FL_ONGROUND )
 				&& ( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
 			{
 				buttons &= ~IN_JUMP;
+			}
+		}
+		
+		if( Timer_GetClientZoneType( client ) == Zone_Start )
+		{
+			if( buttons & IN_JUMP && styleSettings[StartBhop] )
+			{
+				buttons &= IN_JUMP;
+			}
+			
+			if( styleSettings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > styleSettings[PreSpeed]*styleSettings[PreSpeed] )
+			{
+				float speed = GetClientSpeed( client );
+				float scale = styleSettings[PreSpeed] / speed;
+				
+				float vVel[3];
+				GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vVel);
+				ScaleVector( vVel, scale );
+				
+				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
+			}
+		}
+		
+		// blocking keys (only in air)
+		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
+		{
+			if( styleSettings[PreventLeft] && ( buttons & IN_LEFT ) ||
+				styleSettings[PreventRight] && ( buttons & IN_RIGHT ) ||
+				styleSettings[PreventForward] && ( buttons & IN_FORWARD ) ||
+				styleSettings[PreventBack] && ( buttons & IN_BACK ) )
+			{
+				bButtonError = true;
 			}
 		}
 		
@@ -217,7 +269,6 @@ void ClearPlayerData( int client )
 	g_nPlayerAirStrafeFrames[client] = 0;
 	g_nPlayerAirFrames[client] = 0;
 }
-
 
 void StartTimer( int client )
 {
@@ -266,7 +317,7 @@ void FinishTimer( int client )
 		wr = wrRecordData[RD_Time];
 	}
 	
-	PrintToChatAll( "[Timer] %N finished on %s timer in %ss", client, sZoneTrack, sTime );
+	PrintToChatAll( "[%s] %N finished on %s timer in %ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
 	
 	if( pb == 0.0 || time < pb ) // new record, save it
 	{
@@ -285,37 +336,37 @@ void FinishTimer( int client )
 		
 		if( pb == 0.0 ) // new time
 		{
-			if( g_aMapRecords[style][track].Length )
+			if( g_aMapRecords[track][style].Length )
 			{
 				int index = GetRankForTime( time, ztTrack, style ) - 1;
-				g_aMapRecords[style][track].ShiftUp( index );
-				g_aMapRecords[style][track].SetArray( index, g_PlayerRecordData[client][track][style][0] );
+				g_aMapRecords[track][style].ShiftUp( index );
+				g_aMapRecords[track][style].SetArray( index, g_PlayerRecordData[client][track][style][0] );
 			}
 			else
 			{
-				g_aMapRecords[style][track].PushArray( g_PlayerRecordData[client][track][style][0] );
+				g_aMapRecords[track][style].PushArray( g_PlayerRecordData[client][track][style][0] );
 			}
 			
 			SQL_InsertRecord( client, ztTrack, style, time );
 		}
 		else // existing time but beaten
 		{
-			g_aMapRecords[style][track].Erase( oldrank - 1 );
-			if( g_aMapRecords[style][track].Length )
+			g_aMapRecords[track][style].Erase( oldrank - 1 );
+			if( g_aMapRecords[track][style].Length )
 			{
 				int index = GetRankForTime( time, ztTrack, style ) - 1;
-				g_aMapRecords[style][track].ShiftUp( index );
-				g_aMapRecords[style][track].SetArray( index, g_PlayerRecordData[client][track][style][0] );
+				g_aMapRecords[track][style].ShiftUp( index );
+				g_aMapRecords[track][style].SetArray( index, g_PlayerRecordData[client][track][style][0] );
 			}
 			else
 			{
-				g_aMapRecords[style][track].PushArray( g_PlayerRecordData[client][track][style][0] );
+				g_aMapRecords[track][style].PushArray( g_PlayerRecordData[client][track][style][0] );
 			}
 			
 			SQL_UpdateRecord( client, ztTrack, style, time );
 		}
 		
-		if( time < wr )
+		if( wr == 0.0 || time < wr )
 		{
 			PrintToChatAll( "NEW WR!!!!!" );
 		}
@@ -326,22 +377,22 @@ void FinishTimer( int client )
 	}
 }
 
-int GetRankForTime( float time, ZoneTrack track, int style )
+int GetRankForTime( float time, ZoneTrack ztTrack, int style )
 {
 	if( time == 0.0 )
 	{
 		return 0;
 	}
 	
-	int iTrack = view_as<int>( track );
+	int track = view_as<int>( ztTrack );
 	int rank = 1;
 	static bool bTrue = true; // weird workaround for while true loops not giving warning
 	
 	any recordData[RecordData];
 	while( bTrue )
 	{
-		g_aMapRecords[iTrack][style].GetArray( rank - 1, recordData[0] );
-		if( time > recordData[RD_Time] && rank <= g_aMapRecords[iTrack][style].Length )
+		g_aMapRecords[track][style].GetArray( rank - 1, recordData[0] );
+		if( time > recordData[RD_Time] && rank <= g_aMapRecords[track][style].Length )
 		{
 			rank++;
 		}
@@ -354,9 +405,134 @@ int GetRankForTime( float time, ZoneTrack track, int style )
 	return rank;
 }
 
-int GetClientRank( int client, ZoneTrack track, int style )
+int GetClientRank( int client, ZoneTrack ztTrack, int style )
 {
-	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( track )][style][RD_Time], track, style );
+	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( ztTrack )][style][RD_Time], ztTrack, style );
+}
+
+bool LoadStyles()
+{
+	g_iTotalStyles = 0;
+	
+	delete g_smStyleCommands;
+	g_smStyleCommands = new StringMap();
+
+	// load styles from cfg file
+	char path[PLATFORM_MAX_PATH];
+	BuildPath( Path_SM, path, sizeof( path ), "configs/Timer/timer-styles.cfg" );
+
+	KeyValues kvStyles = new KeyValues( "Styles" );
+	if( !kvStyles.ImportFromFile( path ) || !kvStyles.GotoFirstSubKey() )
+	{
+		return false;
+	}
+
+	do
+	{
+		kvStyles.GetString( "stylename", g_StyleSettings[g_iTotalStyles][StyleName], 64 );
+		kvStyles.GetString( "styleprefix", g_StyleSettings[g_iTotalStyles][StylePrefix], 16 );
+		kvStyles.GetString( "aliases", g_StyleSettings[g_iTotalStyles][Aliases], 512 );
+		kvStyles.GetString( "specialid", g_StyleSettings[g_iTotalStyles][SpecialId], 16 );
+
+		g_StyleSettings[g_iTotalStyles][Ranked] = view_as<bool>( kvStyles.GetNum( "ranked" ) );
+		g_StyleSettings[g_iTotalStyles][AutoBhop] = view_as<bool>( kvStyles.GetNum( "autobhop" ) );
+		g_StyleSettings[g_iTotalStyles][StartBhop] = view_as<bool>( kvStyles.GetNum( "startbhop" ) );
+
+		g_StyleSettings[g_iTotalStyles][Gravity] = kvStyles.GetFloat( "gravity" );
+		g_StyleSettings[g_iTotalStyles][Timescale] = kvStyles.GetFloat( "timescale" );
+		g_StyleSettings[g_iTotalStyles][MaxSpeed] = kvStyles.GetFloat( "maxspeed" );
+		g_StyleSettings[g_iTotalStyles][Fov] = kvStyles.GetNum( "fov" );
+
+		g_StyleSettings[g_iTotalStyles][Sync] = view_as<bool>( kvStyles.GetNum( "sync" ) );
+
+		g_StyleSettings[g_iTotalStyles][PreventLeft] = view_as<bool>( kvStyles.GetNum( "prevent_left" ) );
+		g_StyleSettings[g_iTotalStyles][PreventRight] = view_as<bool>( kvStyles.GetNum( "prevent_right" ) );
+		g_StyleSettings[g_iTotalStyles][PreventForward] = view_as<bool>( kvStyles.GetNum( "prevent_forward" ) );
+		g_StyleSettings[g_iTotalStyles][PreventBack] = view_as<bool>( kvStyles.GetNum( "prevent_back" ) );
+
+		g_StyleSettings[g_iTotalStyles][CountLeft] = view_as<bool>( kvStyles.GetNum( "count_left" ) );
+		g_StyleSettings[g_iTotalStyles][CountRight] = view_as<bool>( kvStyles.GetNum( "count_right" ) );
+		g_StyleSettings[g_iTotalStyles][CountForward] = view_as<bool>( kvStyles.GetNum( "count_forward" ) );
+		g_StyleSettings[g_iTotalStyles][CountBack] = view_as<bool>( kvStyles.GetNum( "count_back" ) );
+		
+		g_StyleSettings[g_iTotalStyles][HSW] = view_as<bool>( kvStyles.GetNum( "hsw" ) );
+
+		g_StyleSettings[g_iTotalStyles][PreSpeed] = kvStyles.GetFloat( "prespeed" );
+
+		g_StyleSettings[g_iTotalStyles][StyleId] = g_iTotalStyles;
+		g_StyleSettings[g_iTotalStyles][ExpMultiplier] = kvStyles.GetFloat( "expmultiplier" );
+
+		
+		char splitString[16][32];
+		int nAliases = ExplodeString( g_StyleSettings[g_iTotalStyles][Aliases], ",", splitString, sizeof( splitString ), sizeof( splitString[] ) );
+		
+		for( int i = 0; i < nAliases; i++ )
+		{
+			TrimString( splitString[i] );
+			
+			char command[32];
+			Format( command, sizeof( command ), "sm_%s", splitString[i] );
+			
+			g_smStyleCommands.SetValue( command, g_iTotalStyles );
+			RegConsoleCmd( command, Command_ChangeStyle );
+		}
+		
+		g_iTotalStyles++;
+	} while( kvStyles.GotoNextKey() );
+
+	delete kvStyles;
+
+	// build styles menu
+	delete g_mStylesMenu;
+	g_mStylesMenu = new Menu( StylesMenu_Handler );
+	
+	g_mStylesMenu.SetTitle( "Styles Menu\n \n" );
+	
+	for( int i = 0; i < g_iTotalStyles; i++ )
+	{
+		g_mStylesMenu.AddItem( g_StyleSettings[i][StyleName], g_StyleSettings[i][StyleName] );
+	}
+	
+	return true;
+}
+
+public int StylesMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		SetClientStyle( param1, param2 );
+	}
+}
+
+void SetClientStyle( int client, int style )
+{
+	g_PlayerCurrentStyle[client] = style;
+	
+	SetEntProp( client, Prop_Send, "m_iFOV", g_StyleSettings[style][Fov] );
+	SetEntProp( client, Prop_Send, "m_iDefaultFOV", g_StyleSettings[style][Fov] );
+
+	SetEntityGravity( client, ( 1.0 - g_StyleSettings[style][Gravity] ) );
+	
+	SetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue", view_as<float>( g_StyleSettings[style][Timescale] ) );
+	
+	sv_autobunnyhopping.ReplicateToClient( client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
+	
+	Timer_TeleportClientToZone( client, Zone_Start, ZT_Main );
+	
+	PrintToChat( client, "[Timer] Style now: %s", g_StyleSettings[style][StyleName] );
+}
+
+void OpenSelectStyleMenu( int client, MenuHandler handler )
+{
+	Menu menu = new Menu( handler );
+	menu.SetTitle( "Select Style:\n \n" );
+	
+	for( int i = 0; i < g_iTotalStyles; i++ )
+	{
+		menu.AddItem( "style", g_StyleSettings[i][StyleName] );
+	}
+	
+	menu.Display( client, MENU_TIME_FOREVER );
 }
 
 public void Timer_OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack zoneTrack, int subindex )
@@ -739,48 +915,149 @@ public Action Command_Noclip( int client, int args )
 	}
 }
 
-public Action Command_PB( int client, int args )
+public Action Command_Styles( int client, int args )
 {
-	ShowStats( client, g_PlayerRecordData[client][0][0] );
+	g_mStylesMenu.Display( client, MENU_TIME_FOREVER );
 	
 	return Plugin_Handled;
 }
 
+public Action Command_ChangeStyle( int client, int args )
+{
+	char command[64];
+	GetCmdArg( 0, command, sizeof( command ) );
+	
+	int style = 0;
+	if( g_smStyleCommands.GetValue( command, style ) )
+	{
+		SetClientStyle( client, style );
+		return Plugin_Handled;
+	}
+	
+	return Plugin_Continue;
+}
+
+public Action Command_PB( int client, int args )
+{
+	OpenSelectStyleMenu( client, ShowPB_Handler );
+	
+	return Plugin_Handled;
+}
+
+public int ShowPB_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		ShowStats( param1, g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2] );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+public Action Command_Bonus_PB( int client, int args )
+{
+	OpenSelectStyleMenu( client, ShowBonusPB_Handler );
+	
+	return Plugin_Handled;
+}
+
+public int ShowBonusPB_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		ShowStats( param1, g_PlayerRecordData[param1][view_as<int>( ZT_Bonus )][param2] );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
 public Action Command_WR( int client, int args )
 {
-	char buffer[256];
+	OpenSelectStyleMenu( client, ShowWR_Handler );
 	
+	return Plugin_Handled;
+}
+
+public int ShowWR_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		ShowLeaderboard( param1, ZT_Main, param2 );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+public Action Command_Bonus_WR( int client, int args )
+{
+	OpenSelectStyleMenu( client, ShowBonusWR_Handler );
+	
+	return Plugin_Handled;
+}
+
+public int ShowBonusWR_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		ShowLeaderboard( param1, ZT_Bonus, param2 );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+void ShowLeaderboard( int client, ZoneTrack ztTrack, int style )
+{
 	Menu menu = new Menu( WRMenu_Handler );
 	
-	Format( buffer, sizeof( buffer ), "%s Leaderboard", g_cMapName );
+	char trackName[32];
+	Timer_GetZoneTrackName( ztTrack, trackName, sizeof( trackName ) );
+	
+	char buffer[256];
+	Format( buffer, sizeof( buffer ), "%s %s %s Leaderboard", trackName, g_StyleSettings[style][StyleName], g_cMapName );
 	menu.SetTitle( buffer );
 	
 	char sTime[32], info[8];
+	int track = view_as<int>( ztTrack );
 	
 	for( int i = 0; i < g_aMapRecords[0][0].Length; i++ )
 	{
 		static any recordData[RecordData];
-		g_aMapRecords[0][0].GetArray( i, recordData[0] );
+		g_aMapRecords[track][style].GetArray( i, recordData[0] );
 		
 		Timer_FormatTime( recordData[RD_Time], sTime, sizeof( sTime ) );
 		Format( buffer, sizeof( buffer), "[#%i] - %s (%s)", i + 1, recordData[RD_Name], sTime );
 		
-		IntToString( i, info, sizeof( info ) );
+		Format( info, sizeof( info ), "%i,%i", track, style );
 		
 		menu.AddItem( info, buffer );
 	}
 	
 	menu.Display( client, MENU_TIME_FOREVER );
-	
-	return Plugin_Handled;
 }
 
 public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
 {
 	if( action == MenuAction_Select )
 	{
-		static any recordData[RecordData];
-		g_aMapRecords[0][0].GetArray( 0, recordData[0] );
+		char info[8];
+		menu.GetItem( param2, info, sizeof( info ) );
+		
+		char infoSplit[2][4];
+		ExplodeString( info, ",", infoSplit, sizeof( infoSplit ), sizeof( infoSplit[] ) );
+		
+		int track = StringToInt( infoSplit[0] );
+		int style = StringToInt( infoSplit[1] );
+		
+		any recordData[RecordData];
+		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
 		ShowStats( param1, recordData );
 	}
 	else if( action == MenuAction_End )
