@@ -7,7 +7,7 @@
 #include <cstrike>
 #include <slidy-timer>
 
-#define TIMER_INTERVAL 0.1
+#define TIMER_INTERVAL 1.0
 
 enum
 {
@@ -545,7 +545,7 @@ stock void DrawZoneFromPoints( float points[8][3], const int color[4] = { 255, 1
 		{
 			if( j != 7 - i )
 			{
-				TE_SetupBeamPoints( points[i], points[j], g_Sprites[BlueLightning], g_Sprites[HaloSprite], 0, 0, 0.1, 5.0, 5.0, 0, 0.0, color, 0);
+				TE_SetupBeamPoints( points[i], points[j], g_Sprites[BlueLightning], g_Sprites[HaloSprite], 0, 0, TIMER_INTERVAL, 5.0, 5.0, 0, 0.0, color, 0);
 				
 				if(0 < client <= MaxClients)
 				{
