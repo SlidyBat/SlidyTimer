@@ -891,6 +891,34 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 	}
 }
 
+void SQL_DeleteRecord( int playerid, ZoneTrack track, int style )
+{
+	char query[256];
+	Format( query, sizeof( query ), "DELETE FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i'", playerid, track, style );
+	
+	DataPack pack = new DataPack();
+	pack.WriteCell( track );
+	pack.WriteCell( style );
+	
+	g_hDatabase.Query( DeleteRecord_Callback, query, pack, DBPrio_Normal );
+}
+
+public void DeleteRecord_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (DeleteRecord_Callback) - %s", error );
+		return;
+	}
+	
+	pack.Reset();
+	ZoneTrack track = pack.ReadCell();
+	int style = pack.ReadCell();
+	delete pack;
+	
+	SQL_ReloadCache( track, style );
+}
+
 void SQL_ReloadCache( ZoneTrack track, int style )
 {
 	char query[256];
@@ -1001,7 +1029,10 @@ public int ShowPB_Handler( Menu menu, MenuAction action, int param1, int param2 
 {
 	if( action == MenuAction_Select )
 	{
-		ShowStats( param1, ZT_Main, param2, g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2] );
+		if( g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2][RD_Time] != 0.0 )
+		{
+			ShowStats( param1, ZT_Main, param2, g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2] );
+		}
 	}
 	else if( action == MenuAction_End )
 	{
@@ -1143,6 +1174,9 @@ void ShowStats( int client, ZoneTrack track, int style, const any recordData[Rec
 		Format( sSync, sizeof( sSync ), "(%.2f)", recordData[RD_Sync] );
 	}
 	
+	char sInfo[16];
+	Format( sInfo, sizeof( sInfo ), "%i,%i,%i", recordData[RD_PlayerID], track, style );
+	
 	char buffer[512];
 	Format( buffer, sizeof( buffer ), "%s - %s %s\n \n", g_cMapName, sTrack, g_StyleSettings[style][StyleName] );
 	menu.SetTitle( buffer );
@@ -1153,15 +1187,42 @@ void ShowStats( int client, ZoneTrack track, int style, const any recordData[Rec
 	Format( buffer, sizeof( buffer ), "%sJumps: %i\n", buffer, recordData[RD_Jumps] );
 	Format( buffer, sizeof( buffer ), "%sStrafes: %i %s\n", buffer, recordData[RD_Strafes], sSync );
 	Format( buffer, sizeof( buffer ), "%sStrafe Time %: %.2f\n", buffer, recordData[RD_StrafeTime] );
-	Format( buffer, sizeof( buffer ), "%sSSJ: %i\n", buffer, recordData[RD_SSJ] );
-	menu.AddItem( "stats", buffer );
+	Format( buffer, sizeof( buffer ), "%sSSJ: %i\n \n", buffer, recordData[RD_SSJ] );
+	menu.AddItem( sInfo, buffer );
+	
+	if( CheckCommandAccess( client, "delete_time", ADMFLAG_RCON ) )
+	{
+		menu.AddItem( "delete", "Delete Time" );
+	}
 	
 	menu.Display( client, MENU_TIME_FOREVER );
 }
 
 public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int param2 )
 {
-	if( action == MenuAction_End )
+	if( action == MenuAction_Select )
+	{
+		char sInfo[16];
+		menu.GetItem( 0, sInfo, sizeof( sInfo ) );
+		
+		char sSplitString[3][16];
+		ExplodeString( sInfo, ",", sSplitString, sizeof( sSplitString ), sizeof( sSplitString[] ) );
+		
+		int playerid = StringToInt( sSplitString[0] );
+		ZoneTrack track = view_as<ZoneTrack>( StringToInt( sSplitString[1] ) );
+		int style = StringToInt( sSplitString[2] );
+		
+		switch( param2 )
+		{
+			case 0: // TODO: implement showing player stats here
+			{}
+			case 1: // delete time
+			{
+				SQL_DeleteRecord( playerid, track, style );
+			}
+		}
+	}
+	else if( action == MenuAction_End )
 	{
 		delete menu;
 	}
