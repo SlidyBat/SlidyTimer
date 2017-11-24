@@ -25,6 +25,7 @@ Handle		g_hForward_OnDatabaseLoaded;
 Handle		g_hForward_OnClientLoaded;
 
 int			g_ClientPlayerID[MAXPLAYERS + 1];
+bool			g_bClientLoaded[MAXPLAYERS + 1];
 
 ArrayList    g_aMapRecords[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
@@ -92,10 +93,14 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetClientCurrentSync", Native_GetClientCurrentSync );
 	CreateNative( "Timer_GetClientCurrentStrafeTime", Native_GetClientCurrentStrafeTime );
 	CreateNative( "Timer_GetWRTime", Native_GetWRTime );
+	CreateNative( "Timer_GetWRName", Native_GetWRName );
 	CreateNative( "Timer_GetClientPBTime", Native_GetClientPBTime );
 	CreateNative( "Timer_GetClientStyle", Native_GetClientStyle );
+	CreateNative( "Timer_GetStyleName", Native_GetStyleName );
 	CreateNative( "Timer_GetClientTimerStatus", Native_GetClientTimerStatus );
+	CreateNative( "Timer_GetClientRank", Native_GetClientRank );
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
+	CreateNative( "Timer_IsClientLoaded", Native_IsClientLoaded );
 	CreateNative( "Timer_StopTimer", Native_StopTimer );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
@@ -134,6 +139,11 @@ public void OnClientPostAdminCheck( int client )
 	}
 }
 
+public void OnClientDisconnect( int client )
+{
+	g_bClientLoaded[client] = false;
+}
+
 public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 {
 	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
@@ -147,6 +157,8 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 	
 	ClearPlayerData( client );
 	SQL_LoadRecords( client );
+	
+	g_bClientLoaded[client] = true;
 }
 
 public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
@@ -1209,8 +1221,22 @@ public int Native_GetWRTime( Handle handler, int numparams )
 	return 0;
 }
 
+public int Native_GetWRName( Handle handler, int numparams )
+{
+	int track = GetNativeCell( 1 );
+	int style = GetNativeCell( 2 );
+	
+	if( g_aMapRecords[track][style].Length )
+	{
+		any recordData[RecordData];
+		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
+		
+		SetNativeString( 3, recordData[RD_Name], GetNativeCell( 4 ) );
+	}
+}
+
 public int Native_GetClientPBTime( Handle handler, int numparams )
-{	
+{
 	return view_as<int>( g_PlayerRecordData[GetNativeCell( 1 )][GetNativeCell( 2 )][GetNativeCell( 3 )][RD_Time] );
 }
 
@@ -1230,9 +1256,24 @@ public int Native_GetClientTimerStatus( Handle handler, int numParams )
 	return view_as<int>( TimerStatus_Running );
 }
 
+public int Native_GetClientRank( Handle handler, int numParams )
+{
+	return GetClientRank( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ) );
+}
+
+public int Native_GetStyleName( Handle handler, int numParams )
+{
+	SetNativeString( 2, g_StyleSettings[GetNativeCell( 1 )][StyleName], GetNativeCell( 3 ) );
+}
+
 public int Native_GetClientStyle( Handle handler, int numParams )
 {
 	return g_PlayerCurrentStyle[GetNativeCell( 1 )];
+}
+
+public int Native_IsClientLoaded( Handle handler, int numParams )
+{
+	return g_bClientLoaded[GetNativeCell( 1 )];
 }
 
 public int Native_StopTimer( Handle handler, int numParams )

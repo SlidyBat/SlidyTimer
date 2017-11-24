@@ -19,8 +19,8 @@ enum ZoneType
 
 static char g_cZoneTypeNames[][] =
 {
-	"Start Zone",
-	"End Zone",
+	"Start",
+	"End",
 	"Checkpoint",
 	"Cheatzone"
 };
@@ -303,12 +303,32 @@ native float Timer_GetClientCurrentStrafeTime( int client );
 native TimerStatus Timer_GetClientTimerStatus( int client );
 
 /**
+ * Gets clients rank for specified track and style
+ *
+ * @param client					Client index
+ * @param track						Zone track
+ * @param style						Style index
+ * @return							TimerStatus of client
+ */
+native TimerStatus Timer_GetClientRank( int client, ZoneTrack track, int style );
+
+/**
  * Gets clients style
  *
  * @param client					Client index
  * @return							Style index of client
  */
 native int Timer_GetClientStyle( int client );
+
+/**
+ * Gets style full name
+ *
+ * @param style						Style index
+ * @param buffer					Buffer to store style name in
+ * @param maxlen					Max length of buffer
+ * @return							Style index of client
+ */
+native int Timer_GetStyleName( int style, char[] buffer, int maxlen );
 
 /**
  * Gets WR for specified track and style
@@ -318,6 +338,17 @@ native int Timer_GetClientStyle( int client );
  * @return							WR time as float, or 0.0 if it does not exist (or hasn't been loaded yet)
  */
 native float Timer_GetWRTime( ZoneTrack track, int style );
+
+/**
+ * Gets name of WR holder for specified track and style
+ *
+ * @param track						Zone track to check (ie. main/bonus)
+ * @param style						Style index to check
+ * @param buffer					Buffer to store WR holder name in
+ * @param maxlen					Max length of buffer
+ * @noreturn
+ */
+native void Timer_GetWRName( ZoneTrack track, int style, char[] buffer, int maxlen );
 
 /**
  * Gets PB of client for specified track and style
@@ -348,10 +379,18 @@ native ZoneTrack Timer_GetClientZoneTrack( int client );
 /**
  * Provides database handle from timer
  *
- * @param handle					A handle of type Database passed in by reference to clone database into
- * @noreturn
+ * @return Database handle
  */
 native Database Timer_GetDatabase();
+
+/**
+ * Native to make sure client has been loaded by timer and has been provided a database id
+ * NOTE: This does not guarantee that the clients times and settings have been loaded
+ *
+ * @param client					Client index
+ * @return							Whether client is connected
+ */
+native bool Timer_IsClientLoaded( int client );
 
 /**
  * Stops client timer
@@ -394,10 +433,14 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetClientStyle" );
 	MarkNativeAsOptional( "Timer_GetClientPBTime" );
 	MarkNativeAsOptional( "Timer_GetWRTime" );
+	MarkNativeAsOptional( "Timer_GetWRName" );
+	MarkNativeAsOptional( "Timer_GetStyleName" );
 	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
+	MarkNativeAsOptional( "Timer_GetClientRank" );
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
 	MarkNativeAsOptional( "Timer_GetClientZoneType" );
 	MarkNativeAsOptional( "Timer_GetDatabase" );
+	MarkNativeAsOptional( "Timer_IsClientLoaded" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
 	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 }
