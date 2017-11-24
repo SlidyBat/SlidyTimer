@@ -159,41 +159,28 @@ stock void Timer_GetZoneColour( ZoneType zoneType, ZoneTrack zoneTrack, int colo
 }
 
 // from shavits because im not doing this
-stock void Timer_FormatTime( float time, char[] newtime, int newtimesize, bool precise = true )
+stock void Timer_FormatTime( float time, char[] buffer, int maxlen )
 {
-	float fTempTime = time;
+	int iTime = RoundFloat( time * 1000 );
+	int mins, secs, milli;
+	milli = iTime;
 
-	if( fTempTime < 0.0 )
+	if( milli < 0 )
+		milli = -milli;
+
+	if( milli >= 60000 )
 	{
-		fTempTime = -fTempTime;
+		mins = RoundToFloor( milli / 60000.0 );
+		milli %= 60000;
 	}
 
-	int iRounded = RoundToFloor( fTempTime );
-	float fSeconds = ( iRounded % 60 ) + fTempTime - iRounded;
-
-	char sSeconds[8];
-	FormatEx( sSeconds, 8, precise ? "%s%.03f" : "%s%.01f", ( fSeconds < 0.0 ) ? "-" : "", fSeconds );
-
-	if( fTempTime < 60.0 )
+	if( milli >= 1000 )
 	{
-		strcopy( newtime, newtimesize, sSeconds );
+		secs = RoundToFloor( milli / 1000.0 );
+		milli %= 1000;
 	}
-	else
-	{
-		int iMinutes = ( iRounded / 60 );
 
-		if( fTempTime < 3600.0 )
-		{
-			FormatEx( newtime, newtimesize, "%s%d:%s%s", ( time < 0.0 )? "-" : "", iMinutes, ( fSeconds < 10 )? "0" : "", sSeconds );
-		}
-		else
-		{
-			iMinutes %= 60;
-			int iHours = ( iRounded / 3600 );
-
-			FormatEx( newtime, newtimesize, "%s%d:%s%d:%s%s", ( time < 0.0 ) ? "-" : "", iHours, ( iMinutes < 10 ) ? "0" : "", iMinutes, ( fSeconds < 10 )? "0" : "", sSeconds );
-		}
-	}
+	FormatEx( buffer, maxlen, "%s%02d:%02d.%03d", ( time < 0 ) ? "-" : "", mins, secs, milli );
 }
 
 stock void Timer_GetZoneTypeName( ZoneType zoneType, char[] buffer, int maxlen )
