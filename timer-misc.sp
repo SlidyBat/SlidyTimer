@@ -81,7 +81,10 @@ public Action Hook_OnTakeDamageCallback( int victim, int& attacker, int& inflict
 
 public void Hook_OnWeaponDropPostCallback( int client, int weapon )
 {
-	CreateTimer( 0.1, Timer_ClearEntity, EntIndexToEntRef( weapon ) );
+	if( IsValidEntity( weapon ) )
+	{
+		CreateTimer( 0.1, Timer_ClearEntity, EntIndexToEntRef( weapon ) );
+	}
 }
 
 public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBroadcast )
