@@ -207,9 +207,85 @@ public int ZonesMenuHandler( Menu menu, MenuAction action, int param1, int param
 			}
 			case 1:
 			{
-				// OpenDeleteZoneMenu( client );
-				// TODO: implement zone deletion
+				OpenDeleteZoneMenu( param1 );
 			}
+		}
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+void OpenDeleteZoneMenu( int client )
+{
+	Menu menu = new Menu( DeleteZone_Handler );
+	menu.SetTitle( "Delete Zone\n \n" );
+	
+	char buffer[64];
+	char sType[16], sTrack[16];
+	
+	if( g_PlayerCurrentZoneType[client] != Zone_None )
+	{
+		Timer_GetZoneTypeName( g_PlayerCurrentZoneType[client], sType, sizeof( sType ) );
+		Timer_GetZoneTrackName( g_PlayerCurrentZoneTrack[client], sTrack, sizeof( sTrack ) );
+		
+		if( g_PlayerCurrentZoneType[client] == Zone_Start || g_PlayerCurrentZoneType[client] == Zone_End )
+		{
+			FormatEx( buffer, sizeof( buffer ), "Delete Current Zone (%s %s)\n \n", sTrack, sType );
+		}
+		else
+		{
+			FormatEx( buffer, sizeof( buffer ), "Delete Current Zone (%s %s %i)\n \n", sTrack, sType, g_PlayerCurrentZoneSubIndex[client] + 1 );
+		}
+		
+		menu.AddItem( "current", buffer );
+	}
+	else
+	{
+		menu.AddItem( "current", "Delete Current Zone\n \n", ITEMDRAW_DISABLED );
+	}
+	
+	for( int i = 0; i < g_aZones.Length; i++ )
+	{
+		ZoneTrack track = view_as<ZoneTrack>( g_aZones.Get( i, view_as<int>( ZD_ZoneTrack ) ) );
+		Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
+		ZoneType type = view_as<ZoneType>( g_aZones.Get( i, view_as<int>( ZD_ZoneType ) ) );
+		Timer_GetZoneTypeName( type, sType, sizeof( sType ) );
+		int subindex = g_aZones.Get( i, view_as<int>( ZD_ZoneSubindex ) );
+		
+		
+		if( type == Zone_Start || type == Zone_End )
+		{
+			FormatEx( buffer, sizeof( buffer ), "%s %s", sTrack, sType );
+		}
+		else
+		{
+			FormatEx( buffer, sizeof( buffer ), "%s %s %i", sTrack, sType, subindex + 1 );
+		}
+		
+		char sInfo[8];
+		IntToString( i, sInfo, sizeof( sInfo ) );
+		menu.AddItem( sInfo, buffer );
+	}
+	
+	menu.Display( client, 30 );
+}
+
+public int DeleteZone_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		char sInfo[8];
+		menu.GetItem( param2, sInfo, sizeof( sInfo ) );
+		
+		if( StrEqual( sInfo, "current" ) )
+		{
+			SQL_DeleteZone( GetZoneIndex( g_PlayerCurrentZoneType[param1], g_PlayerCurrentZoneTrack[param1], g_PlayerCurrentZoneSubIndex[param1] ) );
+		}
+		else
+		{
+			SQL_DeleteZone( StringToInt( sInfo ) );
 		}
 	}
 	else if( action == MenuAction_End )
@@ -946,7 +1022,28 @@ public void InsertZone_Callback( Database db, DBResultSet results, const char[] 
 	
 	ClearZones();
 	SQL_LoadZones();
-}	
+}
+
+void SQL_DeleteZone( int index )
+{
+	int zoneid = g_aZones.Get( index, view_as<int>( ZD_ZoneId ) );
+
+	char query[256];
+	Format( query, sizeof( query ), "DELETE FROM `t_zones` WHERE zoneid = '%i'", zoneid );
+	
+	g_hDatabase.Query( DeleteZone_Callback, query, _, DBPrio_Normal );
+}
+
+public void DeleteZone_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (DeleteZone_Callback) - %s", error );
+		return;
+	}
+	
+	SQL_LoadZones();
+}
 
 /* Stocks */
 
