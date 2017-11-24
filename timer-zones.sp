@@ -7,7 +7,7 @@
 #include <cstrike>
 #include <slidy-timer>
 
-#define TIMER_INTERVAL 1.0
+#define TIMER_INTERVAL 0.1
 
 enum
 {
