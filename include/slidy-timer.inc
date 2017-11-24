@@ -229,6 +229,35 @@ forward void Timer_OnDatabaseLoaded();
 forward void Timer_OnClientLoaded( int client, int playerid, bool newplayer );
 
 /**
+ * Called when all styles have been loaded from config file
+ *
+ * @noreturn
+ */
+forward void Timer_OnStylesLoaded();
+
+/**
+ * Called just before client changes style
+ *
+ * @param client					Client index of player
+ * @param oldstyle					Style index of client's old style
+ * @param newstyle					Style index of client's new style
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop client style from being changed
+ */
+forward Action Timer_OnStyleChangedPre( int client, int oldstyle, int newstyle );
+
+/**
+ * Called after client changes style
+ *
+ * @param client					Client index of player
+ * @param oldstyle					Style index of client's old style
+ * @param newstyle					Style index of client's new style
+ *
+ * @noreturn
+ */
+forward void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle );
+
+/**
  * Called when a client enters a zone
  *
  * @param client					Client index of player that entered zone

@@ -23,6 +23,9 @@ char			g_cMapName[PLATFORM_MAX_PATH];
 
 Handle		g_hForward_OnDatabaseLoaded;
 Handle		g_hForward_OnClientLoaded;
+Handle		g_hForward_OnStylesLoaded;
+Handle		g_hForward_OnStyleChangedPre;
+Handle		g_hForward_OnStyleChangedPost;
 
 int			g_ClientPlayerID[MAXPLAYERS + 1];
 bool			g_bClientLoaded[MAXPLAYERS + 1];
@@ -32,7 +35,6 @@ ArrayList    g_aMapRecords[TOTAL_ZONE_TRACKS][MAX_STYLES];
 any			g_StyleSettings[MAX_STYLES][StyleSettings];
 StringMap	g_smStyleCommands;
 int			g_iTotalStyles;
-Menu			g_mStylesMenu;
 
 /* Player Data */
 any			g_PlayerRecordData[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES][RecordData];
@@ -57,6 +59,9 @@ public void OnPluginStart()
 	/* Forwards */
 	g_hForward_OnDatabaseLoaded = CreateGlobalForward( "Timer_OnDatabaseLoaded", ET_Event );
 	g_hForward_OnClientLoaded = CreateGlobalForward( "Timer_OnClientLoaded", ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnStylesLoaded = CreateGlobalForward( "Timer_OnStylesLoaded", ET_Event );
+	g_hForward_OnStyleChangedPre = CreateGlobalForward( "Timer_OnStyleChangedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnStyleChangedPost = CreateGlobalForward( "Timer_OnStyleChangedPost", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
@@ -506,11 +511,27 @@ bool LoadStyles()
 
 	delete kvStyles;
 	
+	Call_StartForward( g_hForward_OnStylesLoaded );
+	Call_Finish();
+	
 	return true;
 }
 
 void SetClientStyle( int client, int style )
 {
+	Action result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnStyleChangedPre );
+	Call_PushCell( client );
+	Call_PushCell( g_PlayerCurrentStyle[client] );
+	Call_PushCell( style );
+	Call_Finish( result );
+	
+	if(result != Plugin_Continue && result != Plugin_Changed)
+	{
+		return;
+	}
+
+	int oldstyle = g_PlayerCurrentStyle[client];
 	g_PlayerCurrentStyle[client] = style;
 	
 	SetEntProp( client, Prop_Send, "m_iFOV", g_StyleSettings[style][Fov] );
@@ -526,7 +547,11 @@ void SetClientStyle( int client, int style )
 	
 	PrintToChat( client, "[Timer] Style now: %s", g_StyleSettings[style][StyleName] );
 	
-	// onstylechanged forward
+	Call_StartForward( g_hForward_OnStyleChangedPost );
+	Call_PushCell( client );
+	Call_PushCell( oldstyle );
+	Call_PushCell( style );
+	Call_Finish();
 }
 
 void OpenSelectStyleMenu( int client, MenuHandler handler )
