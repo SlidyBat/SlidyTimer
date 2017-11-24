@@ -86,6 +86,15 @@ public void OnPluginStart()
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetClientCurrentTime", Native_GetClientCurrentTime );
+	CreateNative( "Timer_GetClientCurrentJumps", Native_GetClientCurrentJumps );
+	CreateNative( "Timer_GetClientCurrentStrafes", Native_GetClientCurrentStrafes );
+	CreateNative( "Timer_GetClientCurrentSync", Native_GetClientCurrentSync );
+	CreateNative( "Timer_GetClientCurrentStrafeTime", Native_GetClientCurrentStrafeTime );
+	CreateNative( "Timer_GetWRTime", Native_GetWRTime );
+	CreateNative( "Timer_GetClientPBTime", Native_GetClientPBTime );
+	CreateNative( "Timer_GetClientStyle", Native_GetClientStyle );
+	CreateNative( "Timer_GetClientTimerStatus", Native_GetClientTimerStatus );
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
 	CreateNative( "Timer_StopTimer", Native_StopTimer );
 
@@ -1127,6 +1136,103 @@ public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int par
 public int Native_GetDatabase( Handle handler, int numParams )
 {
 	return view_as<int>( CloneHandle( g_hDatabase, handler ) );
+}
+
+public int Native_GetClientCurrentTime( Handle handler, int numparams )
+{
+	int client = GetNativeCell( 1 );
+	if( !g_bTimerRunning[client] )
+	{
+		return 0;
+	}
+	
+	return view_as<int>( g_nPlayerFrames[client] * g_fFrameTime );
+}
+
+public int Native_GetClientCurrentJumps( Handle handler, int numparams )
+{
+	int client = GetNativeCell( 1 );
+	if( !g_bTimerRunning[client] )
+	{
+		return 0;
+	}
+	
+	return g_nPlayerJumps[client];
+}
+
+public int Native_GetClientCurrentStrafes( Handle handler, int numparams )
+{
+	int client = GetNativeCell( 1 );
+	if( !g_bTimerRunning[client] )
+	{
+		return 0;
+	}
+	
+	return g_nPlayerStrafes[client];
+}
+
+public int Native_GetClientCurrentSync( Handle handler, int numparams )
+{
+	int client = GetNativeCell( 1 );
+	if( !g_bTimerRunning[client] )
+	{
+		return 0;
+	}
+	
+	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client] );
+}
+
+public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
+{
+	int client = GetNativeCell( 1 );
+	if( !g_bTimerRunning[client] )
+	{
+		return 0;
+	}
+	
+	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 ) ? 0.0 : float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client] );
+}
+
+public int Native_GetWRTime( Handle handler, int numparams )
+{
+	int track = GetNativeCell( 1 );
+	int style = GetNativeCell( 2 );
+	
+	if( g_aMapRecords[track][style].Length )
+	{
+		any recordData[RecordData];
+		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
+		
+		return view_as<int>( recordData[RD_Time] );
+	}
+	
+	return 0;
+}
+
+public int Native_GetClientPBTime( Handle handler, int numparams )
+{	
+	return view_as<int>( g_PlayerRecordData[GetNativeCell( 1 )][GetNativeCell( 2 )][GetNativeCell( 3 )][RD_Time] );
+}
+
+public int Native_GetClientTimerStatus( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	if( !g_bTimerRunning[client] )
+	{
+		return view_as<int>( TimerStatus_Stopped );
+	}
+	else if( g_bTimerPaused[client] )
+	{
+		return view_as<int>( TimerStatus_Paused );
+	}
+	
+	return view_as<int>( TimerStatus_Running );
+}
+
+public int Native_GetClientStyle( Handle handler, int numParams )
+{
+	return g_PlayerCurrentStyle[GetNativeCell( 1 )];
 }
 
 public int Native_StopTimer( Handle handler, int numParams )

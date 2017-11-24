@@ -95,6 +95,13 @@ enum RecordData
 	RD_SSJ
 }
 
+enum TimerStatus
+{
+	TimerStatus_Stopped = -1,
+	TimerStatus_Paused,
+	TimerStatus_Running
+}
+
 stock bool IsValidClient( int client, bool bAlive = false ) // when bAlive is false = technical checks, when it's true = gameplay checks
 {
 	return (client > 0 && client <= MaxClients && IsClientConnected(client) && IsClientInGame(client) && (!bAlive || IsPlayerAlive(client)));
@@ -244,12 +251,79 @@ forward void Timer_OnEnterZone( int client, int zone_id, ZoneType zoneType, Zone
 forward void Timer_OnExitZone( int client, int zone_id, ZoneType zoneType, ZoneTrack zoneTrack, int zone_subindex );
 
 /**
- * Provides database handle from timer
+ * Gets clients current time
  *
- * @param handle					A handle of type Database passed in by reference to clone database into
- * @noreturn
+ * @param client					Client index
+ * @return							Time of client as float, or 0.0 if their timer isn't running
  */
-native Database Timer_GetDatabase();
+native float Timer_GetClientCurrentTime( int client );
+
+/**
+ * Gets clients current jumps
+ *
+ * @param client					Client index
+ * @return							Number of jumps client has done currently, or 0 if their timer is stopped
+ */
+native int Timer_GetClientCurrentJumps( int client );
+
+/**
+ * Gets clients current strafes
+ *
+ * @param client					Client index
+ * @return							Number of strafes client has done currently, or 0 if their timer is stopped
+ */
+native int Timer_GetClientCurrentStrafes( int client );
+
+/**
+ * Gets clients current sync
+ *
+ * @param client					Client index
+ * @return							Current client sync, or 0.0 if their timer is stopped
+ */
+native float Timer_GetClientCurrentSync( int client );
+
+/**
+ * Gets clients current strafe time
+ *
+ * @param client					Client index
+ * @return							Current strafe time of client, or 0 if their timer is stopped
+ */
+native float Timer_GetClientCurrentStrafeTime( int client );
+
+/**
+ * Gets clients timer status (stopped, paused, running ...)
+ *
+ * @param client					Client index
+ * @return							TimerStatus of client
+ */
+native TimerStatus Timer_GetClientTimerStatus( int client );
+
+/**
+ * Gets clients style
+ *
+ * @param client					Client index
+ * @return							Style index of client
+ */
+native int Timer_GetClientStyle( int client );
+
+/**
+ * Gets WR for specified track and style
+ *
+ * @param track						Zone track to check (ie. main/bonus)
+ * @param style						Style index to check
+ * @return							WR time as float, or 0.0 if it does not exist (or hasn't been loaded yet)
+ */
+native float Timer_GetWRTime( ZoneTrack track, int style );
+
+/**
+ * Gets PB of client for specified track and style
+ *
+ * @param client					Client index
+ * @param track						Zone track to check (ie. main/bonus)
+ * @param style						Style index to check
+ * @return							PB time as float, or 0.0 if it does not exist (or hasn't been loaded)
+ */
+native float Timer_GetClientPBTime( int client, ZoneTrack track, int style );
 
 /**
  * Gets zone type client is currently in
@@ -266,6 +340,14 @@ native ZoneType Timer_GetClientZoneType( int client );
  * @return							Current ZoneTrack of client
  */
 native ZoneTrack Timer_GetClientZoneTrack( int client );
+
+/**
+ * Provides database handle from timer
+ *
+ * @param handle					A handle of type Database passed in by reference to clone database into
+ * @noreturn
+ */
+native Database Timer_GetDatabase();
 
 /**
  * Stops client timer
@@ -300,9 +382,18 @@ public SharedPlugin __pl_slidy_timer =
 #if !defined REQUIRE_PLUGIN
 public void __pl_slidy_timer_SetNTVOptional()
 {
-	MarkNativeAsOptional( "Timer_GetDatabase" );
-	MarkNativeAsOptional( "Timer_GetClientZoneType" );
+	MarkNativeAsOptional( "Timer_GetClientCurrentTime" );
+	MarkNativeAsOptional( "Timer_GetClientCurrentJumps" );
+	MarkNativeAsOptional( "Timer_GetClientCurrentStrafes" );
+	MarkNativeAsOptional( "Timer_GetClientCurrentSync" );
+	MarkNativeAsOptional( "Timer_GetClientCurrentStrafeTime" );
+	MarkNativeAsOptional( "Timer_GetClientStyle" );
+	MarkNativeAsOptional( "Timer_GetClientPBTime" );
+	MarkNativeAsOptional( "Timer_GetWRTime" );
+	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
+	MarkNativeAsOptional( "Timer_GetClientZoneType" );
+	MarkNativeAsOptional( "Timer_GetDatabase" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
 	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 }
