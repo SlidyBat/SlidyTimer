@@ -112,10 +112,9 @@ public void OnMapStart()
 		for( int j = 0; j < MAX_STYLES; j++ )
 		{
 			g_aMapRecords[i][j].Clear();
+			SQL_ReloadCache( view_as<ZoneTrack>( i ), j );
 		}
 	}
-	
-	SQL_CacheRecords();
 }
 
 public void OnClientPostAdminCheck( int client )
@@ -320,8 +319,7 @@ void FinishTimer( int client )
 	PrintToChatAll( "[%s] %N finished on %s timer in %ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
 	
 	if( pb == 0.0 || time < pb ) // new record, save it
-	{
-		int oldrank = GetClientRank( client, ztTrack, style );
+	{	
 		// avoid dividing by 0
 		float sync = ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client];
 		float strafetime = ( g_nPlayerAirFrames[client] == 0 ) ? 0.0   : float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client];
@@ -336,33 +334,10 @@ void FinishTimer( int client )
 		
 		if( pb == 0.0 ) // new time
 		{
-			if( g_aMapRecords[track][style].Length )
-			{
-				int index = GetRankForTime( time, ztTrack, style ) - 1;
-				g_aMapRecords[track][style].ShiftUp( index );
-				g_aMapRecords[track][style].SetArray( index, g_PlayerRecordData[client][track][style][0] );
-			}
-			else
-			{
-				g_aMapRecords[track][style].PushArray( g_PlayerRecordData[client][track][style][0] );
-			}
-			
 			SQL_InsertRecord( client, ztTrack, style, time );
 		}
 		else // existing time but beaten
 		{
-			g_aMapRecords[track][style].Erase( oldrank - 1 );
-			if( g_aMapRecords[track][style].Length )
-			{
-				int index = GetRankForTime( time, ztTrack, style ) - 1;
-				g_aMapRecords[track][style].ShiftUp( index );
-				g_aMapRecords[track][style].SetArray( index, g_PlayerRecordData[client][track][style][0] );
-			}
-			else
-			{
-				g_aMapRecords[track][style].PushArray( g_PlayerRecordData[client][track][style][0] );
-			}
-			
 			SQL_UpdateRecord( client, ztTrack, style, time );
 		}
 		
@@ -375,9 +350,11 @@ void FinishTimer( int client )
 			PrintToChatAll( "NEW PB!!!" );
 		}
 	}
+	
+	SQL_ReloadCache( ztTrack, style );
 }
 
-int GetRankForTime( float time, ZoneTrack ztTrack, int style )
+stock int GetRankForTime( float time, ZoneTrack ztTrack, int style )
 {
 	if( time == 0.0 )
 	{
@@ -385,29 +362,28 @@ int GetRankForTime( float time, ZoneTrack ztTrack, int style )
 	}
 	
 	int track = view_as<int>( ztTrack );
-	int rank = 1;
-	static bool bTrue = true; // weird workaround for while true loops not giving warning
+	if( g_aMapRecords[track][style].Length == 0 )
+	{
+		return 1;
+	}
 	
 	any recordData[RecordData];
-	while( bTrue )
+	for( int i = 0; i < g_aMapRecords[track][style].Length; i++ )
 	{
-		g_aMapRecords[track][style].GetArray( rank - 1, recordData[0] );
-		if( time > recordData[RD_Time] && rank <= g_aMapRecords[track][style].Length )
+		g_aMapRecords[track][style].GetArray( i, recordData[0] );
+		if( time < recordData[RD_Time] )
 		{
-			rank++;
-		}
-		else
-		{
-			break;
+			return ++i;
 		}
 	}
 	
-	return rank;
+	return g_aMapRecords[track][style].Length + 1;
 }
 
-int GetClientRank( int client, ZoneTrack ztTrack, int style )
+stock int GetClientRank( int client, ZoneTrack ztTrack, int style )
 {
-	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( ztTrack )][style][RD_Time], ztTrack, style );
+	// subtract 1 because when times are equal, it counts as next rank
+	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( ztTrack )][style][RD_Time], ztTrack, style ) - 1;
 }
 
 bool LoadStyles()
@@ -861,18 +837,22 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 	}
 }
 
-void SQL_CacheRecords()
+void SQL_ReloadCache( ZoneTrack track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "SELECT r.track, r.style, p.lastname, r.timestamp, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
+	Format( query, sizeof( query ), "SELECT p.lastname, r.timestamp, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
 									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
-									WHERE mapname = '%s'\
-									ORDER BY r.time ASC", g_cMapName, MAX_WR_CACHE );
+									WHERE mapname = '%s' AND track = '%i' AND style = '%i'\
+									ORDER BY r.time ASC", g_cMapName, view_as<int>( track ), style );
 	
-	g_hDatabase.Query( CacheRecords_Callback, query, _, DBPrio_High );
+	DataPack pack = new DataPack();
+	pack.WriteCell( track );
+	pack.WriteCell( style );
+	
+	g_hDatabase.Query( CacheRecords_Callback, query, pack, DBPrio_High );
 }
 
-public void CacheRecords_Callback( Database db, DBResultSet results, const char[] error, any data )
+public void CacheRecords_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
 {
 	if( results == null )
 	{
@@ -880,20 +860,25 @@ public void CacheRecords_Callback( Database db, DBResultSet results, const char[
 		return;
 	}
 	
+	pack.Reset();
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	delete pack;
+	
+	g_aMapRecords[track][style].Clear();
+	
 	while( results.FetchRow() )
 	{
-		int track = results.FetchInt( 0 );
-		int style = results.FetchInt( 1 );
 		static any recordData[RecordData];
 		
-		results.FetchString( 2, recordData[RD_Name], MAX_NAME_LENGTH );
-		recordData[RD_Timestamp] = results.FetchInt( 3 );
-		recordData[RD_Time] = results.FetchFloat( 4 );
-		recordData[RD_Jumps] = results.FetchInt( 5 );
-		recordData[RD_Strafes] = results.FetchInt( 6 );
-		recordData[RD_Sync] = results.FetchFloat( 7 );
-		recordData[RD_StrafeTime] = results.FetchFloat( 8 );
-		recordData[RD_SSJ] = results.FetchInt( 9 );
+		results.FetchString( 0, recordData[RD_Name], MAX_NAME_LENGTH );
+		recordData[RD_Timestamp] = results.FetchInt( 1 );
+		recordData[RD_Time] = results.FetchFloat( 2 );
+		recordData[RD_Jumps] = results.FetchInt( 3 );
+		recordData[RD_Strafes] = results.FetchInt( 4 );
+		recordData[RD_Sync] = results.FetchFloat( 5 );
+		recordData[RD_StrafeTime] = results.FetchFloat( 6 );
+		recordData[RD_SSJ] = results.FetchInt( 7 );
 		
 		g_aMapRecords[track][style].PushArray( recordData[0] );
 	}
@@ -948,7 +933,7 @@ public int ShowPB_Handler( Menu menu, MenuAction action, int param1, int param2 
 {
 	if( action == MenuAction_Select )
 	{
-		ShowStats( param1, g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2] );
+		ShowStats( param1, ZT_Main, param2, g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2] );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -967,7 +952,7 @@ public int ShowBonusPB_Handler( Menu menu, MenuAction action, int param1, int pa
 {
 	if( action == MenuAction_Select )
 	{
-		ShowStats( param1, g_PlayerRecordData[param1][view_as<int>( ZT_Bonus )][param2] );
+		ShowStats( param1, ZT_Bonus, param2, g_PlayerRecordData[param1][view_as<int>( ZT_Bonus )][param2] );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -1015,6 +1000,12 @@ public int ShowBonusWR_Handler( Menu menu, MenuAction action, int param1, int pa
 
 void ShowLeaderboard( int client, ZoneTrack ztTrack, int style )
 {
+	int track = view_as<int>( ztTrack );
+	if( !g_aMapRecords[track][style].Length )
+	{
+		return;
+	}
+	
 	Menu menu = new Menu( WRMenu_Handler );
 	
 	char trackName[32];
@@ -1025,9 +1016,9 @@ void ShowLeaderboard( int client, ZoneTrack ztTrack, int style )
 	menu.SetTitle( buffer );
 	
 	char sTime[32], info[8];
-	int track = view_as<int>( ztTrack );
 	
-	for( int i = 0; i < g_aMapRecords[0][0].Length; i++ )
+	int max = ( MAX_WR_CACHE > g_aMapRecords[track][style].Length ) ? g_aMapRecords[track][style].Length : MAX_WR_CACHE;
+	for( int i = 0; i < max; i++ )
 	{
 		static any recordData[RecordData];
 		g_aMapRecords[track][style].GetArray( i, recordData[0] );
@@ -1058,7 +1049,7 @@ public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 		
 		any recordData[RecordData];
 		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
-		ShowStats( param1, recordData );
+		ShowStats( param1, view_as<ZoneTrack>( track ), style, recordData );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -1066,7 +1057,7 @@ public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 	}
 }
 
-void ShowStats( int client, const any recordData[RecordData] )
+void ShowStats( int client, ZoneTrack track, int style, const any recordData[RecordData] )
 {
 	Menu menu = new Menu( RecordInfo_Handler );
 		
@@ -1075,16 +1066,25 @@ void ShowStats( int client, const any recordData[RecordData] )
 	char sTime[64];
 	Timer_FormatTime( recordData[RD_Time], sTime, sizeof( sTime ) );
 	
+	char sTrack[16];
+	Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
+	
+	char sSync[10];
+	if( g_StyleSettings[style][Sync] )
+	{
+		Format( sSync, sizeof( sSync ), "(%.2f)", recordData[RD_Sync] );
+	}
+	
 	char buffer[512];
-	Format( buffer, sizeof( buffer ), "Record Info\n \n" );
+	Format( buffer, sizeof( buffer ), "%s - %s %s\n \n", g_cMapName, sTrack, g_StyleSettings[style][StyleName] );
 	menu.SetTitle( buffer );
 	
-	Format( buffer, sizeof( buffer ), "Player: %s\n \n", recordData[RD_Name] );
-	Format( buffer, sizeof( buffer ), "%s%s (%s)\n \n", buffer, g_cMapName, date );
-	Format( buffer, sizeof( buffer ), "%sTime: %s\n", buffer, sTime );
+	Format( buffer, sizeof( buffer ), "Player: %s\n", recordData[RD_Name] );
+	Format( buffer, sizeof( buffer ), "%sDate: %s\n \n", buffer, date );
+	Format( buffer, sizeof( buffer ), "%sTime: %s\n \n", buffer, sTime );
 	Format( buffer, sizeof( buffer ), "%sJumps: %i\n", buffer, recordData[RD_Jumps] );
-	Format( buffer, sizeof( buffer ), "%sStrafes: %i (%.2f)\n", buffer, recordData[RD_Strafes], recordData[RD_Sync] );
-	Format( buffer, sizeof( buffer ), "%sStrafe Time %: %.2f\n \n", buffer, recordData[RD_StrafeTime] );
+	Format( buffer, sizeof( buffer ), "%sStrafes: %i %s\n", buffer, recordData[RD_Strafes], sSync );
+	Format( buffer, sizeof( buffer ), "%sStrafe Time %: %.2f\n", buffer, recordData[RD_StrafeTime] );
 	Format( buffer, sizeof( buffer ), "%sSSJ: %i\n", buffer, recordData[RD_SSJ] );
 	menu.AddItem( "stats", buffer );
 	
