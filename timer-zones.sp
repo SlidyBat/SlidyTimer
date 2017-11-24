@@ -330,13 +330,17 @@ void OpenCreateZoneMenu( int client )
 	
 	Menu menu = new Menu( CreateZoneMenuHandler );
 	
-	Format( buffer, sizeof( buffer ), "%s - Creating zone", MENU_PREFIX );
+	Format( buffer, sizeof( buffer ), "%s - Creating zone\n \n", MENU_PREFIX );
 	menu.SetTitle( buffer );
 	
 	if( g_iZoningStage[client] < 2 )
 	{
 		Format( buffer, sizeof( buffer ), "Set point %i\n \n", g_iZoningStage[client] + 1 );
 		menu.AddItem( "select", buffer );
+		
+		Format( buffer, sizeof( buffer ), "Snap To Wall: %s", g_bSnapToWall[client] ? "Enabled" : "Disabled" );
+		menu.AddItem( "wallsnap", buffer );
+		Format( buffer, sizeof( buffer ), "Zone Point: %s", g_bZoneEyeAngle[client] ? "Eye Angles" : "Position" );
 	}
 	else
 	{
@@ -361,14 +365,28 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 	{
 		if( g_iZoningStage[param1] < 2 )
 		{
-			GetZoningPoint( param1, g_fZonePointCache[param1][g_iZoningStage[param1]] );
-			
-			if( g_iZoningStage[param1] == 1 )
+			switch( param2 )
 			{
-				g_fZonePointCache[param1][1][2] += 150.0;
-			}
+				case 0:
+				{
+					GetZoningPoint( param1, g_fZonePointCache[param1][g_iZoningStage[param1]] );
 			
-			g_iZoningStage[param1]++;
+					if( g_iZoningStage[param1] == 1 )
+					{
+						g_fZonePointCache[param1][1][2] += 150.0;
+					}
+					
+					g_iZoningStage[param1]++;
+				}
+				case 1:
+				{
+					g_bSnapToWall[param1] = !g_bSnapToWall[param1];
+				}
+				case 2:
+				{
+					g_bZoneEyeAngle[param1] = !g_bZoneEyeAngle[param1];
+				}
+			}
 			
 			OpenCreateZoneMenu( param1 );
 		}
