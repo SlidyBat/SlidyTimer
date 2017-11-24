@@ -494,7 +494,11 @@ bool LoadStyles()
 			Format( command, sizeof( command ), "sm_%s", splitString[i] );
 			
 			g_smStyleCommands.SetValue( command, g_iTotalStyles );
-			RegConsoleCmd( command, Command_ChangeStyle );
+			
+			if( !CommandExists( command ) )
+			{
+				RegConsoleCmd( command, Command_ChangeStyle );
+			}
 		}
 		
 		g_iTotalStyles++;
