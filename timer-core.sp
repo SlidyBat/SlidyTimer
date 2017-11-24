@@ -152,11 +152,11 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 		{
 			g_PlayerRecordData[client][i][j][RD_PlayerID] = playerid;
 			GetClientName( client, g_PlayerRecordData[client][i][j][RD_Name], MAX_NAME_LENGTH );
+			SQL_LoadRecords( client, view_as<ZoneTrack>( i ), j );
 		}
 	}
 	
 	ClearPlayerData( client );
-	SQL_LoadRecords( client );
 	
 	g_bClientLoaded[client] = true;
 }
@@ -424,10 +424,10 @@ stock int GetRankForTime( float time, ZoneTrack ztTrack, int style )
 	return g_aMapRecords[track][style].Length + 1;
 }
 
-stock int GetClientRank( int client, ZoneTrack ztTrack, int style )
+stock int GetClientRank( int client, ZoneTrack track, int style )
 {
 	// subtract 1 because when times are equal, it counts as next rank
-	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( ztTrack )][style][RD_Time], ztTrack, style ) - 1;
+	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( track )][style][RD_Time], track, style ) - 1;
 }
 
 bool LoadStyles()
@@ -779,15 +779,20 @@ public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const c
 	Call_Finish();
 }
 
-void SQL_LoadRecords( int client )
+void SQL_LoadRecords( int client, ZoneTrack track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "SELECT track, style, timestamp, time, jumps, strafes, sync, strafetime, ssj FROM `t_records` WHERE playerid = '%i' AND mapname = '%s'", g_ClientPlayerID[client], g_cMapName );
+	Format( query, sizeof( query ), "SELECT timestamp, time, jumps, strafes, sync, strafetime, ssj FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapname = '%s'", g_ClientPlayerID[client], track, style, g_cMapName );
 	
-	g_hDatabase.Query( LoadRecords_Callback, query, GetClientUserId( client ), DBPrio_High );
+	DataPack pack = new DataPack();
+	pack.WriteCell( GetClientUserId( client ) );
+	pack.WriteCell( track );
+	pack.WriteCell( style );
+	
+	g_hDatabase.Query( LoadRecords_Callback, query, pack, DBPrio_High );
 }
 
-public void LoadRecords_Callback( Database db, DBResultSet results, const char[] error, int uid )
+public void LoadRecords_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
 {
 	if( results == null )
 	{
@@ -795,7 +800,11 @@ public void LoadRecords_Callback( Database db, DBResultSet results, const char[]
 		return;
 	}
 	
-	int client = GetClientOfUserId( uid );
+	pack.Reset();
+	int client = GetClientOfUserId( pack.ReadCell() );
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	delete pack;
 	
 	if( !IsValidClient( client ) )
 	{
@@ -804,16 +813,13 @@ public void LoadRecords_Callback( Database db, DBResultSet results, const char[]
 	
 	while( results.FetchRow() )
 	{
-		int track = results.FetchInt( 0 );
-		int style = results.FetchInt( 1 );
-		
-		g_PlayerRecordData[client][track][style][RD_Timestamp] = results.FetchInt( 2 );
-		g_PlayerRecordData[client][track][style][RD_Time] = results.FetchFloat( 3 );
-		g_PlayerRecordData[client][track][style][RD_Jumps] = results.FetchInt( 4 );
-		g_PlayerRecordData[client][track][style][RD_Strafes] = results.FetchInt( 5 );
-		g_PlayerRecordData[client][track][style][RD_Sync] = results.FetchFloat( 6 );
-		g_PlayerRecordData[client][track][style][RD_StrafeTime] = results.FetchFloat( 7 );
-		g_PlayerRecordData[client][track][style][RD_SSJ] = results.FetchInt( 8 );
+		g_PlayerRecordData[client][track][style][RD_Timestamp] = results.FetchInt( 0 );
+		g_PlayerRecordData[client][track][style][RD_Time] = results.FetchFloat( 1 );
+		g_PlayerRecordData[client][track][style][RD_Jumps] = results.FetchInt( 2 );
+		g_PlayerRecordData[client][track][style][RD_Strafes] = results.FetchInt( 3 );
+		g_PlayerRecordData[client][track][style][RD_Sync] = results.FetchFloat( 4 );
+		g_PlayerRecordData[client][track][style][RD_StrafeTime] = results.FetchFloat( 5 );
+		g_PlayerRecordData[client][track][style][RD_SSJ] = results.FetchInt( 6 );
 	}
 }
 
@@ -884,7 +890,7 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 void SQL_ReloadCache( ZoneTrack track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "SELECT p.lastname, r.timestamp, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
+	Format( query, sizeof( query ), "SELECT p.lastname, r.playerid, r.timestamp, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
 									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
 									WHERE mapname = '%s' AND track = '%i' AND style = '%i'\
 									ORDER BY r.time ASC", g_cMapName, view_as<int>( track ), style );
@@ -894,6 +900,14 @@ void SQL_ReloadCache( ZoneTrack track, int style )
 	pack.WriteCell( style );
 	
 	g_hDatabase.Query( CacheRecords_Callback, query, pack, DBPrio_High );
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( g_bClientLoaded[i] )
+		{
+			SQL_LoadRecords( i, track, style );
+		}
+	}
 }
 
 public void CacheRecords_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
@@ -911,18 +925,24 @@ public void CacheRecords_Callback( Database db, DBResultSet results, const char[
 	
 	g_aMapRecords[track][style].Clear();
 	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		g_PlayerRecordData[i][track][style][RD_Time] = 0.0;
+	}
+	
 	while( results.FetchRow() )
 	{
 		static any recordData[RecordData];
 		
 		results.FetchString( 0, recordData[RD_Name], MAX_NAME_LENGTH );
-		recordData[RD_Timestamp] = results.FetchInt( 1 );
-		recordData[RD_Time] = results.FetchFloat( 2 );
-		recordData[RD_Jumps] = results.FetchInt( 3 );
-		recordData[RD_Strafes] = results.FetchInt( 4 );
-		recordData[RD_Sync] = results.FetchFloat( 5 );
-		recordData[RD_StrafeTime] = results.FetchFloat( 6 );
-		recordData[RD_SSJ] = results.FetchInt( 7 );
+		recordData[RD_PlayerID] = results.FetchInt( 1 );
+		recordData[RD_Timestamp] = results.FetchInt( 2 );
+		recordData[RD_Time] = results.FetchFloat( 3 );
+		recordData[RD_Jumps] = results.FetchInt( 4 );
+		recordData[RD_Strafes] = results.FetchInt( 5 );
+		recordData[RD_Sync] = results.FetchFloat( 6 );
+		recordData[RD_StrafeTime] = results.FetchFloat( 7 );
+		recordData[RD_SSJ] = results.FetchInt( 8 );
 		
 		g_aMapRecords[track][style].PushArray( recordData[0] );
 	}
