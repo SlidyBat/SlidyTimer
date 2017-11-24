@@ -179,28 +179,46 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 					g_nPlayerAirStrafeFrames[client]++;
 				}
 				
-				if( ( fDeltaYaw > 0.0 && ( buttons & IN_MOVELEFT ) && !( buttons & IN_MOVERIGHT ) ) ||
-					( fDeltaYaw < 0.0 && ( buttons & IN_MOVERIGHT ) && !( buttons & IN_MOVELEFT ) ) )
+				if( styleSettings[Sync] &&
+					( ( fDeltaYaw > 0.0 && ( buttons & IN_MOVELEFT ) && !( buttons & IN_MOVERIGHT ) ) ||
+					( fDeltaYaw < 0.0 && ( buttons & IN_MOVERIGHT ) && !( buttons & IN_MOVELEFT ) ) ) )
 				{
 					g_nPlayerSyncedFrames[client]++;
 				}
 			}
 			
-			if( styleSettings[CountLeft] && !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+			if( styleSettings[HSW] )
 			{
-				g_nPlayerStrafes[client]++;
+				if( ( buttons & IN_FORWARD ) && ( lastButtons[client] & IN_FORWARD ) )
+				{
+					if( !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+					{
+						g_nPlayerStrafes[client]++;
+					}
+					else if( !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+					{
+						g_nPlayerStrafes[client]++;
+					}
+				}
 			}
-			else if( styleSettings[CountRight] && !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+			else
 			{
-				g_nPlayerStrafes[client]++;
-			}
-			else if( styleSettings[CountForward] && !( lastButtons[client] & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
-			{
-				g_nPlayerStrafes[client]++;
-			}
-			else if( styleSettings[CountBack] && !( lastButtons[client] & IN_BACK ) && ( buttons & IN_BACK ) )
-			{
-				g_nPlayerStrafes[client]++;
+				if( styleSettings[CountLeft] && !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+				{
+					g_nPlayerStrafes[client]++;
+				}
+				else if( styleSettings[CountRight] && !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+				{
+					g_nPlayerStrafes[client]++;
+				}
+				else if( styleSettings[CountForward] && !( lastButtons[client] & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
+				{
+					g_nPlayerStrafes[client]++;
+				}
+				else if( styleSettings[CountBack] && !( lastButtons[client] & IN_BACK ) && ( buttons & IN_BACK ) )
+				{
+					g_nPlayerStrafes[client]++;
+				}
 			}
 		}
 		
@@ -241,6 +259,11 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				styleSettings[PreventRight] && ( buttons & IN_RIGHT ) ||
 				styleSettings[PreventForward] && ( buttons & IN_FORWARD ) ||
 				styleSettings[PreventBack] && ( buttons & IN_BACK ) )
+			{
+				bButtonError = true;
+			}
+			else if( styleSettings[HSW] && 
+					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_LEFT ) || ( buttons & IN_RIGHT ) ) ) )
 			{
 				bButtonError = true;
 			}
