@@ -505,27 +505,8 @@ bool LoadStyles()
 	} while( kvStyles.GotoNextKey() );
 
 	delete kvStyles;
-
-	// build styles menu
-	delete g_mStylesMenu;
-	g_mStylesMenu = new Menu( StylesMenu_Handler );
-	
-	g_mStylesMenu.SetTitle( "Styles Menu\n \n" );
-	
-	for( int i = 0; i < g_iTotalStyles; i++ )
-	{
-		g_mStylesMenu.AddItem( g_StyleSettings[i][StyleName], g_StyleSettings[i][StyleName] );
-	}
 	
 	return true;
-}
-
-public int StylesMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
-{
-	if( action == MenuAction_Select )
-	{
-		SetClientStyle( param1, param2 );
-	}
 }
 
 void SetClientStyle( int client, int style )
@@ -544,6 +525,8 @@ void SetClientStyle( int client, int style )
 	Timer_TeleportClientToZone( client, Zone_Start, ZT_Main );
 	
 	PrintToChat( client, "[Timer] Style now: %s", g_StyleSettings[style][StyleName] );
+	
+	// onstylechanged forward
 }
 
 void OpenSelectStyleMenu( int client, MenuHandler handler )
@@ -998,9 +981,21 @@ public Action Command_Noclip( int client, int args )
 
 public Action Command_Styles( int client, int args )
 {
-	g_mStylesMenu.Display( client, MENU_TIME_FOREVER );
+	OpenSelectStyleMenu( client, ChangeStyle_Handler );
 	
 	return Plugin_Handled;
+}
+
+public int ChangeStyle_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		SetClientStyle( param1, param2 );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
 }
 
 public Action Command_ChangeStyle( int client, int args )
