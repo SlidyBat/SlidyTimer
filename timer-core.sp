@@ -365,8 +365,8 @@ void FinishTimer( int client )
 	if( pb == 0.0 || time < pb ) // new record, save it
 	{	
 		// avoid dividing by 0
-		float sync = ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client];
-		float strafetime = ( g_nPlayerAirFrames[client] == 0 ) ? 0.0   : float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client];
+		float sync = ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] * 100 ) / g_nPlayerAirStrafeFrames[client];
+		float strafetime = ( g_nPlayerAirFrames[client] == 0 ) ? 0.0   : float( g_nPlayerAirStrafeFrames[client] * 100 ) / g_nPlayerAirFrames[client];
 		
 		g_PlayerRecordData[client][track][style][RD_Timestamp] = GetTime();
 		g_PlayerRecordData[client][track][style][RD_Time] = time;
