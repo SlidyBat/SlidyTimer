@@ -23,16 +23,16 @@ Handle      g_hForward_OnEnterZone;
 Handle      g_hForward_OnExitZone;
 
 /* Globals */
-bool        g_bLoaded;
-Database    g_hDatabase;
-char        g_cCurrentMap[PLATFORM_MAX_PATH];
+bool			g_bLoaded;
+Database		g_hDatabase;
+char			g_cCurrentMap[PLATFORM_MAX_PATH];
 
-bool        g_bZoning[MAXPLAYERS + 1];
-int         g_iZoningStage[MAXPLAYERS + 1];
-ZoneTrack   g_ztCurrentSelectedTrack[MAXPLAYERS + 1];
-float       g_fZonePointCache[MAXPLAYERS + 1][2][3];
+bool			g_bZoning[MAXPLAYERS + 1];
+int			g_iZoningStage[MAXPLAYERS + 1];
+ZoneTrack	g_ztCurrentSelectedTrack[MAXPLAYERS + 1];
+float		g_fZonePointCache[MAXPLAYERS + 1][2][3];
 
-bool        g_bSnapToWall[MAXPLAYERS + 1] = { true, ... };
+bool			g_bSnapToWall[MAXPLAYERS + 1] = { true, ... };
 bool        g_bZoneEyeAngle[MAXPLAYERS + 1];
 
 int         g_nZoningPlayers;
@@ -44,6 +44,7 @@ ArrayList   g_aZoneSpawnCache;
 
 ZoneType    g_PlayerCurrentZoneType[MAXPLAYERS + 1];
 ZoneTrack   g_PlayerCurrentZoneTrack[MAXPLAYERS + 1];
+int			g_PlayerCurrentZoneSubIndex[MAXPLAYERS + 1];
 
 public Plugin myinfo = 
 {
@@ -240,8 +241,9 @@ void TeleportClientToZone( int client, ZoneType zoneType, ZoneTrack zoneTrack, i
 	g_aZoneSpawnCache.GetArray( index, spawn );
 	
 	Timer_StopTimer( client );
-	g_PlayerCurrentZoneType[client] = ZoneType;
-	g_PlayerCurrentZoneTrack[client] = ZoneTrack;
+	g_PlayerCurrentZoneType[client] = zoneType;
+	g_PlayerCurrentZoneTrack[client] = zoneTrack;
+	g_PlayerCurrentZoneSubIndex[client] = subindex;
 	
 	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
 }
@@ -605,6 +607,7 @@ public Action Entity_StartTouch( int caller, int activator )
 		int index = StringToInt( zoneIndex );
 		ZoneType zoneType = view_as<ZoneType>( g_aZones.Get( index, view_as<int>( ZD_ZoneType ) ) );
 		ZoneTrack zoneTrack = view_as<ZoneTrack>( g_aZones.Get( index, view_as<int>( ZD_ZoneTrack ) ) );
+		int subindex = g_aZones.Get( index, view_as<int>( ZD_ZoneSubindex ) );
 		
 		Call_StartForward( g_hForward_OnEnterZone );
 		Call_PushCell( activator );
@@ -615,6 +618,7 @@ public Action Entity_StartTouch( int caller, int activator )
 		Call_Finish();
 		
 		g_PlayerCurrentZoneType[activator] = zoneType;
+		g_PlayerCurrentZoneSubIndex[activator] = subindex;
 		
 		if( zoneType == Zone_Start )
 		{
