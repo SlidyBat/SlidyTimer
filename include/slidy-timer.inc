@@ -120,6 +120,23 @@ stock float GetClientSpeed( int client )
 	return SquareRoot( GetClientSpeedSq( client ) );
 }
 
+stock int GetClientObserverTarget( int client )
+{
+	int target = client;
+
+	if( IsClientObserver( client ) )
+	{
+		int specmode = GetEntProp( client, Prop_Send, "m_iObserverMode" );
+
+		if( specmode >= 3 && specmode <= 5 )
+		{
+			target = GetEntPropEnt( client, Prop_Send, "m_hObserverTarget" );
+		}
+	}
+	
+	return target;
+}
+
 stock void NormalizeAngle( float& ang )
 {
 	if( ang > 180 )
