@@ -82,6 +82,13 @@ enum StyleSettings
 	Float:ExpMultiplier
 };
 
+enum FrameData
+{
+	Float:FD_Pos[3],
+	Float:FD_Angles[2],
+	FD_Buttons
+}
+
 enum RecordData
 {
 	RD_PlayerID,
