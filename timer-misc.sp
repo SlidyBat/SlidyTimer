@@ -4,7 +4,6 @@
 #include <cstrike>
 #include <slidy-timer>
 
-#define HIDE_RADAR_CSGO 1 << 12
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
 
 public Plugin myinfo = 
@@ -270,7 +269,7 @@ public void HideRadar( int client )
 {
 	if( IsValidClient( client ) )
 	{
-		SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | HIDE_RADAR_CSGO );
+		SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
 	}
 }
 
