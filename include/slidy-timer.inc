@@ -423,6 +423,14 @@ native Database Timer_GetDatabase();
 native bool Timer_IsClientLoaded( int client );
 
 /**
+ * Returns whether clients timer is currently running
+ *
+ * @param client					Client index
+ * @return							False if clients timer is stopped, they are paused, or they're in start zone
+ */
+native bool Timer_IsTimerRunning( int client );
+
+/**
  * Stops client timer
  *
  * @param client					Client index.
@@ -471,6 +479,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetClientZoneType" );
 	MarkNativeAsOptional( "Timer_GetDatabase" );
 	MarkNativeAsOptional( "Timer_IsClientLoaded" );
+	MarkNativeAsOptional( "Timer_IsTimerRunning" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
 	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 }

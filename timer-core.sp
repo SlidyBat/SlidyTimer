@@ -106,6 +106,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetClientRank", Native_GetClientRank );
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
 	CreateNative( "Timer_IsClientLoaded", Native_IsClientLoaded );
+	CreateNative( "Timer_IsTimerRunning", Native_IsTimerRunning );
 	CreateNative( "Timer_StopTimer", Native_StopTimer );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
@@ -1388,6 +1389,11 @@ public int Native_GetClientStyle( Handle handler, int numParams )
 public int Native_IsClientLoaded( Handle handler, int numParams )
 {
 	return g_bClientLoaded[GetNativeCell( 1 )];
+}
+
+public int Native_IsTimerRunning( Handle handler, int numParams )
+{
+	return !( !g_bTimerRunning[GetNativeCell( 1 )] || g_bTimerPaused[GetNativeCell( 1 )] );
 }
 
 public int Native_StopTimer( Handle handler, int numParams )
