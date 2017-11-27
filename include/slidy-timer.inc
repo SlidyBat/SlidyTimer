@@ -259,6 +259,47 @@ forward Action Timer_OnStyleChangedPre( int client, int oldstyle, int newstyle )
 forward void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle );
 
 /**
+ * Called after client finishes
+ *
+ * @param client					Client index of player
+ * @param track						Track that client finished in
+ * @param newstyle					Style that client finished in
+ * @param time						Time that client finished in
+ * @param pbtime					Clients personal best time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
+ * @param wrtime					WR time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop style change
+ */
+forward Action Timer_OnFinishPre( int client, ZoneTrack track, int style, float time, float pbtime, float wrtime );
+
+/**
+ * Called after client finishes
+ *
+ * @param client					Client index of player
+ * @param track						Track that client finished in
+ * @param style						Style that client finished in
+ * @param time						Time that client finished in
+ * @param pbtime					Clients personal best time for that track/style (old one, still hasnt been replaced if it was beaten)
+ * @param wrtime					WR time for that track/style (old one, still hasnt been replaced if it was beaten)
+ *
+ * @noreturn
+ */
+forward void Timer_OnFinishPost( int client, ZoneTrack track, int style, float time, float pbtime, float wrtime );
+
+/**
+ * Called after client finishes
+ *
+ * @param client					Client index of player
+ * @param track						Track that client finished in
+ * @param style						Style that client finished in
+ * @param time						Time that client finished in
+ * @param oldwrtime					The old WR time for that track/style
+ *
+ * @noreturn
+ */
+forward void Timer_OnWRBeaten( int client, ZoneTrack track, int style, float time, float oldwrtime );
+
+/**
  * Called when a client enters a zone
  *
  * @param client					Client index of player that entered zone
@@ -283,6 +324,15 @@ forward void Timer_OnEnterZone( int client, int zone_id, ZoneType zoneType, Zone
  * @noreturn
  */
 forward void Timer_OnExitZone( int client, int zone_id, ZoneType zoneType, ZoneTrack zoneTrack, int zone_subindex );
+
+/**
+ * Called when clients timer starts
+ *
+ * @param client					Client index of player
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop client from starting
+ */
+forward Action Timer_OnTimerStart( int client );
 
 /**
  * Gets clients current time

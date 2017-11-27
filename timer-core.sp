@@ -26,6 +26,10 @@ Handle		g_hForward_OnClientLoaded;
 Handle		g_hForward_OnStylesLoaded;
 Handle		g_hForward_OnStyleChangedPre;
 Handle		g_hForward_OnStyleChangedPost;
+Handle		g_hForward_OnFinishPre;
+Handle		g_hForward_OnFinishPost;
+Handle		g_hForward_OnWRBeaten;
+Handle		g_hForward_OnTimerStart;
 
 int			g_ClientPlayerID[MAXPLAYERS + 1];
 bool			g_bClientLoaded[MAXPLAYERS + 1];
@@ -62,6 +66,10 @@ public void OnPluginStart()
 	g_hForward_OnStylesLoaded = CreateGlobalForward( "Timer_OnStylesLoaded", ET_Event, Param_Cell );
 	g_hForward_OnStyleChangedPre = CreateGlobalForward( "Timer_OnStyleChangedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnStyleChangedPost = CreateGlobalForward( "Timer_OnStyleChangedPost", ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnFinishPre = CreateGlobalForward( "Timer_OnFinishPre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnFinishPost = CreateGlobalForward( "Timer_OnFinishPost", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnWRBeaten = CreateGlobalForward( "Timer_OnWRBeaten", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnTimerStart = CreateGlobalForward( "Timer_OnTimerStart", ET_Event, Param_Cell );
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
@@ -328,6 +336,17 @@ void StartTimer( int client )
 		return;
 	}
 
+	Action result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnTimerStart );
+	Call_PushCell( client );
+	Call_Finish( result );
+	
+	if( result != Plugin_Continue && result != Plugin_Changed )
+	{
+		StopTimer( client );
+		return;
+	}
+
 	g_bTimerRunning[client] = true;
 	g_bTimerPaused[client] = false;
 	
@@ -373,6 +392,21 @@ void FinishTimer( int client )
 		wr = wrRecordData[RD_Time];
 	}
 	
+	Action result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnFinishPre );
+	Call_PushCell( client );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushCell( time );
+	Call_PushCell( pb );
+	Call_PushCell( wr );
+	Call_Finish( result );
+	
+	if( result == Plugin_Stop || result == Plugin_Handled )
+	{
+		return;
+	}
+	
 	PrintToChatAll( "[%s] %N finished on %s timer in %ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
 	
 	if( pb == 0.0 || time < pb ) // new record, save it
@@ -401,12 +435,29 @@ void FinishTimer( int client )
 		if( wr == 0.0 || time < wr )
 		{
 			PrintToChatAll( "NEW WR!!!!!" );
+			
+			Call_StartForward( g_hForward_OnWRBeaten );
+			Call_PushCell( client );
+			Call_PushCell( track );
+			Call_PushCell( style );
+			Call_PushCell( time );
+			Call_PushCell( wr );
+			Call_Finish();
 		}
 		else
 		{
 			PrintToChatAll( "NEW PB!!!" );
 		}
 	}
+	
+	Call_StartForward( g_hForward_OnFinishPost );
+	Call_PushCell( client );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushCell( time );
+	Call_PushCell( pb );
+	Call_PushCell( wr );
+	Call_Finish();
 	
 	SQL_ReloadCache( ztTrack, style );
 }
