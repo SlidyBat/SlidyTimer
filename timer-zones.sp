@@ -341,6 +341,7 @@ void OpenCreateZoneMenu( int client )
 		Format( buffer, sizeof( buffer ), "Snap To Wall: %s", g_bSnapToWall[client] ? "Enabled" : "Disabled" );
 		menu.AddItem( "wallsnap", buffer );
 		Format( buffer, sizeof( buffer ), "Zone Point: %s", g_bZoneEyeAngle[client] ? "Eye Angles" : "Position" );
+		menu.AddItem( "zonepoint", buffer );
 	}
 	else
 	{
