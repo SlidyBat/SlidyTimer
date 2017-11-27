@@ -142,6 +142,8 @@ public void OnClientPostAdminCheck( int client )
 	{
 		SQL_LoadPlayerID( client );
 	}
+	
+	StopTimer( client );
 }
 
 public void OnClientDisconnect( int client )
@@ -320,6 +322,11 @@ void ClearPlayerData( int client )
 
 void StartTimer( int client )
 {
+	if( g_bNoclip[client] )
+	{
+		return;
+	}
+
 	g_bTimerRunning[client] = true;
 	g_bTimerPaused[client] = false;
 	
@@ -998,6 +1005,7 @@ public Action Command_Noclip( int client, int args )
 	if( g_bNoclip[client] )
 	{
 		SetEntityMoveType( client, MOVETYPE_NOCLIP );
+		StopTimer( client );
 	}
 	else
 	{
