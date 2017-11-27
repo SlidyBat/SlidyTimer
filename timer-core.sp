@@ -250,21 +250,11 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			}
 		}
 		
-		if( buttons & IN_JUMP )
-		{
-			if( !( GetEntityMoveType( client ) & MOVETYPE_LADDER )
-				&& !( GetEntityFlags( client ) & FL_ONGROUND )
-				&& ( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
-			{
-				buttons &= ~IN_JUMP;
-			}
-		}
-		
 		if( Timer_GetClientZoneType( client ) == Zone_Start )
 		{
-			if( buttons & IN_JUMP && styleSettings[StartBhop] )
+			if( buttons & IN_JUMP && !styleSettings[StartBhop] )
 			{
-				buttons &= IN_JUMP;
+				buttons &= ~IN_JUMP;
 			}
 			
 			if( styleSettings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > styleSettings[PreSpeed]*styleSettings[PreSpeed] )
@@ -277,6 +267,16 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				ScaleVector( vVel, scale );
 				
 				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
+			}
+		}
+		
+		if( buttons & IN_JUMP )
+		{
+			if( !( GetEntityMoveType( client ) & MOVETYPE_LADDER )
+				&& !( GetEntityFlags( client ) & FL_ONGROUND )
+				&& ( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
+			{
+				buttons &= ~IN_JUMP;
 			}
 		}
 		
