@@ -59,7 +59,7 @@ public void OnPluginStart()
 	/* Forwards */
 	g_hForward_OnDatabaseLoaded = CreateGlobalForward( "Timer_OnDatabaseLoaded", ET_Event );
 	g_hForward_OnClientLoaded = CreateGlobalForward( "Timer_OnClientLoaded", ET_Event, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnStylesLoaded = CreateGlobalForward( "Timer_OnStylesLoaded", ET_Event );
+	g_hForward_OnStylesLoaded = CreateGlobalForward( "Timer_OnStylesLoaded", ET_Event, Param_Cell );
 	g_hForward_OnStyleChangedPre = CreateGlobalForward( "Timer_OnStyleChangedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnStyleChangedPost = CreateGlobalForward( "Timer_OnStyleChangedPost", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	
@@ -512,6 +512,7 @@ bool LoadStyles()
 	delete kvStyles;
 	
 	Call_StartForward( g_hForward_OnStylesLoaded );
+	Call_PushCell( g_iTotalStyles );
 	Call_Finish();
 	
 	return true;

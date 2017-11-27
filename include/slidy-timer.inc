@@ -231,9 +231,10 @@ forward void Timer_OnClientLoaded( int client, int playerid, bool newplayer );
 /**
  * Called when all styles have been loaded from config file
  *
+ * @param totalstyles				Total number of styles loaded from config
  * @noreturn
  */
-forward void Timer_OnStylesLoaded();
+forward void Timer_OnStylesLoaded( int totalstyles );
 
 /**
  * Called just before client changes style
