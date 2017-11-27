@@ -242,7 +242,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		if( i == client || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
+		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
 		{
 			continue;
 		}
@@ -500,10 +500,18 @@ void DrawButtonsPanel( int client )
 void DrawTopLeftOverlay( int client )
 {
 	if( g_iCount % 25 != 0 ) // delay it to run every 2.5s to avoid flicker
+	{
 		return;
+	}
 	
 	int target = GetClientObserverTarget( client );
 	ZoneTrack track = Timer_GetClientZoneTrack( target );
+	
+	if( track == ZT_None )
+	{
+		return;
+	}
+	
 	int style = Timer_GetClientStyle( target );
 	
 	float wrtime = Timer_GetWRTime( track, style );
