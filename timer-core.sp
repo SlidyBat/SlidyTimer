@@ -1305,7 +1305,7 @@ public int Native_GetClientCurrentSync( Handle handler, int numparams )
 		return 0;
 	}
 	
-	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] ) / g_nPlayerAirStrafeFrames[client] );
+	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] * 100 ) / g_nPlayerAirStrafeFrames[client] );
 }
 
 public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
@@ -1316,7 +1316,7 @@ public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
 		return 0;
 	}
 	
-	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 ) ? 0.0 : float( g_nPlayerAirStrafeFrames[client] ) / g_nPlayerAirFrames[client] );
+	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 ) ? 0.0 : float( g_nPlayerAirStrafeFrames[client] * 100 ) / g_nPlayerAirFrames[client] );
 }
 
 public int Native_GetWRTime( Handle handler, int numparams )
