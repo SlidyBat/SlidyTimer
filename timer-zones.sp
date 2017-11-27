@@ -370,6 +370,7 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 			{
 				case 0:
 				{
+					Timer_StopTimer( param1 );
 					GetZoningPoint( param1, g_fZonePointCache[param1][g_iZoningStage[param1]] );
 			
 					if( g_iZoningStage[param1] == 1 )
