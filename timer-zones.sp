@@ -692,7 +692,7 @@ public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroa
 
 public Action Entity_StartTouch( int caller, int activator )
 {
-	if( IsValidClient( activator ) )
+	if( IsValidClient( activator ) && !IsFakeClient( activator ) )
 	{
 		char entName[512];
 		GetEntPropString( caller, Prop_Data, "m_iName", entName, sizeof( entName ) );
@@ -725,7 +725,7 @@ public Action Entity_StartTouch( int caller, int activator )
 
 public Action Entity_EndTouch( int caller, int activator )
 {
-	if( IsValidClient( activator ) )
+	if( IsValidClient( activator ) && !IsFakeClient( activator ) )
 	{
 		char entName[512];
 		GetEntPropString( caller, Prop_Data, "m_iName", entName, sizeof( entName ) );
