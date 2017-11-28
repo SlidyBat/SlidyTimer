@@ -636,6 +636,17 @@ void StopReplayBot( int botidx )
 	g_MultireplayCurrentlyReplayingTrack[botid] = ZT_None;
 	g_aPlayerFrameData[botidx].Clear();
 	
+	char name[MAX_NAME_LENGTH];
+	if( botid == 0 )
+	{
+		Format( name, sizeof( name ), "MultiReplay (!replay)" );
+	}
+	else
+	{
+		Format( name, sizeof( name ), "MultiReplay %i (!replay)", botid + 1 );
+	}
+	SetClientName( botidx, name );
+	
 	Timer_TeleportClientToZone( botidx, Zone_Start, ZT_Main );
 }
 
