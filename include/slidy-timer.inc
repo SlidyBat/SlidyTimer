@@ -54,7 +54,7 @@ enum
 	ZONE_DATA
 }
 
-enum StyleSettings
+enum styleSettings
 {
 	String:StyleName[64],
 	String:StylePrefix[16],

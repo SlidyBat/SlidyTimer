@@ -36,7 +36,7 @@ bool			g_bClientLoaded[MAXPLAYERS + 1];
 
 ArrayList    g_aMapRecords[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
-any			g_StyleSettings[MAX_STYLES][StyleSettings];
+any			g_StyleSettings[MAX_STYLES][styleSettings];
 StringMap	g_smStyleCommands;
 int			g_iTotalStyles;
 
@@ -181,8 +181,8 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 {
 	if( IsValidClient( client, true ) )
 	{	
-		static any styleSettings[StyleSettings];
-		styleSettings = g_StyleSettings[g_PlayerCurrentStyle[client]];
+		static any settings[styleSettings];
+		settings = g_StyleSettings[g_PlayerCurrentStyle[client]];
 		
 		static int lastButtons[MAXPLAYERS + 1];
 		static float lastYaw[MAXPLAYERS + 1];
@@ -216,7 +216,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 					g_nPlayerAirStrafeFrames[client]++;
 				}
 				
-				if( styleSettings[Sync] &&
+				if( settings[Sync] &&
 					( ( fDeltaYaw > 0.0 && ( buttons & IN_MOVELEFT ) && !( buttons & IN_MOVERIGHT ) ) ||
 					( fDeltaYaw < 0.0 && ( buttons & IN_MOVERIGHT ) && !( buttons & IN_MOVELEFT ) ) ) )
 				{
@@ -224,7 +224,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				}
 			}
 			
-			if( styleSettings[HSW] )
+			if( settings[HSW] )
 			{
 				if( ( buttons & IN_FORWARD ) && ( lastButtons[client] & IN_FORWARD ) )
 				{
@@ -240,19 +240,19 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			}
 			else
 			{
-				if( styleSettings[CountLeft] && !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+				if( settings[CountLeft] && !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
-				else if( styleSettings[CountRight] && !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+				else if( settings[CountRight] && !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
-				else if( styleSettings[CountForward] && !( lastButtons[client] & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
+				else if( settings[CountForward] && !( lastButtons[client] & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
-				else if( styleSettings[CountBack] && !( lastButtons[client] & IN_BACK ) && ( buttons & IN_BACK ) )
+				else if( settings[CountBack] && !( lastButtons[client] & IN_BACK ) && ( buttons & IN_BACK ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
@@ -261,15 +261,15 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 		
 		if( Timer_GetClientZoneType( client ) == Zone_Start )
 		{
-			if( buttons & IN_JUMP && !styleSettings[StartBhop] )
+			if( buttons & IN_JUMP && !settings[StartBhop] )
 			{
 				buttons &= ~IN_JUMP;
 			}
 			
-			if( styleSettings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > styleSettings[PreSpeed]*styleSettings[PreSpeed] )
+			if( settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
 			{
 				float speed = GetClientSpeed( client );
-				float scale = styleSettings[PreSpeed] / speed;
+				float scale = settings[PreSpeed] / speed;
 				
 				float vVel[3];
 				GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vVel);
@@ -292,14 +292,14 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 		// blocking keys (only in air)
 		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
 		{
-			if( styleSettings[PreventLeft] && ( buttons & IN_LEFT ) ||
-				styleSettings[PreventRight] && ( buttons & IN_RIGHT ) ||
-				styleSettings[PreventForward] && ( buttons & IN_FORWARD ) ||
-				styleSettings[PreventBack] && ( buttons & IN_BACK ) )
+			if( settings[PreventLeft] && ( buttons & IN_LEFT ) ||
+				settings[PreventRight] && ( buttons & IN_RIGHT ) ||
+				settings[PreventForward] && ( buttons & IN_FORWARD ) ||
+				settings[PreventBack] && ( buttons & IN_BACK ) )
 			{
 				bButtonError = true;
 			}
-			else if( styleSettings[HSW] && 
+			else if( settings[HSW] && 
 					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_LEFT ) || ( buttons & IN_RIGHT ) ) ) )
 			{
 				bButtonError = true;
