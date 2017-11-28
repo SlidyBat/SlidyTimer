@@ -543,6 +543,9 @@ bool LoadStyles()
 		
 		g_StyleSettings[g_iTotalStyles][HSW] = view_as<bool>( kvStyles.GetNum( "hsw" ) );
 
+		g_StyleSettings[g_iTotalStyles][MainReplayBot] = view_as<bool>( kvStyles.GetNum( "main_bot" ) );
+		g_StyleSettings[g_iTotalStyles][BonusReplayBot] = view_as<bool>( kvStyles.GetNum( "bonus_bot" ) );
+		
 		g_StyleSettings[g_iTotalStyles][PreSpeed] = kvStyles.GetFloat( "prespeed" );
 
 		g_StyleSettings[g_iTotalStyles][StyleId] = g_iTotalStyles;

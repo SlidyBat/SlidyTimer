@@ -79,6 +79,8 @@ enum styleSettings
 	bool:HSW,
 	Float:PreSpeed,
 	StyleId,
+	bool:MainReplayBot,
+	bool:BonusReplayBot,
 	Float:ExpMultiplier
 };
 
