@@ -153,7 +153,6 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	g_aReplayQueue.Clear();
-	g_iTotalStyles = 0;
 	g_bRoundStarted = false;
 
 	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
@@ -163,6 +162,15 @@ public void OnMapEnd()
 			delete g_aReplayFrames[i][j];
 			g_cReplayRecordNames[i][j] = "";
 			g_fReplayRecordTimes[i][j] = 0.0;
+		}
+	}
+	g_iTotalStyles = 0;
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientConnected( i ) && IsFakeClient( i ) )
+		{
+			KickClient( i );
 		}
 	}
 }
@@ -186,6 +194,7 @@ public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroa
 		
 		g_iMultireplayBotIndexes[i] = CreateFakeClient( botname );
 		SetEntityFlags( g_iMultireplayBotIndexes[i], FL_CLIENT | FL_FAKECLIENT );
+		delete g_aPlayerFrameData[g_iMultireplayBotIndexes[i]];
 		
 		g_MultireplayCurrentlyReplayingStyle[i] = -1;
 		g_MultireplayCurrentlyReplayingTrack[i] = ZT_None;
@@ -268,6 +277,7 @@ void CreateStyleBots()
 				Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
 				g_iStyleBots[totalbots] = CreateFakeClient( name );
 				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
+				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
 				
 				g_iBotId[g_iStyleBots[totalbots]] = totalbots;
 				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
@@ -283,6 +293,7 @@ void CreateStyleBots()
 				Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
 				g_iStyleBots[totalbots] = CreateFakeClient( name );
 				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
+				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
 				
 				g_iBotId[g_iStyleBots[totalbots]] = i;
 				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
@@ -312,6 +323,7 @@ void CreateStyleBots()
 				Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
 				g_iStyleBots[totalbots] = CreateFakeClient( name );
 				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
+				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
 				
 				g_iBotId[g_iStyleBots[totalbots]] = totalbots;
 				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
@@ -327,6 +339,7 @@ void CreateStyleBots()
 				Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
 				g_iStyleBots[totalbots] = CreateFakeClient( name );
 				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
+				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
 				
 				g_iBotId[g_iStyleBots[totalbots]] = i;
 				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
@@ -375,7 +388,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 	}
 	else
 	{
-		if( g_iBotType[client] != ReplayBot_None && g_aPlayerFrameData[client].Length )
+		if( g_iBotType[client] != ReplayBot_None && g_aPlayerFrameData[client] != null && g_aPlayerFrameData[client].Length )
 		{
 			// its a replay bot, move it
 			if( g_iCurrentFrame[client] == 0 )
@@ -617,8 +630,10 @@ void QueueReplay( int client, ZoneTrack track, int style )
 
 void StopReplayBot( int botidx )
 {
-	g_MultireplayCurrentlyReplayingStyle[g_iBotId[botidx]] = -1;
-	g_MultireplayCurrentlyReplayingTrack[g_iBotId[botidx]] = ZT_None;
+	int botid = g_iBotId[botidx];
+
+	g_MultireplayCurrentlyReplayingStyle[botid] = -1;
+	g_MultireplayCurrentlyReplayingTrack[botid] = ZT_None;
 	g_aPlayerFrameData[botidx].Clear();
 	
 	Timer_TeleportClientToZone( botidx, Zone_Start, ZT_Main );
@@ -635,7 +650,6 @@ void EndReplayBot( int botidx )
 		
 		StartReplay( g_iBotId[botidx], track, style );
 		PrintToChat( client, "[Timer] Your replay has started" );
-		
 	}
 	else
 	{
