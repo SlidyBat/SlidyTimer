@@ -109,7 +109,9 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetWRName", Native_GetWRName );
 	CreateNative( "Timer_GetClientPBTime", Native_GetClientPBTime );
 	CreateNative( "Timer_GetClientStyle", Native_GetClientStyle );
+	CreateNative( "Timer_GetStyleSettings", Native_GetStyleSettings );
 	CreateNative( "Timer_GetStyleName", Native_GetStyleName );
+	CreateNative( "Timer_GetStylePrefix", Native_GetStylePrefix );
 	CreateNative( "Timer_GetClientTimerStatus", Native_GetClientTimerStatus );
 	CreateNative( "Timer_GetClientRank", Native_GetClientRank );
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
@@ -1427,9 +1429,19 @@ public int Native_GetClientRank( Handle handler, int numParams )
 	return GetClientRank( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ) );
 }
 
+public int Native_GetStyleSettings( Handle handler, int numParams )
+{
+	SetNativeArray( 2, g_StyleSettings[GetNativeCell( 1 )], styleSettings );
+}
+
 public int Native_GetStyleName( Handle handler, int numParams )
 {
 	SetNativeString( 2, g_StyleSettings[GetNativeCell( 1 )][StyleName], GetNativeCell( 3 ) );
+}
+
+public int Native_GetStylePrefix( Handle handler, int numParams )
+{
+	SetNativeString( 2, g_StyleSettings[GetNativeCell( 1 )][StylePrefix], GetNativeCell( 3 ) );
 }
 
 public int Native_GetClientStyle( Handle handler, int numParams )

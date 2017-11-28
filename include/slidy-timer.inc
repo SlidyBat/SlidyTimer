@@ -408,14 +408,33 @@ native TimerStatus Timer_GetClientRank( int client, ZoneTrack track, int style )
 native int Timer_GetClientStyle( int client );
 
 /**
+ * Gets style settings
+ *
+ * @param style						Style index
+ * @param buffer					Buffer to store style settings in
+ * @noreturn
+ */
+native bool Timer_GetStyleSettings( int style, any buffer[styleSettings] );
+
+/**
  * Gets style full name
  *
  * @param style						Style index
  * @param buffer					Buffer to store style name in
  * @param maxlen					Max length of buffer
- * @return							Style index of client
+ * @noreturn
  */
-native int Timer_GetStyleName( int style, char[] buffer, int maxlen );
+native void Timer_GetStyleName( int style, char[] buffer, int maxlen );
+
+/**
+ * Gets style prefix string
+ *
+ * @param style						Style index
+ * @param buffer					Buffer to store style prefix in
+ * @param maxlen					Max length of buffer
+ * @noreturn
+ */
+native void Timer_GetStylePrefix( int style, char[] buffer, int maxlen );
 
 /**
  * Gets WR for specified track and style
@@ -529,7 +548,9 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetClientPBTime" );
 	MarkNativeAsOptional( "Timer_GetWRTime" );
 	MarkNativeAsOptional( "Timer_GetWRName" );
+	MarkNativeAsOptional( "Timer_GetStyleSettings" );
 	MarkNativeAsOptional( "Timer_GetStyleName" );
+	MarkNativeAsOptional( "Timer_GetStylePrefix" );
 	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
 	MarkNativeAsOptional( "Timer_GetClientRank" );
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
