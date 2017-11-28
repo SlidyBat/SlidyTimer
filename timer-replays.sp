@@ -65,6 +65,9 @@ int			g_iStyleBots[MAX_STYLE_BOTS];
 ZoneTrack	g_StyleBotReplayingTrack[MAX_STYLE_BOTS];
 int			g_StyleBotReplayingStyle[MAX_STYLE_BOTS];
 
+ConVar		g_cvStartDelay;
+ConVar		g_cvEndDelay;
+
 int			g_iBotType[MAXPLAYERS + 1];
 int			g_iBotId[MAXPLAYERS + 1];
 
@@ -88,6 +91,9 @@ public void OnPluginStart()
 	g_cvMultireplayBots = CreateConVar( "sm_timer_multireplay_bots", "2", "Total amount of MultiReplay bots", _, true, 0.0, true, float( MAX_MULTIREPLAY_BOTS ) );
 	g_cvMultireplayBots.AddChangeHook( OnConVarChanged );
 	g_nMultireplayBots = g_cvMultireplayBots.IntValue;
+	
+	g_cvStartDelay = CreateConVar( "sm_timer_replay_start_delay", "3.0", "Delay at beginning of replays before bots start", _, true, 0.0, false );
+	g_cvEndDelay = CreateConVar( "sm_timer_replay_end_delay", "3.0", "Delay at end of replays before bots restart", _, true, 0.0, false );
 	AutoExecConfig( true, "timer-replays", "Timer" );
 	
 	HookEvent( "round_start", Hook_RoundStartPost, EventHookMode_Post );
@@ -402,9 +408,10 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				angles[0] = frameData[FD_Angles][0];
 				angles[1] = frameData[FD_Angles][1];
 				
+				SetEntityMoveType( client, MOVETYPE_NONE );
 				TeleportEntity( client, pos, angles, NULL_VECTOR );
 				
-				g_iCurrentFrame[client] += 2;
+				CreateTimer( g_cvStartDelay.FloatValue, Timer_StartBotDelayed, GetClientUserId( client ) );
 			}
 			else if( g_iCurrentFrame[client] < g_aPlayerFrameData[client].Length )
 			{
@@ -428,18 +435,12 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				
 				TeleportEntity( client, NULL_VECTOR, angles, tmp );
 				
-				g_iCurrentFrame[client] += 2;
+				g_iCurrentFrame[client]++;
 			}
 			else
 			{
-				if( g_iBotType[client] == ReplayBot_Style )
-				{
-					g_iCurrentFrame[client] = 0;
-				}
-				else
-				{
-					EndReplayBot( client );
-				}
+				SetEntityMoveType( client, MOVETYPE_NONE );
+				CreateTimer( g_cvEndDelay.FloatValue, Timer_EndBotDelayed, GetClientUserId( client ) );
 			}
 		}
 	}
@@ -792,6 +793,25 @@ public Action Command_Replay( int client, int args )
 	OpenReplayMenu( client, ZT_Main, 0 );
 	
 	return Plugin_Handled;
+}
+
+public Action Timer_StartBotDelayed( Handle timer, int userid )
+{
+	int client = GetClientOfUserId( userid );
+	g_iCurrentFrame[client]++;
+}
+
+public Action Timer_EndBotDelayed( Handle timer, int userid )
+{
+	int client = GetClientOfUserId( userid );
+	if( g_iBotType[client] == ReplayBot_Style )
+	{
+		g_iCurrentFrame[client] = 0;
+	}
+	else
+	{
+		EndReplayBot( client );
+	}
 }
 
 public void OnConVarChanged( ConVar convar, const char[] oldValue, const char[] newValue )
