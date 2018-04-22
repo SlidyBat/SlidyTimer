@@ -7,8 +7,6 @@
 #define MENU_PREFIX "Timer"
 #define MAX_STYLES 24 // for now, until i actually implement them
 
-#define DEBUG
-
 typedef SelectStyleCB = function void ( int client, int style );
 
 static SelectStyleCB g_SelectStyleCallback[MAXPLAYERS + 1];
