@@ -270,40 +270,25 @@ bool LoadHuds()
 	
 	do
 	{
-		for( int i = 0; i < TOTAL_HUD_ITEMS; i++ )
-		{
-			g_bHudItems[g_iTotalHuds][i] = false;
-		}
-		
 		char sFileName[32];
-		kvHud.GetSectionName( g_cHudNames[g_iTotalHuds], sizeof( g_cHudNames[] ) );
-		kvHud.GetString( "filename", sFileName, sizeof( sFileName ) );
+		kvHud.GetString( "name", g_cHudNames[g_iTotalHuds], sizeof(g_cHudNames[]) );
+		kvHud.GetString( "filename", sFileName, sizeof(sFileName) );
 		
 		BuildPath( Path_SM, path, sizeof( path ), "configs/Timer/HUD/%s.txt", sFileName );
 		File hud = OpenFile( path, "r" );
-		hud.ReadString( g_cHudCache[g_iTotalHuds], sizeof( g_cHudCache[] ) );
+		hud.ReadString( g_cHudCache[g_iTotalHuds], sizeof(g_cHudCache[]) );
 		hud.Close();
 		
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{time}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Time] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{jumps}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Jumps] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{strafes}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Strafes] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{sync}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Sync] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{strafetime}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_StrafeTime] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{wrtime}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_WRTime] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{pbtime}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_PBTime] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{speed}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Speed] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{style}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Style] = true;
-		if( StrContains( g_cHudCache[g_iTotalHuds], "{rainbow}" ) )
-			g_bHudItems[g_iTotalHuds][HUD_Rainbow] = true;
+		g_bHudItems[g_iTotalHuds][HUD_Time] =		StrContains( g_cHudCache[g_iTotalHuds], "{time}" );
+		g_bHudItems[g_iTotalHuds][HUD_Jumps] =		StrContains( g_cHudCache[g_iTotalHuds], "{jumps}" );
+		g_bHudItems[g_iTotalHuds][HUD_Strafes] =		StrContains( g_cHudCache[g_iTotalHuds], "{strafes}" );
+		g_bHudItems[g_iTotalHuds][HUD_Sync] =		StrContains( g_cHudCache[g_iTotalHuds], "{sync}" );
+		g_bHudItems[g_iTotalHuds][HUD_StrafeTime] =	StrContains( g_cHudCache[g_iTotalHuds], "{strafetime}" );
+		g_bHudItems[g_iTotalHuds][HUD_WRTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{wrtime}" );
+		g_bHudItems[g_iTotalHuds][HUD_PBTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{pbtime}" );
+		g_bHudItems[g_iTotalHuds][HUD_Speed] =		StrContains( g_cHudCache[g_iTotalHuds], "{speed}" );
+		g_bHudItems[g_iTotalHuds][HUD_Style] =		StrContains( g_cHudCache[g_iTotalHuds], "{style}" );
+		g_bHudItems[g_iTotalHuds][HUD_Rainbow] =		StrContains( g_cHudCache[g_iTotalHuds], "{rainbow}" );
 		
 		g_iTotalHuds++;
 	} while( kvHud.GotoNextKey() );
