@@ -74,7 +74,7 @@ public Action CS_OnTerminateRound( float& delay, CSRoundEndReason& reason )
 	return Plugin_Handled;
 }
 
-public Action HookEvent_GameEnd( Event E_Event, char[] C_Name, bool B_DontBroadcast )
+public Action HookEvent_GameEnd( Event event, char[] name, bool dontBroadcast )
 {
 	int timeleft;
 	GetMapTimeLeft( timeleft );
@@ -108,7 +108,7 @@ public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBr
 	{
 		SetEntProp( client, Prop_Data, "m_CollisionGroup", COLLISION_GROUP_DEBRIS_TRIGGER );
 		
-		if( IsValidClient( client ) && !IsFakeClient( client ) )
+		if( !IsFakeClient( client ) )
 		{
 			RequestFrame( HideRadar, client );
 
@@ -267,10 +267,7 @@ public Action Timer_ClearEntity( Handle timer, int entref )
 
 public void HideRadar( int client )
 {
-	if( IsValidClient( client ) )
-	{
-		SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
-	}
+	SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
 }
 
 public Action Command_Spec( int client, int args )
@@ -287,7 +284,7 @@ public Action Command_Spec( int client, int args )
 
 		if( target > -1 )
 		{
-			if( IsValidClient( target, true ) )
+			if( IsClientInGame( target ) && IsPlayerAlive( target ) )
 			{
 				SetClientObserverTarget( client, target )
 			}
@@ -301,6 +298,8 @@ public Action Command_Spec( int client, int args )
 			ReplyToCommand( client, "[Timer] No matching players" );	
 		}
 	}
+	
+	return Plugin_Handled;
 }
 
 stock void SetClientObserverTarget( int client, int target )

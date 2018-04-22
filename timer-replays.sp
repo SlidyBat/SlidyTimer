@@ -27,7 +27,7 @@ enum ReplayHeader
 {
 	HD_MagicNumber,
 	HD_ReplayVersion,
-	String:HD_SteamId[32],
+	HD_SteamAccountId,
 	Float:HD_Time,
 	HD_Size,
 	HD_TickRate,
@@ -42,28 +42,29 @@ char g_cReplayFolders[][] =
 
 Database g_hDatabase;
 
-float		g_fFrameTime;
-float		g_fTickRate;
+float			g_fFrameTime;
+float			g_fTickRate;
 char			g_cCurrentMap[PLATFORM_MAX_PATH];
-int			g_iTotalStyles;
-bool			g_bRoundStarted;
 
-ArrayList	g_aReplayQueue;
+ArrayList		g_aReplayQueue;
 
-ArrayList	g_aReplayFrames[TOTAL_ZONE_TRACKS][MAX_STYLES];
-float		g_fReplayRecordTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
+ArrayList		g_aReplayFrames[TOTAL_ZONE_TRACKS][MAX_STYLES];
+float			g_fReplayRecordTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 char			g_cReplayRecordNames[TOTAL_ZONE_TRACKS][MAX_STYLES][MAX_NAME_LENGTH];
 
 ConVar		g_cvMultireplayBots;
 int			g_nMultireplayBots;
+int			g_nExpectedMultireplayBots;
 int			g_iMultireplayBotIndexes[MAX_MULTIREPLAY_BOTS];
-ZoneTrack	g_MultireplayCurrentlyReplayingTrack[MAX_MULTIREPLAY_BOTS];
+int			g_MultireplayCurrentlyReplayingTrack[MAX_MULTIREPLAY_BOTS];
 int			g_MultireplayCurrentlyReplayingStyle[MAX_MULTIREPLAY_BOTS];
 
 int			g_nStyleBots;
-int			g_iStyleBots[MAX_STYLE_BOTS];
-ZoneTrack	g_StyleBotReplayingTrack[MAX_STYLE_BOTS];
+int			g_nExpectedStyleBots;
+int			g_iStyleBotIndexes[MAX_STYLE_BOTS];
+int			g_StyleBotReplayingTrack[MAX_STYLE_BOTS];
 int			g_StyleBotReplayingStyle[MAX_STYLE_BOTS];
+bool			g_bStyleBotLoaded[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
 ConVar		g_cvStartDelay;
 ConVar		g_cvEndDelay;
@@ -73,7 +74,7 @@ int			g_iBotId[MAXPLAYERS + 1];
 
 int			g_iCurrentFrame[MAXPLAYERS + 1];
 
-ArrayList	g_aPlayerFrameData[MAXPLAYERS + 1];
+ArrayList		g_aPlayerFrameData[MAXPLAYERS + 1];
 
 public Plugin myinfo = 
 {
@@ -90,13 +91,11 @@ public void OnPluginStart()
 
 	g_cvMultireplayBots = CreateConVar( "sm_timer_multireplay_bots", "2", "Total amount of MultiReplay bots", _, true, 0.0, true, float( MAX_MULTIREPLAY_BOTS ) );
 	g_cvMultireplayBots.AddChangeHook( OnConVarChanged );
-	g_nMultireplayBots = g_cvMultireplayBots.IntValue;
+	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
 	
 	g_cvStartDelay = CreateConVar( "sm_timer_replay_start_delay", "3.0", "Delay at beginning of replays before bots start", _, true, 0.0, false );
 	g_cvEndDelay = CreateConVar( "sm_timer_replay_end_delay", "3.0", "Delay at end of replays before bots restart", _, true, 0.0, false );
 	AutoExecConfig( true, "timer-replays", "Timer" );
-	
-	HookEvent( "round_start", Hook_RoundStartPost, EventHookMode_Post );
 	
 	g_fFrameTime = GetTickInterval();
 	g_fTickRate = 1.0 / g_fFrameTime;
@@ -121,7 +120,7 @@ public void OnPluginStart()
 			CreateDirectory( path, sizeof( path ) );
 		}
 
-		for( int x = 0; x < view_as<int>( TOTAL_ZONE_TRACKS ); x++ )
+		for( int x = 0; x < TOTAL_ZONE_TRACKS; x++ )
 		{
 			BuildPath( Path_SM, path, 512, "data/Timer/%s/%i", g_cReplayFolders[i], x );
 
@@ -159,18 +158,19 @@ public void OnMapStart()
 public void OnMapEnd()
 {
 	g_aReplayQueue.Clear();
-	g_bRoundStarted = false;
-
-	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
+	
+	int totalstyles = Timer_GetStyleCount();
+	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
 	{
-		for( int j = 0; j < g_iTotalStyles; j++ )
+		for( int j = 0; j < totalstyles; j++ )
 		{
 			delete g_aReplayFrames[i][j];
 			g_cReplayRecordNames[i][j] = "";
 			g_fReplayRecordTimes[i][j] = 0.0;
+			
+			g_bStyleBotLoaded[i][j] = false;
 		}
 	}
-	g_iTotalStyles = 0;
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
@@ -181,46 +181,85 @@ public void OnMapEnd()
 	}
 }
 
-public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroadcast )
+public void OnClientPutInServer( int client )
 {
-	g_bRoundStarted = true;
-	// load multireplay bots
-	char botname[MAX_NAME_LENGTH];
-	
-	for( int i = 0; i < g_nMultireplayBots; i++ )
+	if( !IsFakeClient( client ) )
 	{
-		if( i == 0 )
+		if( g_aPlayerFrameData[client] != null )
 		{
-			Format( botname, sizeof( botname ), "MultiReplay (!replay)" );
+			delete g_aPlayerFrameData[client];
+		}
+		g_aPlayerFrameData[client] = new ArrayList( FRAME_DATA_SIZE );
+	}
+	else
+	{
+		if( g_nMultireplayBots < g_nExpectedMultireplayBots )
+		{
+			int botid = -1;
+		
+			for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
+			{
+				if( g_iMultireplayBotIndexes[i] == 0 )
+				{
+					g_iMultireplayBotIndexes[i] = client;
+					g_nMultireplayBots++;
+					botid = i;
+					break;
+				}
+			}
+			
+			if( botid > -1 )
+			{
+				InitializeBot( client, ReplayBot_Multireplay, botid );
+			}
+		}
+		else if( g_nStyleBots < g_nExpectedStyleBots )
+		{
+			int botid = -1;
+		
+			for( int i = 0; i < g_nExpectedStyleBots; i++ )
+			{
+				if( g_iStyleBotIndexes[i] == 0 )
+				{
+					g_iStyleBotIndexes[i] = client;
+					g_nStyleBots++;
+					botid = i;
+					break;
+				}
+			}
+			
+			if( botid > -1 )
+			{
+				InitializeBot( client, ReplayBot_Style, botid );
+			}
 		}
 		else
 		{
-			Format( botname, sizeof( botname ), "MultiReplay %i (!replay)", i + 1 );
+			KickClient( client );
 		}
-		
-		g_iMultireplayBotIndexes[i] = CreateFakeClient( botname );
-		SetEntityFlags( g_iMultireplayBotIndexes[i], FL_CLIENT | FL_FAKECLIENT );
-		delete g_aPlayerFrameData[g_iMultireplayBotIndexes[i]];
-		
-		g_MultireplayCurrentlyReplayingStyle[i] = -1;
-		g_MultireplayCurrentlyReplayingTrack[i] = ZT_None;
-		g_iBotId[g_iMultireplayBotIndexes[i]] = i;
-		g_iBotType[g_iMultireplayBotIndexes[i]] = ReplayBot_Multireplay;
-		
-		ChangeClientTeam( g_iMultireplayBotIndexes[i], CS_TEAM_CT );
-		Timer_TeleportClientToZone( g_iMultireplayBotIndexes[i], Zone_Start, ZT_Main );
-	}
-	
-	if( g_iTotalStyles > 0 )
-	{
-		CreateStyleBots();
 	}
 }
 
-public void OnClientConnected( int client )
+public void OnClientDisconnect( int client )
 {
-	delete g_aPlayerFrameData[client];
-	g_aPlayerFrameData[client] = new ArrayList( FRAME_DATA_SIZE );
+	for( int i = 0; i < g_nExpectedStyleBots; i++ )
+	{
+		if( client == g_iMultireplayBotIndexes[i] )
+		{
+			g_iMultireplayBotIndexes[i] = 0;
+			g_nMultireplayBots--;
+			return;
+		}
+	}
+	for( int i = 0; i < g_nExpectedStyleBots; i++ )
+	{
+		if( client == g_iStyleBotIndexes[i] )
+		{
+			g_iStyleBotIndexes[i] = 0;
+			g_nStyleBots--;
+			return;
+		}
+	}
 }
 
 public Action Timer_OnTimerStart( int client )
@@ -229,7 +268,7 @@ public Action Timer_OnTimerStart( int client )
 	g_iCurrentFrame[client] = 0;
 }
 
-public void Timer_OnFinishPost( int client, ZoneTrack track, int style, float time, float pbtime, float wrtime )
+public void Timer_OnFinishPost( int client, int track, int style, float time, float pbtime, float wrtime )
 {
 	if( g_fReplayRecordTimes[track][style] == 0.0 || time < g_fReplayRecordTimes[track][style] )
 	{
@@ -239,129 +278,127 @@ public void Timer_OnFinishPost( int client, ZoneTrack track, int style, float ti
 
 public void Timer_OnStylesLoaded( int totalstyles )
 {
-	g_iTotalStyles = totalstyles;
-	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
-	
 	// load specific bots
-	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
+	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
 	{
 		for( int j = 0; j < totalstyles; j++ )
 		{
-			LoadReplay( view_as<ZoneTrack>( i ), j );
+			LoadReplay( i, j );
 		}
 	}
 	
-	if( g_bRoundStarted )
+	CreateMultireplayBots();
+	CreateStyleBots();
+}
+
+void CreateMultireplayBots()
+{
+	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
 	{
-		CreateStyleBots();
+		ServerCommand( "bot_add_ct" );
 	}
 }
 
 void CreateStyleBots()
 {
-	int totalbots;
-	for( int i; i < g_iTotalStyles; i++ )
+	g_nExpectedStyleBots = 0;
+	
+	int totalstyles = Timer_GetStyleCount();
+	for( int i = 0; i < totalstyles; i++ )
 	{
 		any settings[styleSettings];
 		Timer_GetStyleSettings( i, settings );
 		
-		// yuck yuck yuck
-		// TODO: work on this more so its not so ugly and isnt copied twice
-		if( settings[MainReplayBot] )
+		if( settings[MainReplayBot] || settings[BonusReplayBot] )
 		{
-			ZoneTrack track = g_StyleBotReplayingTrack[totalbots] = ZT_Main;
-			int style = g_StyleBotReplayingStyle[totalbots] = i;
-			
-			char sTrack[32];
-			Timer_GetZoneTrackName( ZT_Main, sTrack, sizeof( sTrack ) );
-			char sStyle[16];
-			strcopy( sStyle, sizeof( sStyle ), settings[StylePrefix] );
-			
-			char name[MAX_NAME_LENGTH + 32];
-			if( g_fReplayRecordTimes[track][style] == 0.0 )
-			{
-				Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
-				g_iStyleBots[totalbots] = CreateFakeClient( name );
-				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
-				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
-				
-				g_iBotId[g_iStyleBots[totalbots]] = totalbots;
-				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
-				
-				ChangeClientTeam( g_iStyleBots[totalbots], CS_TEAM_CT );
-				Timer_TeleportClientToZone( g_iStyleBots[totalbots], Zone_Start, ZT_Main );
-				//ForcePlayerSuicide( g_iStyleBots[totalbots] );
-			}
-			else
-			{
-				char sTime[32];
-				Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
-				Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
-				g_iStyleBots[totalbots] = CreateFakeClient( name );
-				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
-				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
-				
-				g_iBotId[g_iStyleBots[totalbots]] = i;
-				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
-				
-				ChangeClientTeam( g_iStyleBots[totalbots], CS_TEAM_CT );
-				Timer_TeleportClientToZone( g_iStyleBots[totalbots], Zone_Start, ZT_Main );
-				
-				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
-				g_aPlayerFrameData[g_iStyleBots[totalbots]] = g_aReplayFrames[track][style].Clone();
-			}
-			
-			totalbots++;
-		}
-		if( settings[BonusReplayBot] )
-		{
-			ZoneTrack track = g_StyleBotReplayingTrack[totalbots] = ZT_Bonus;
-			int style = g_StyleBotReplayingStyle[totalbots] = i;
-			
-			char sTrack[32];
-			Timer_GetZoneTrackName( ZT_Bonus, sTrack, sizeof( sTrack ) );
-			char sStyle[16];
-			strcopy( sStyle, sizeof( sStyle ), settings[StylePrefix] );
-			
-			char name[MAX_NAME_LENGTH + 32];
-			if( g_fReplayRecordTimes[track][style] == 0.0 )
-			{
-				Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
-				g_iStyleBots[totalbots] = CreateFakeClient( name );
-				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
-				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
-				
-				g_iBotId[g_iStyleBots[totalbots]] = totalbots;
-				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
-				
-				ChangeClientTeam( g_iStyleBots[totalbots], CS_TEAM_CT );
-				Timer_TeleportClientToZone( g_iStyleBots[totalbots], Zone_Start, ZT_Bonus );
-				//ForcePlayerSuicide( g_iStyleBots[totalbots] );
-			}
-			else
-			{
-				char sTime[32];
-				Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
-				Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
-				g_iStyleBots[totalbots] = CreateFakeClient( name );
-				SetEntityFlags( g_iStyleBots[totalbots], FL_CLIENT | FL_FAKECLIENT );
-				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
-				
-				g_iBotId[g_iStyleBots[totalbots]] = i;
-				g_iBotType[g_iStyleBots[totalbots]] = ReplayBot_Style;
-				
-				ChangeClientTeam( g_iStyleBots[totalbots], CS_TEAM_CT );
-				Timer_TeleportClientToZone( g_iStyleBots[totalbots], Zone_Start, ZT_Bonus );
-				
-				delete g_aPlayerFrameData[g_iStyleBots[totalbots]];
-				g_aPlayerFrameData[g_iStyleBots[totalbots]] = g_aReplayFrames[track][style].Clone();
-			}
-			
-			totalbots++;
+			g_nExpectedStyleBots++;
 		}
 	}
 	
-	g_nStyleBots = totalbots;
+	for( int i = 0; i < g_nExpectedStyleBots; i++ )
+	{
+		ServerCommand( "bot_add_ct" );
+	}
+}
+
+void InitializeBot( int client, int replaytype, int botid )
+{
+	char name[MAX_NAME_LENGTH];
+
+	if( replaytype == ReplayBot_Multireplay )
+	{
+		g_iMultireplayBotIndexes[botid] = client;
+		g_MultireplayCurrentlyReplayingTrack[botid] = ZoneTrack_None;
+		g_MultireplayCurrentlyReplayingStyle[botid] = -1;
+		
+		if( botid == 0 )
+		{
+			Format( name, sizeof( name ), "MultiReplay (!replay)" );
+		}
+		else
+		{
+			Format( name, sizeof( name ), "MultiReplay %i (!replay)", botid + 1 );
+		}
+	}
+	else if( replaytype == ReplayBot_Style )
+	{
+		g_iStyleBotIndexes[botid] = client;
+	
+		int totalstyles = Timer_GetStyleCount();
+		for( int track = 0; track < TOTAL_ZONE_TRACKS; track++ )
+		{
+			bool assigned = false;
+		
+			for( int style; style < totalstyles; style++ )
+			{
+				any settings[styleSettings];
+				Timer_GetStyleSettings( style, settings );
+			
+				int tracksetting = (track == ZoneTrack_Main) ? MainReplayBot : BonusReplayBot;
+				if( settings[tracksetting] && !g_bStyleBotLoaded[track][style] )
+				{
+					g_StyleBotReplayingTrack[botid] = track;
+					g_StyleBotReplayingStyle[botid] = style;
+					
+					char sTrack[32];
+					Timer_GetZoneTrackName( track, sTrack, sizeof(sTrack) );
+					char sStyle[16];
+					strcopy( sStyle, sizeof(sStyle), settings[StylePrefix] );
+					
+					if( g_fReplayRecordTimes[track][style] == 0.0 )
+					{
+						Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
+						delete g_aPlayerFrameData[client];
+					}
+					else
+					{
+						char sTime[32];
+						Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
+						Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
+						
+						delete g_aPlayerFrameData[client];
+						g_aPlayerFrameData[client] = g_aReplayFrames[track][style].Clone();
+					}
+					
+					g_bStyleBotLoaded[track][style] = true;
+					assigned = true;
+					break;
+				}
+			}
+			
+			if( assigned )
+			{
+				break;
+			}
+		}
+	}
+	
+	g_iBotId[client] = botid;
+	g_iBotType[client] = replaytype;
+	
+	SetClientName( client, name );
+	ChangeClientTeam( client, CS_TEAM_CT );
+	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 }
 
 public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
@@ -371,8 +408,8 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 		return;
 	}
 	
-	static any frameData[FrameData];
-	static float pos[3];
+	any frameData[FrameData];
+	float pos[3];
 	
 	if( !IsFakeClient( client ) )
 	{
@@ -390,10 +427,17 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			
 			g_aPlayerFrameData[client].PushArray( frameData[0] );
 			g_iCurrentFrame[client]++;
+			
+			//PrintToServer( "Frame %i saved", g_iCurrentFrame[client] );
 		}
 	}
 	else
 	{
+		vel[0] = 0.0;
+		vel[1] = 0.0;
+		vel[2] = 0.0;
+		buttons = 0;
+	
 		if( g_iBotType[client] != ReplayBot_None && g_aPlayerFrameData[client] != null && g_aPlayerFrameData[client].Length )
 		{
 			// its a replay bot, move it
@@ -411,12 +455,12 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				SetEntityMoveType( client, MOVETYPE_NONE );
 				TeleportEntity( client, pos, angles, NULL_VECTOR );
 				
-				CreateTimer( g_cvStartDelay.FloatValue, Timer_StartBotDelayed, GetClientUserId( client ) );
+				CreateTimer( g_cvStartDelay.FloatValue, Timer_StartBotDelayed, GetClientUserId( client ), TIMER_FLAG_NO_MAPCHANGE );
 			}
 			else if( g_iCurrentFrame[client] < g_aPlayerFrameData[client].Length )
 			{
-				SetEntityMoveType( client, ( ( GetEntityFlags( client ) & FL_ONGROUND ) ) ? MOVETYPE_WALK : MOVETYPE_NOCLIP );
-				
+				SetEntityMoveType( client, MOVETYPE_WALK );
+			
 				g_aPlayerFrameData[client].GetArray( g_iCurrentFrame[client], frameData[0] );
 				
 				static float tmp[3];
@@ -440,16 +484,14 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			else
 			{
 				SetEntityMoveType( client, MOVETYPE_NONE );
-				CreateTimer( g_cvEndDelay.FloatValue, Timer_EndBotDelayed, GetClientUserId( client ) );
+				CreateTimer( g_cvEndDelay.FloatValue, Timer_EndBotDelayed, GetClientUserId( client ), TIMER_FLAG_NO_MAPCHANGE );
 			}
 		}
 	}
 }
 
-void LoadReplay( ZoneTrack ztTrack, int style )
+void LoadReplay( int track, int style )
 {
-	int track = view_as<int>( ztTrack );
-
 	char path[PLATFORM_MAX_PATH];
 	BuildPath( Path_SM, path, sizeof( path ), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
@@ -477,7 +519,7 @@ void LoadReplay( ZoneTrack ztTrack, int style )
 		g_fReplayRecordTimes[track][style] = header[HD_Time];
 		
 		char query[128];
-		Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE steamid = '%s'", header[HD_SteamId] );
+		Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE steamaccountid = '%i'", header[HD_SteamAccountId] );
 		DataPack pack = new DataPack();
 		pack.WriteCell( track );
 		pack.WriteCell( style );
@@ -500,10 +542,8 @@ void LoadReplay( ZoneTrack ztTrack, int style )
 	}
 }
 
-void SaveReplay( int client, float time, ZoneTrack ztTrack, int style )
+void SaveReplay( int client, float time, int track, int style )
 {
-	int track = view_as<int>( ztTrack );
-	
 	if( !GetClientName( client, g_cReplayRecordNames[track][style], sizeof( g_cReplayRecordNames[][] ) ) )
 	{
 		LogError( "Failed to get client name when saving replay" );
@@ -515,15 +555,12 @@ void SaveReplay( int client, float time, ZoneTrack ztTrack, int style )
 	delete g_aReplayFrames[track][style];
 	g_aReplayFrames[track][style] = g_aPlayerFrameData[client].Clone();
 	
-	char steamid[32];
-	GetClientAuthId( client, AuthId_Steam2, steamid, sizeof( steamid ) );
-	
 	any header[ReplayHeader];
 	header[HD_MagicNumber] = MAGIC_NUMBER;
 	header[HD_ReplayVersion] = 1;
 	header[HD_Size] = g_aReplayFrames[track][style].Length;
 	header[HD_Time] = time;
-	strcopy( header[HD_SteamId], 32, steamid );
+	header[HD_SteamAccountId] = GetSteamAccountID( client );
 	header[HD_TickRate] = RoundFloat( 1.0 / g_fFrameTime );
 	header[HD_Timestamp] = GetTime();
 	
@@ -560,23 +597,26 @@ void SaveReplay( int client, float time, ZoneTrack ztTrack, int style )
 	
 	for( int i = 0; i < g_nStyleBots; i++ )
 	{
-		if( g_StyleBotReplayingStyle[i] == style && g_StyleBotReplayingTrack[i] == ztTrack )
+		if( g_StyleBotReplayingStyle[i] == style && g_StyleBotReplayingTrack[i] == track )
 		{
-			int idx = g_iStyleBots[i];
+			int idx = g_iStyleBotIndexes[i];
 			if( !IsPlayerAlive( idx ) )
 			{
 				CS_RespawnPlayer( idx );
 			}
 			
+			// reset frames
 			delete g_aPlayerFrameData[idx];
 			g_aPlayerFrameData[idx] = g_aReplayFrames[track][style].Clone();
+			g_iCurrentFrame[idx] = 0;
 			
 			char sTrack[16];
-			Timer_GetZoneTrackName( ztTrack, sTrack, sizeof( sTrack ) );
+			Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
 			char sStyle[16];
 			Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
 			char sTime[16];
 			Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
+			
 			char name[MAX_NAME_LENGTH + 32];
 			Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
 			SetClientName( idx, name );
@@ -586,14 +626,16 @@ void SaveReplay( int client, float time, ZoneTrack ztTrack, int style )
 	}
 }
 
-void StartReplay( int botid, ZoneTrack track, int style )
+void StartReplay( int botid, int track, int style )
 {
 	int idx = g_iMultireplayBotIndexes[botid];
 	
 	g_MultireplayCurrentlyReplayingStyle[botid] = style;
 	g_MultireplayCurrentlyReplayingTrack[botid] = track;
+	
 	delete g_aPlayerFrameData[idx];
 	g_aPlayerFrameData[idx] = g_aReplayFrames[track][style].Clone();
+	
 	g_iCurrentFrame[idx] = 0;
 	
 	// TODO: can make some functions for replay bot names to make this bit more organised
@@ -608,12 +650,12 @@ void StartReplay( int botid, ZoneTrack track, int style )
 	SetClientName( idx, name );
 }
 
-void QueueReplay( int client, ZoneTrack track, int style )
+void QueueReplay( int client, int track, int style )
 {
-	for( int i = 0; i < g_nMultireplayBots; i++ )
+	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
 	{
 		if( g_MultireplayCurrentlyReplayingStyle[i] == -1 &&
-			g_MultireplayCurrentlyReplayingTrack[i] == ZT_None )
+			g_MultireplayCurrentlyReplayingTrack[i] == ZoneTrack_None )
 		{
 			StartReplay( i, track, style );
 			return;
@@ -634,8 +676,9 @@ void StopReplayBot( int botidx )
 	int botid = g_iBotId[botidx];
 
 	g_MultireplayCurrentlyReplayingStyle[botid] = -1;
-	g_MultireplayCurrentlyReplayingTrack[botid] = ZT_None;
-	g_aPlayerFrameData[botidx].Clear();
+	g_MultireplayCurrentlyReplayingTrack[botid] = ZoneTrack_None;
+	delete g_aPlayerFrameData[botidx];
+	g_aPlayerFrameData[botidx] = new ArrayList( FRAME_DATA_SIZE );
 	
 	char name[MAX_NAME_LENGTH];
 	if( botid == 0 )
@@ -648,7 +691,7 @@ void StopReplayBot( int botidx )
 	}
 	SetClientName( botidx, name );
 	
-	Timer_TeleportClientToZone( botidx, Zone_Start, ZT_Main );
+	Timer_TeleportClientToZone( botidx, Zone_Start, ZoneTrack_Main );
 }
 
 void EndReplayBot( int botidx )
@@ -656,7 +699,7 @@ void EndReplayBot( int botidx )
 	if( g_aReplayQueue.Length )
 	{
 		int client = g_aReplayQueue.Get( 0, 0 );
-		ZoneTrack track = g_aReplayQueue.Get( 0, 1 );
+		int track = g_aReplayQueue.Get( 0, 1 );
 		int style= g_aReplayQueue.Get( 0, 2 );
 		g_aReplayQueue.Erase( 0 );
 		
@@ -669,7 +712,7 @@ void EndReplayBot( int botidx )
 	}
 }
 
-void OpenReplayMenu( int client, ZoneTrack track, int style )
+void OpenReplayMenu( int client, int track, int style )
 {
 	Menu menu = new Menu( ReplayMenu_Handler );
 	menu.SetTitle( "Replay Menu\n \n" );
@@ -678,7 +721,7 @@ void OpenReplayMenu( int client, ZoneTrack track, int style )
 	
 	Timer_GetZoneTrackName( track, buffer, sizeof( buffer ) );
 	Format( buffer, sizeof( buffer ), "Track: %s\n\n", buffer );
-	IntToString( view_as<int>( track ), sInfo, sizeof( sInfo ) );
+	IntToString( track, sInfo, sizeof( sInfo ) );
 	menu.AddItem( sInfo, buffer );
 	
 	IntToString( style, sInfo, sizeof( sInfo ) );
@@ -698,18 +741,20 @@ public int ReplayMenu_Handler( Menu menu, MenuAction action, int param1, int par
 	{
 		char sInfo[8];
 		menu.GetItem( 0, sInfo, sizeof( sInfo ) );
-		ZoneTrack track = view_as<ZoneTrack>( StringToInt( sInfo ) );
+		int track = StringToInt( sInfo );
 		menu.GetItem( 1, sInfo, sizeof( sInfo ) );
 		int style = StringToInt( sInfo );
+		
+		int totalstyles = Timer_GetStyleCount();
 		
 		switch( param2 )
 		{
 			case 0:
 			{
-				track = view_as<ZoneTrack>( view_as<int>( track ) + 1 );
+				track++;
 				if( track == TOTAL_ZONE_TRACKS )
 				{
-					track = ZT_Main;
+					track = ZoneTrack_Main;
 				}
 				
 				OpenReplayMenu( param1, track, style );
@@ -719,7 +764,7 @@ public int ReplayMenu_Handler( Menu menu, MenuAction action, int param1, int par
 				style -= 1;
 				if( style < 0 )
 				{
-					style = g_iTotalStyles - 1;
+					style = totalstyles - 1;
 				}
 				
 				OpenReplayMenu( param1, track, style );
@@ -727,7 +772,7 @@ public int ReplayMenu_Handler( Menu menu, MenuAction action, int param1, int par
 			case 2:
 			{
 				style += 1;
-				if( style >= g_iTotalStyles )
+				if( style >= totalstyles )
 				{
 					style = 0;
 				}
@@ -790,7 +835,7 @@ public void GetName_Callback( Database db, DBResultSet results, const char[] err
 
 public Action Command_Replay( int client, int args )
 {
-	OpenReplayMenu( client, ZT_Main, 0 );
+	OpenReplayMenu( client, ZoneTrack_Main, 0 );
 	
 	return Plugin_Handled;
 }
@@ -816,5 +861,5 @@ public Action Timer_EndBotDelayed( Handle timer, int userid )
 
 public void OnConVarChanged( ConVar convar, const char[] oldValue, const char[] newValue )
 {
-	g_nMultireplayBots = g_cvMultireplayBots.IntValue;
+	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
 }

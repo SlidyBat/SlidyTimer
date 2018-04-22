@@ -114,7 +114,7 @@ public void OnClientCookiesCached( int client )
 
 public Action OnPlayerRunCmd( int client, int& buttons )
 {
-	if( IsFakeClient( client ) || !IsValidClient( client, true ) || !( g_iHudSettings[client] & HUD_CENTRAL ) )
+	if( IsFakeClient( client ) || !IsPlayerAlive( client ) || !( g_iHudSettings[client] & HUD_CENTRAL ) )
 	{
 		return;
 	}
@@ -125,7 +125,8 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	{
 		if( IsFakeClient( target ) ) // draw replay bot hud
 		{
-			// TODO: add replay bot hud
+			int speed = RoundFloat( GetClientSpeed( target ) );
+			PrintHintText( client, "Speed: %i", speed );
 		}
 		return;
 	}
@@ -134,12 +135,12 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	hudtext = g_cHudCache[g_iSelectedHud[client]];
 	
 	static char buffer[64];
-	ZoneType ztType = Timer_GetClientZoneType( client );
-	ZoneTrack track = Timer_GetClientZoneTrack( client );
+	int type = Timer_GetClientZoneType( client );
+	int track = Timer_GetClientZoneTrack( client );
 	int style = Timer_GetClientStyle( client );
 	float pbtime, wrtime;
 	
-	if( track > ZT_None )
+	if( track > ZoneTrack_None )
 	{
 		pbtime = Timer_GetClientPBTime( client, track, style );
 		wrtime = Timer_GetWRTime( track, style );
@@ -205,7 +206,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	
 	if( g_bHudItems[g_iSelectedHud[client]][HUD_Time] )
 	{
-		if( ztType == Zone_Start )
+		if( type == Zone_Start )
 		{
 			Timer_GetZoneTrackName( track, buffer, sizeof( buffer ) );
 			
@@ -398,7 +399,7 @@ public Action Timer_DrawHud( Handle timer )
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		if( !IsClientInGame( i ) )
+		if( !IsClientInGame( i ) || IsFakeClient( i ) )
 		{
 			continue;
 		}
@@ -430,14 +431,14 @@ public Action Timer_DrawHud( Handle timer )
 
 void DrawSpecList( int client )
 {
-	int[] spectators = new int[MaxClients];
+	int[] spectators = new int[MaxClients + 1];
 	int nSpectators = 0;
 	
 	int target = GetClientObserverTarget( client );
 
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		if( i == client || !IsValidClient( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
+		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
 		{
 			continue;
 		}
@@ -505,9 +506,9 @@ void DrawTopLeftOverlay( int client )
 	}
 	
 	int target = GetClientObserverTarget( client );
-	ZoneTrack track = Timer_GetClientZoneTrack( target );
+	int track = Timer_GetClientZoneTrack( target );
 	
-	if( track == ZT_None )
+	if( track == ZoneTrack_None )
 	{
 		return;
 	}
@@ -515,7 +516,6 @@ void DrawTopLeftOverlay( int client )
 	int style = Timer_GetClientStyle( target );
 	
 	float wrtime = Timer_GetWRTime( track, style );
-
 	if( wrtime != 0.0 )
 	{
 		char sWRTime[16];
@@ -524,7 +524,7 @@ void DrawTopLeftOverlay( int client )
 		char sWRName[MAX_NAME_LENGTH];
 		Timer_GetWRName( track, style, sWRName, sizeof( sWRName ) );
 
-		float pbtime = Timer_GetClientPBTime( client, track, style );
+		float pbtime = Timer_GetClientPBTime( target, track, style );
 
 		char sTopLeft[64];
 

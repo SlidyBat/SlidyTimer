@@ -18,7 +18,7 @@ public Plugin myinfo =
 
 Database		g_hDatabase;
 
-float		g_fFrameTime;
+float			g_fFrameTime;
 char			g_cMapName[PLATFORM_MAX_PATH];
 
 Handle		g_hForward_OnDatabaseLoaded;
@@ -31,17 +31,19 @@ Handle		g_hForward_OnFinishPost;
 Handle		g_hForward_OnWRBeaten;
 Handle		g_hForward_OnTimerStart;
 
-int			g_ClientPlayerID[MAXPLAYERS + 1];
-bool			g_bClientLoaded[MAXPLAYERS + 1];
+int			g_iPlayerId[MAXPLAYERS + 1] = { -1, ... };
 
-ArrayList    g_aMapRecords[TOTAL_ZONE_TRACKS][MAX_STYLES];
+ArrayList		g_aMapTopRecordIds[TOTAL_ZONE_TRACKS][MAX_STYLES];
+ArrayList		g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
+ArrayList		g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
 any			g_StyleSettings[MAX_STYLES][styleSettings];
-StringMap	g_smStyleCommands;
+StringMap		g_smStyleCommands;
 int			g_iTotalStyles;
 
 /* Player Data */
-any			g_PlayerRecordData[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES][RecordData];
+int			g_iPlayerRecordId[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES];
+float			g_fPlayerPersonalBest[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES];
 int			g_PlayerCurrentStyle[MAXPLAYERS + 1];
 int			g_nPlayerFrames[MAXPLAYERS + 1];
 bool			g_bTimerRunning[MAXPLAYERS + 1]; // whether client timer is running or not, regardless of if its paused
@@ -55,8 +57,9 @@ int			g_nPlayerSyncedFrames[MAXPLAYERS + 1];
 int			g_nPlayerAirFrames[MAXPLAYERS + 1];
 int			g_nPlayerAirStrafeFrames[MAXPLAYERS + 1];
 
-ConVar		sv_autobunnyhopping;
 bool			g_bNoclip[MAXPLAYERS + 1];
+
+ConVar		sv_autobunnyhopping;
 
 public void OnPluginStart()
 {
@@ -73,6 +76,8 @@ public void OnPluginStart()
 	
 	/* Commands */
 	RegConsoleCmd( "sm_nc", Command_Noclip );
+	RegConsoleCmd( "sm_reload1", Command_Reload1 );
+	RegConsoleCmd( "sm_reload2", Command_Reload2 );
 	
 	RegConsoleCmd( "sm_style", Command_Styles );
 	RegConsoleCmd( "sm_styles", Command_Styles );
@@ -85,17 +90,20 @@ public void OnPluginStart()
 	/* Hooks */
 	HookEvent( "player_jump", HookEvent_PlayerJump );
 	
-	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
-	{
-		for( int j = 0; j < MAX_STYLES; j++ )
-		{
-			g_aMapRecords[i][j] = new ArrayList( sizeof( g_PlayerRecordData[][][] ) );
-		}
-	}
-	
 	SQL_DBConnect();
 	
 	g_fFrameTime = GetTickInterval();
+	
+	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
+	{
+		for( int j = 0; j < MAX_STYLES; j++ )
+		{
+			g_aMapTopRecordIds[i][j] = new ArrayList();
+			g_aMapTopTimes[i][j] = new ArrayList();
+			g_aMapTopNames[i][j] = new ArrayList( ByteCountToCells( MAX_NAME_LENGTH ) );
+		}
+	}
+	
 }
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
@@ -109,6 +117,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetWRName", Native_GetWRName );
 	CreateNative( "Timer_GetClientPBTime", Native_GetClientPBTime );
 	CreateNative( "Timer_GetClientStyle", Native_GetClientStyle );
+	CreateNative( "Timer_GetStyleCount", Native_GetStyleCount );
 	CreateNative( "Timer_GetStyleSettings", Native_GetStyleSettings );
 	CreateNative( "Timer_GetStyleName", Native_GetStyleName );
 	CreateNative( "Timer_GetStylePrefix", Native_GetStylePrefix );
@@ -137,20 +146,23 @@ public void OnMapStart()
 
 	GetCurrentMap( g_cMapName, sizeof( g_cMapName ) );
 	
-	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
+	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
 	{
 		for( int j = 0; j < MAX_STYLES; j++ )
 		{
-			g_aMapRecords[i][j].Clear();
-			SQL_ReloadCache( view_as<ZoneTrack>( i ), j );
+			g_aMapTopRecordIds[i][j].Clear();
+			g_aMapTopTimes[i][j].Clear();
+			g_aMapTopNames[i][j].Clear();
+			SQL_ReloadCache( i, j, true );
 		}
 	}
 }
 
-public void OnClientPostAdminCheck( int client )
+public void OnClientAuthorized( int client, const char[] auth )
 {
 	if( !IsFakeClient( client ) )
 	{
+		Timer_DebugPrint( "OnClientAuthorized: %N", client );
 		SQL_LoadPlayerID( client );
 	}
 	
@@ -159,41 +171,38 @@ public void OnClientPostAdminCheck( int client )
 
 public void OnClientDisconnect( int client )
 {
-	g_bClientLoaded[client] = false;
+	g_iPlayerId[client] = -1;
 }
 
 public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 {
-	for( int i = 0; i < view_as<int>( TOTAL_ZONE_TRACKS ); i++ )
+	Timer_DebugPrint( "Timer_OnClientLoaded: Loading records for %N", client );
+
+	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
 	{
 		for( int j = 0; j < MAX_STYLES; j++ )
 		{
-			g_PlayerRecordData[client][i][j][RD_PlayerID] = playerid;
-			GetClientName( client, g_PlayerRecordData[client][i][j][RD_Name], MAX_NAME_LENGTH );
-			SQL_LoadRecords( client, view_as<ZoneTrack>( i ), j );
+			SQL_LoadRecords( client, i, j );
 		}
 	}
 	
 	ClearPlayerData( client );
-	
-	g_bClientLoaded[client] = true;
 }
 
 public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
 {
-	if( IsValidClient( client, true ) )
+	if( IsPlayerAlive( client ) )
 	{	
 		static any settings[styleSettings];
 		settings = g_StyleSettings[g_PlayerCurrentStyle[client]];
 		
-		static int lastButtons[MAXPLAYERS + 1];
+		int lastButtons = GetEntProp( client, Prop_Data, "m_nOldButtons" );
 		static float lastYaw[MAXPLAYERS + 1];
 		
 		float fDeltaYaw = angles[1] - lastYaw[client];
 		NormalizeAngle( fDeltaYaw );
 		
 		bool bButtonError = false;
-		
 		
 		// sanity check, if player pressing buttons but not moving then somethings wrong
 		if( ( ( buttons & IN_FORWARD ) || ( buttons & IN_BACK ) ) && ( vel[0] == 0.0 ) )
@@ -228,13 +237,13 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			
 			if( settings[HSW] )
 			{
-				if( ( buttons & IN_FORWARD ) && ( lastButtons[client] & IN_FORWARD ) )
+				if( ( buttons & IN_FORWARD ) && ( lastButtons & IN_FORWARD ) )
 				{
-					if( !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+					if( !( lastButtons & IN_LEFT ) && ( buttons & IN_LEFT ) )
 					{
 						g_nPlayerStrafes[client]++;
 					}
-					else if( !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+					else if( !( lastButtons & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
 					{
 						g_nPlayerStrafes[client]++;
 					}
@@ -242,19 +251,19 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			}
 			else
 			{
-				if( settings[CountLeft] && !( lastButtons[client] & IN_LEFT ) && ( buttons & IN_LEFT ) )
+				if( settings[CountLeft] && !( lastButtons & IN_MOVELEFT ) && ( buttons & IN_MOVELEFT ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
-				else if( settings[CountRight] && !( lastButtons[client] & IN_RIGHT ) && ( buttons & IN_RIGHT ) )
+				else if( settings[CountRight] && !( lastButtons & IN_MOVERIGHT ) && ( buttons & IN_MOVERIGHT ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
-				else if( settings[CountForward] && !( lastButtons[client] & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
+				else if( settings[CountForward] && !( lastButtons & IN_FORWARD ) && ( buttons & IN_FORWARD ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
-				else if( settings[CountBack] && !( lastButtons[client] & IN_BACK ) && ( buttons & IN_BACK ) )
+				else if( settings[CountBack] && !( lastButtons & IN_BACK ) && ( buttons & IN_BACK ) )
 				{
 					g_nPlayerStrafes[client]++;
 				}
@@ -314,7 +323,6 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			vel[1] = 0.0;
 		}
 		
-		lastButtons[client] = buttons;
 		lastYaw[client] = angles[1];
 	}
 }
@@ -367,7 +375,7 @@ void StopTimer( int client )
 
 void FinishTimer( int client )
 {
-	if( !IsValidClient( client ) )
+	if( !IsPlayerAlive( client ) )
 	{
 		return;
 	}
@@ -378,21 +386,11 @@ void FinishTimer( int client )
 	
 	StopTimer( client );
 	
-	ZoneTrack ztTrack = Timer_GetClientZoneTrack( client );
-	char sZoneTrack[64];
-	Timer_GetZoneTrackName( ztTrack, sZoneTrack, sizeof( sZoneTrack ) );
-	int track = view_as<int>( ztTrack );
-	
+	int track = Timer_GetClientZoneTrack( client );
 	int style = g_PlayerCurrentStyle[client];
 	
-	float pb = g_PlayerRecordData[client][track][style][RD_Time];
-	float wr = 0.0;
-	if( g_aMapRecords[track][style].Length )
-	{
-		any wrRecordData[RecordData];
-		g_aMapRecords[track][style].GetArray( 0, wrRecordData[0] );
-		wr = wrRecordData[RD_Time];
-	}
+	float pb = g_fPlayerPersonalBest[client][track][style]; // TODO: store pb time in seperate cache
+	float wr = Timer_GetWRTime( track, style ); // store wr times
 	
 	Action result = Plugin_Continue;
 	Call_StartForward( g_hForward_OnFinishPre );
@@ -409,29 +407,23 @@ void FinishTimer( int client )
 		return;
 	}
 	
-	PrintToChatAll( "[%s] %N finished on %s timer in %ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
+	char sZoneTrack[64];
+	Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
+	PrintToChatAll( "[%s] %N finished on %s timer in %ss (time=%f, wr=%f, pb=%f)", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime, time, wr, pb );
+	// TODO: store attempts in seperate cache
+	//g_iPlayerRecordId[client][track][style][RD_Attempts]++;
 	
 	if( pb == 0.0 || time < pb ) // new record, save it
-	{	
-		// avoid dividing by 0
-		float sync = ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] * 100 ) / g_nPlayerAirStrafeFrames[client];
-		float strafetime = ( g_nPlayerAirFrames[client] == 0 ) ? 0.0   : float( g_nPlayerAirStrafeFrames[client] * 100 ) / g_nPlayerAirFrames[client];
-		
-		g_PlayerRecordData[client][track][style][RD_Timestamp] = GetTime();
-		g_PlayerRecordData[client][track][style][RD_Time] = time;
-		g_PlayerRecordData[client][track][style][RD_Jumps] = g_nPlayerJumps[client];
-		g_PlayerRecordData[client][track][style][RD_Strafes] = g_nPlayerStrafes[client];
-		g_PlayerRecordData[client][track][style][RD_Sync] = sync;
-		g_PlayerRecordData[client][track][style][RD_StrafeTime] = strafetime;
-		g_PlayerRecordData[client][track][style][RD_SSJ] = g_iPlayerSSJ[client];
+	{
+		g_fPlayerPersonalBest[client][track][style] = time;
 		
 		if( pb == 0.0 ) // new time
 		{
-			SQL_InsertRecord( client, ztTrack, style, time );
+			SQL_InsertRecord( client, track, style, time );
 		}
 		else // existing time but beaten
 		{
-			SQL_UpdateRecord( client, ztTrack, style, time );
+			SQL_UpdateRecord( client, track, style, time );
 		}
 		
 		if( wr == 0.0 || time < wr )
@@ -451,6 +443,16 @@ void FinishTimer( int client )
 			PrintToChatAll( "NEW PB!!!" );
 		}
 	}
+	else
+	{
+		// they didnt beat their pb but we should update their attempts anyway
+		char query[128];
+		FormatEx( query, sizeof( query ), "UPDATE `t_records` SET `attempts` = `attempts` + 1 WHERE recordid = '%i'",
+										g_iPlayerRecordId[client][track][style] );
+										
+		Timer_DebugPrint( "FinishTimer: %s", query );
+		g_hDatabase.Query( UpdateAttempts_Callback, query, _, DBPrio_Low );
+	}
 	
 	Call_StartForward( g_hForward_OnFinishPost );
 	Call_PushCell( client );
@@ -461,39 +463,39 @@ void FinishTimer( int client )
 	Call_PushCell( wr );
 	Call_Finish();
 	
-	SQL_ReloadCache( ztTrack, style );
+	SQL_ReloadCache( track, style );
 }
 
-stock int GetRankForTime( float time, ZoneTrack ztTrack, int style )
+stock int GetRankForTime( float time, int track, int style )
 {
 	if( time == 0.0 )
 	{
 		return 0;
 	}
 	
-	int track = view_as<int>( ztTrack );
-	if( g_aMapRecords[track][style].Length == 0 )
+	int nRecords = g_aMapTopTimes[track][style].Length;
+	
+	if( nRecords == 0 )
 	{
 		return 1;
 	}
 	
-	any recordData[RecordData];
-	for( int i = 0; i < g_aMapRecords[track][style].Length; i++ )
+	for( int i = 0; i < nRecords; i++ )
 	{
-		g_aMapRecords[track][style].GetArray( i, recordData[0] );
-		if( time < recordData[RD_Time] )
+		float maptime = g_aMapTopTimes[track][style].Get( i );
+		if( time < maptime )
 		{
 			return ++i;
 		}
 	}
 	
-	return g_aMapRecords[track][style].Length + 1;
+	return nRecords + 1;
 }
 
-stock int GetClientRank( int client, ZoneTrack track, int style )
+stock int GetClientRank( int client, int track, int style )
 {
 	// subtract 1 because when times are equal, it counts as next rank
-	return GetRankForTime( g_PlayerRecordData[client][view_as<int>( track )][style][RD_Time], track, style ) - 1;
+	return GetRankForTime( g_fPlayerPersonalBest[client][track][style], track, style ) - 1; // pb time
 }
 
 bool LoadStyles()
@@ -582,7 +584,7 @@ bool LoadStyles()
 	return true;
 }
 
-void SetClientStyle( int client, int style )
+public void SetClientStyle( int client, int style )
 {
 	Action result = Plugin_Continue;
 	Call_StartForward( g_hForward_OnStyleChangedPre );
@@ -608,7 +610,7 @@ void SetClientStyle( int client, int style )
 	
 	sv_autobunnyhopping.ReplicateToClient( client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
 	
-	Timer_TeleportClientToZone( client, Zone_Start, ZT_Main );
+	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	
 	PrintToChat( client, "[Timer] Style now: %s", g_StyleSettings[style][StyleName] );
 	
@@ -619,25 +621,13 @@ void SetClientStyle( int client, int style )
 	Call_Finish();
 }
 
-void OpenSelectStyleMenu( int client, MenuHandler handler )
-{
-	Menu menu = new Menu( handler );
-	menu.SetTitle( "Select Style:\n \n" );
-	
-	for( int i = 0; i < g_iTotalStyles; i++ )
-	{
-		menu.AddItem( "style", g_StyleSettings[i][StyleName] );
-	}
-	
-	menu.Display( client, MENU_TIME_FOREVER );
-}
-
-public void Timer_OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack zoneTrack, int subindex )
+public void Timer_OnEnterZone( int client, int id, int zoneType, int zoneTrack, int subindex )
 {
 	switch( zoneType )
 	{
 		case Zone_Start:
 		{
+			g_bTimerRunning[client] = false;
 		}
 		case Zone_End:
 		{
@@ -660,7 +650,7 @@ public void Timer_OnEnterZone( int client, int id, ZoneType zoneType, ZoneTrack 
 	}
 }
 
-public void Timer_OnExitZone( int client, int id, ZoneType zoneType, ZoneTrack zoneTrack, int subindex )
+public void Timer_OnExitZone( int client, int id, int zoneType, int zoneTrack, int subindex )
 {
 	switch( zoneType )
 	{
@@ -688,7 +678,7 @@ public void Timer_OnExitZone( int client, int id, ZoneType zoneType, ZoneTrack z
 public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBroadcast )
 {
 	int client = GetClientOfUserId( event.GetInt( "userid" ) );
-	if( g_bTimerRunning[client] && !g_bTimerPaused[client] ) // TODO: consider making this a function (and possibly native)
+	if( Timer_IsTimerRunning( client ) )
 	{	
 		if( ++g_nPlayerJumps[client] == 6 )
 		{
@@ -726,17 +716,19 @@ void SQL_CreateTables()
 	
 	char query[512];
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_players` ( playerid INT NOT NULL AUTO_INCREMENT, \
-																			steamid CHAR( 32 ) NOT NULL, \
-																			lastname CHAR( 64 ) NOT NULL, \
-																			firstconnect INT( 16 ) NOT NULL, \
-																			lastconnect INT( 16 ) NOT NULL, \
-																			PRIMARY KEY ( `playerid` ) );" );
+	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_players` ( playerid INT NOT NULL AUTO_INCREMENT, \
+																			steamaccountid INT NOT NULL, \
+																			lastname CHAR(64) NOT NULL, \
+																			firstconnect INT(16) NOT NULL, \
+																			lastconnect INT(16) NOT NULL, \
+																			PRIMARY KEY (`playerid`) );" );
 	txn.AddQuery( query );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_records` ( mapname CHAR( 128 ) NOT NULL, \
+	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_records` ( recordid INT NOT NULL AUTO_INCREMENT, \
+																			mapname CHAR( 128 ) NOT NULL, \
 																			playerid INT NOT NULL, \
 																			timestamp INT( 16 ) NOT NULL, \
+																			attempts INT( 8 ) NOT NULL, \
 																			time FLOAT NOT NULL, \
 																			track INT NOT NULL, \
 																			style INT NOT NULL, \
@@ -745,7 +737,7 @@ void SQL_CreateTables()
 																			sync FLOAT NOT NULL, \
 																			strafetime FLOAT NOT NULL, \
 																			ssj INT NOT NULL, \
-																			PRIMARY KEY ( `mapname`, `playerid`, `style`, `track` ) );" );
+																			PRIMARY KEY (`recordid`) );" );
 	txn.AddQuery( query );
 	
 	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
@@ -763,11 +755,10 @@ public void SQL_OnCreateTableFailure( Database db, any data, int numQueries, con
 
 void SQL_LoadPlayerID( int client )
 {
-	char steamid[32];
-	GetClientAuthId( client, AuthId_Steam2, steamid, sizeof( steamid ) );
-	
 	char query[128];
-	Format( query, sizeof( query ), "SELECT playerid FROM `t_players` WHERE steamid = '%s'", steamid );
+	Format( query, sizeof( query ), "SELECT playerid FROM `t_players` WHERE steamaccountid = '%i';", GetSteamAccountID( client ) );
+	
+	Timer_DebugPrint( "SQL_LoadPlayerID: %s", query );
 	
 	g_hDatabase.Query( LoadPlayerID_Callback, query, GetClientUserId( client ), DBPrio_High );
 }
@@ -781,42 +772,45 @@ public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[
 	}
 	
 	int client = GetClientOfUserId( uid );
-	
-	if( !IsValidClient( client ) ) // client no longer valid since id loaded :(
+	if( !client ) // client no longer valid since id loaded :(
 	{
+		Timer_DebugPrint( "LoadPlayerID_Callback: Invalid userid %i (%i)", uid, client );
 		return;
 	}
 	
 	if( results.RowCount ) // playerid already exists, this is returning user
 	{
 		if( results.FetchRow() )
-		{
+		{		
 			char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
 			GetClientName( client, name, sizeof( name ) );
 			g_hDatabase.Escape( name, name, sizeof( name ) );
 			
-			g_ClientPlayerID[client] = results.FetchInt( 0 );
+			g_iPlayerId[client] = results.FetchInt( 0 );
 			
 			// update info
 			char query[256];
-			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i' WHERE playerid = '%i';", name, GetTime(), g_ClientPlayerID[client] );
+			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i' WHERE playerid = '%i';", name, GetTime(), g_iPlayerId[client] );
+			
+			Timer_DebugPrint( "LoadPlayerID_Callback: Existing user %L (playerid=%i)", client, g_iPlayerId[client] );
 			
 			g_hDatabase.Query( UpdatePlayerInfo_Callback, query, uid, DBPrio_Normal );
 		}
 	}
 	else  // new user
 	{
+		Timer_DebugPrint( "LoadPlayerID_Callback: New user %L", client );
+	
 		int timestamp = GetTime();
 		
 		char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
 		GetClientName( client, name, sizeof( name ) );
 		g_hDatabase.Escape( name, name, sizeof( name ) );
-		
-		char steamid[32];
-		GetClientAuthId( client, AuthId_Steam2, steamid, sizeof( steamid ) );
 
 		char query[256];
-		Format( query, sizeof( query ), "INSERT INTO `t_players` VALUES ( 0, '%s', '%s', '%i', '%i' );", steamid, name, timestamp, timestamp );
+		Format( query, sizeof( query ), "INSERT INTO `t_players` (`steamaccountid`, `lastname`, `firstconnect`, `lastconnect`) VALUES ('%i', '%s', '%i', '%i');", GetSteamAccountID( client ), name, timestamp, timestamp );
+		
+		Timer_DebugPrint( "LoadPlayerID_Callback: %s", query );
 		
 		g_hDatabase.Query( InsertPlayerInfo_Callback, query, uid, DBPrio_High );
 	}
@@ -834,7 +828,7 @@ public void UpdatePlayerInfo_Callback( Database db, DBResultSet results, const c
 	
 	Call_StartForward( g_hForward_OnClientLoaded );
 	Call_PushCell( client );
-	Call_PushCell( g_ClientPlayerID[client] );
+	Call_PushCell( g_iPlayerId[client] );
 	Call_PushCell( false );
 	Call_Finish();
 }
@@ -843,23 +837,26 @@ public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const c
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
+		LogError( "[SQL ERROR] (InsertPlayerInfo_Callback) - %s", error );
 		return;
 	}
 	
 	int client = GetClientOfUserId( uid );
+	g_iPlayerId[client] = results.InsertId;
 	
 	Call_StartForward( g_hForward_OnClientLoaded );
 	Call_PushCell( client );
-	Call_PushCell( g_ClientPlayerID[client] );
+	Call_PushCell( g_iPlayerId[client] );
 	Call_PushCell( true );
 	Call_Finish();
 }
 
-void SQL_LoadRecords( int client, ZoneTrack track, int style )
+void SQL_LoadRecords( int client, int track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "SELECT timestamp, time, jumps, strafes, sync, strafetime, ssj FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapname = '%s'", g_ClientPlayerID[client], track, style, g_cMapName );
+	Format( query, sizeof( query ), "SELECT recordid, time FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapname = '%s';", g_iPlayerId[client], track, style, g_cMapName );
+	
+	Timer_DebugPrint( "SQL_LoadRecords: %s", query );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( GetClientUserId( client ) );
@@ -883,36 +880,40 @@ public void LoadRecords_Callback( Database db, DBResultSet results, const char[]
 	int style = pack.ReadCell();
 	delete pack;
 	
-	if( !IsValidClient( client ) )
+	if( !client )
 	{
 		return;
 	}
 	
-	while( results.FetchRow() )
+	if( results.FetchRow() )
 	{
-		g_PlayerRecordData[client][track][style][RD_Timestamp] = results.FetchInt( 0 );
-		g_PlayerRecordData[client][track][style][RD_Time] = results.FetchFloat( 1 );
-		g_PlayerRecordData[client][track][style][RD_Jumps] = results.FetchInt( 2 );
-		g_PlayerRecordData[client][track][style][RD_Strafes] = results.FetchInt( 3 );
-		g_PlayerRecordData[client][track][style][RD_Sync] = results.FetchFloat( 4 );
-		g_PlayerRecordData[client][track][style][RD_StrafeTime] = results.FetchFloat( 5 );
-		g_PlayerRecordData[client][track][style][RD_SSJ] = results.FetchInt( 6 );
+		g_iPlayerRecordId[client][track][style] = results.FetchInt( 0 );
+		g_fPlayerPersonalBest[client][track][style] = results.FetchFloat( 1 );
+		
+		Timer_DebugPrint( "LoadRecords_Callback: track=%i style=%i recordid=%i pb=%f", track, style, g_iPlayerRecordId[client][track][style], g_fPlayerPersonalBest[client][track][style] );
+	}
+	else
+	{
+		g_iPlayerRecordId[client][track][style] = -1;
+		g_fPlayerPersonalBest[client][track][style] = 0.0;
 	}
 }
 
-void SQL_InsertRecord( int client, ZoneTrack track, int style, float time )
+void SQL_InsertRecord( int client, int track, int style, float time )
 {
-	float sync = g_PlayerRecordData[client][view_as<int>( track )][style][RD_Sync];
-	float strafetime = g_PlayerRecordData[client][view_as<int>( track )][style][RD_StrafeTime];
-	
-	char query[256];
-	Format( query, sizeof( query ), "INSERT INTO `t_records` (mapname, playerid, track, style, timestamp, time, jumps, strafes, sync, strafetime, ssj) \
-													VALUES ('%s', '%i', '%i', '%i', '%i', '%.5f', '%i', '%i', '%.2f', '%.2f', '%i')",
+	// avoid dividing by 0
+	float sync = ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : ( g_nPlayerSyncedFrames[client] * 100.0 ) / g_nPlayerAirStrafeFrames[client];
+	float strafetime = ( g_nPlayerAirFrames[client] == 0 ) ? 0.0   : ( g_nPlayerAirStrafeFrames[client] * 100.0 ) / g_nPlayerAirFrames[client];
+
+	char query[512];
+	Format( query, sizeof( query ), "INSERT INTO `t_records` (mapname, playerid, track, style, timestamp, attempts, time, jumps, strafes, sync, strafetime, ssj) \
+													VALUES ('%s', '%i', '%i', '%i', '%i', '%i', '%.5f', '%i', '%i', '%.2f', '%.2f', '%i');",
 													g_cMapName,
-													g_ClientPlayerID[client],
-													view_as<int>( track ),
+													g_iPlayerId[client],
+													track,
 													style,
 													GetTime(),
+													1,
 													time,
 													g_nPlayerJumps[client],
 													g_nPlayerStrafes[client],
@@ -920,26 +921,42 @@ void SQL_InsertRecord( int client, ZoneTrack track, int style, float time )
 													strafetime,
 													g_iPlayerSSJ[client]);
 	
-	g_hDatabase.Query( InsertRecord_Callback, query, _, DBPrio_High );
+	Timer_DebugPrint( "SQL_InsertRecord: %s", query );
+	
+	DataPack pack = new DataPack();
+	pack.WriteCell( GetClientUserId( client ) );
+	pack.WriteCell( track );
+	pack.WriteCell( style );
+	
+	g_hDatabase.Query( InsertRecord_Callback, query, pack, DBPrio_High );
 }
 
-public void InsertRecord_Callback( Database db, DBResultSet results, const char[] error, int uid )
+public void InsertRecord_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (InsertRecord_Callback) - %s", g_ClientPlayerID[GetClientOfUserId( uid )], error );
+		LogError( "[SQL ERROR] (InsertRecord_Callback) - %s", error );
 		return;
 	}
+	
+	pack.Reset();
+	int client = GetClientOfUserId( pack.ReadCell() );
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	delete pack;
+	
+	g_iPlayerRecordId[client][track][style] = results.InsertId;
 }
 
-void SQL_UpdateRecord( int client, ZoneTrack track, int style, float time )
+void SQL_UpdateRecord( int client, int track, int style, float time )
 {
-	float sync = g_PlayerRecordData[client][view_as<int>( track )][style][RD_Sync];
-	float strafetime = g_PlayerRecordData[client][view_as<int>( track )][style][RD_StrafeTime];
-	
-	char query[256];
-	Format( query, sizeof( query ), "UPDATE `t_records` SET timestamp = '%i', time = '%f', jumps = '%i', strafes = '%i', sync = '%f', strafetime = '%f', ssj = '%i' \
-													WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapname = '%s'",
+	// avoid dividing by 0
+	float sync = ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : ( g_nPlayerSyncedFrames[client] * 100.0 ) / g_nPlayerAirStrafeFrames[client];
+	float strafetime = ( g_nPlayerAirFrames[client] == 0 ) ? 0.0   : ( g_nPlayerAirStrafeFrames[client] * 100.0 ) / g_nPlayerAirFrames[client];
+
+	char query[312];
+	Format( query, sizeof( query ), "UPDATE `t_records` SET timestamp = '%i', attempts = attempts+1, time = '%f', jumps = '%i', strafes = '%i', sync = '%f', strafetime = '%f', ssj = '%i' \
+													WHERE recordid = '%i';",
 													GetTime(),
 													time,
 													g_nPlayerJumps[client],
@@ -947,10 +964,9 @@ void SQL_UpdateRecord( int client, ZoneTrack track, int style, float time )
 													sync,
 													strafetime,
 													g_iPlayerSSJ[client],
-													g_ClientPlayerID[client],
-													view_as<int>( track ),
-													style,
-													g_cMapName );
+													g_iPlayerRecordId[client][track][style] );
+	
+	Timer_DebugPrint( "SQL_UpdateRecord: %s", query );
 	
 	g_hDatabase.Query( UpdateRecord_Callback, query, _, DBPrio_High );
 }
@@ -964,10 +980,10 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 	}
 }
 
-void SQL_DeleteRecord( int playerid, ZoneTrack track, int style )
+void SQL_DeleteRecord( int playerid, int track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "DELETE FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i'", playerid, track, style );
+	Format( query, sizeof( query ), "DELETE FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i';", playerid, track, style );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );
@@ -985,32 +1001,37 @@ public void DeleteRecord_Callback( Database db, DBResultSet results, const char[
 	}
 	
 	pack.Reset();
-	ZoneTrack track = pack.ReadCell();
+	int track = pack.ReadCell();
 	int style = pack.ReadCell();
 	delete pack;
 	
-	SQL_ReloadCache( track, style );
+	SQL_ReloadCache( track, style, true );
 }
 
-void SQL_ReloadCache( ZoneTrack track, int style )
+void SQL_ReloadCache( int track, int style, bool reloadall = false )
 {
-	char query[256];
-	Format( query, sizeof( query ), "SELECT p.lastname, r.playerid, r.timestamp, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
+	char query[512];
+	Format( query, sizeof( query ), "SELECT r.recordid, r.time, p.lastname \
 									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
 									WHERE mapname = '%s' AND track = '%i' AND style = '%i'\
-									ORDER BY r.time ASC", g_cMapName, view_as<int>( track ), style );
+									ORDER BY r.time ASC;", g_cMapName, track, style );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );
 	pack.WriteCell( style );
 	
+	Timer_DebugPrint( "SQL_ReloadCache: %s", query );
+	
 	g_hDatabase.Query( CacheRecords_Callback, query, pack, DBPrio_High );
 	
-	for( int i = 1; i <= MaxClients; i++ )
+	if( reloadall )
 	{
-		if( g_bClientLoaded[i] )
+		for( int i = 1; i <= MaxClients; i++ )
 		{
-			SQL_LoadRecords( i, track, style );
+			if( IsClientConnected( i ) && !IsFakeClient( i ) && g_iPlayerId[i] > -1 )
+			{
+				SQL_LoadRecords( i, track, style );
+			}
 		}
 	}
 }
@@ -1028,28 +1049,77 @@ public void CacheRecords_Callback( Database db, DBResultSet results, const char[
 	int style = pack.ReadCell();
 	delete pack;
 	
-	g_aMapRecords[track][style].Clear();
-	
-	for( int i = 1; i <= MaxClients; i++ )
-	{
-		g_PlayerRecordData[i][track][style][RD_Time] = 0.0;
-	}
+	g_aMapTopTimes[track][style].Clear();
 	
 	while( results.FetchRow() )
 	{
-		static any recordData[RecordData];
+		g_aMapTopRecordIds[track][style].Push( results.FetchInt( 0 ) );
+		g_aMapTopTimes[track][style].Push( results.FetchFloat( 1 ) );
 		
-		results.FetchString( 0, recordData[RD_Name], MAX_NAME_LENGTH );
-		recordData[RD_PlayerID] = results.FetchInt( 1 );
+		char lastname[MAX_NAME_LENGTH];
+		results.FetchString( 2, lastname, sizeof(lastname) );
+		
+		g_aMapTopNames[track][style].PushString( lastname );
+	}
+}
+
+void SQL_ShowStats( int client, int recordid )
+{
+	char query[256];
+	Format( query, sizeof(query), "SELECT r.playerid, p.lastname, r.timestamp, r.attempts, r.time, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj, r.track, r.style \
+									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
+									WHERE recordid='%i'\
+									ORDER BY r.time ASC;", recordid );
+	
+	g_hDatabase.Query( GetRecordStats_Callback, query, GetClientUserId( client ), DBPrio_Normal );
+}
+
+public void GetRecordStats_Callback( Database db, DBResultSet results, const char[] error, int uid )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (GetRecordStats_Callback) - %s", error );
+		return;
+	}
+	
+	int client = GetClientOfUserId( uid );
+	if( !client )
+	{
+		return;
+	}
+	
+	if( results.FetchRow() )
+	{
+		any recordData[RecordData];
+		
+		recordData[RD_PlayerID] = results.FetchInt( 0 );
+		results.FetchString( 1, recordData[RD_Name], MAX_NAME_LENGTH );
 		recordData[RD_Timestamp] = results.FetchInt( 2 );
-		recordData[RD_Time] = results.FetchFloat( 3 );
-		recordData[RD_Jumps] = results.FetchInt( 4 );
-		recordData[RD_Strafes] = results.FetchInt( 5 );
-		recordData[RD_Sync] = results.FetchFloat( 6 );
-		recordData[RD_StrafeTime] = results.FetchFloat( 7 );
-		recordData[RD_SSJ] = results.FetchInt( 8 );
+		recordData[RD_Attempts] = results.FetchInt( 3 );
+		recordData[RD_Time] = results.FetchFloat( 4 );
+		recordData[RD_Jumps] = results.FetchInt( 5 );
+		recordData[RD_Strafes] = results.FetchInt( 6 );
+		recordData[RD_Sync] = results.FetchFloat( 7 );
+		recordData[RD_StrafeTime] = results.FetchFloat( 8 );
+		recordData[RD_SSJ] = results.FetchInt( 9 );
 		
-		g_aMapRecords[track][style].PushArray( recordData[0] );
+		int track = results.FetchInt( 10 );
+		int style = results.FetchInt( 11 );
+		
+		ShowStats( client, track, style, recordData );
+	}
+	else
+	{
+		LogError( "[SQL Error] (GetRecordStats_Callback) - Invalid recordid" );
+	}
+}
+
+public void UpdateAttempts_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (UpdateAttempts_Callback) - %s", error );
+		return;
 	}
 }
 
@@ -1068,25 +1138,25 @@ public Action Command_Noclip( int client, int args )
 	{
 		SetEntityMoveType( client, MOVETYPE_WALK );
 	}
-}
-
-public Action Command_Styles( int client, int args )
-{
-	OpenSelectStyleMenu( client, ChangeStyle_Handler );
 	
 	return Plugin_Handled;
 }
 
-public int ChangeStyle_Handler( Menu menu, MenuAction action, int param1, int param2 )
+public Action Command_Reload1( int client, int args )
 {
-	if( action == MenuAction_Select )
-	{
-		SetClientStyle( param1, param2 );
-	}
-	else if( action == MenuAction_End )
-	{
-		delete menu;
-	}
+	SQL_ReloadCache( 0, 0, true );
+}
+
+public Action Command_Reload2( int client, int args )
+{
+	SQL_ReloadCache( 0, 0, false );
+}
+
+public Action Command_Styles( int client, int args )
+{
+	Timer_OpenSelectStyleMenu( client, SetClientStyle );
+	
+	return Plugin_Handled;
 }
 
 public Action Command_ChangeStyle( int client, int args )
@@ -1106,95 +1176,78 @@ public Action Command_ChangeStyle( int client, int args )
 
 public Action Command_PB( int client, int args )
 {
-	OpenSelectStyleMenu( client, ShowPB_Handler );
+	Timer_OpenSelectStyleMenu( client, ShowPB );
 	
 	return Plugin_Handled;
 }
 
-public int ShowPB_Handler( Menu menu, MenuAction action, int param1, int param2 )
+public void ShowPB( int client, int style )
 {
-	if( action == MenuAction_Select )
+	if( g_iPlayerRecordId[client][ZoneTrack_Main][style] != -1 )
 	{
-		if( g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2][RD_Time] != 0.0 )
-		{
-			ShowStats( param1, ZT_Main, param2, g_PlayerRecordData[param1][view_as<int>( ZT_Main )][param2] );
-		}
+		SQL_ShowStats( client, g_iPlayerRecordId[client][ZoneTrack_Main][style] );
 	}
-	else if( action == MenuAction_End )
+	else
 	{
-		delete menu;
+		PrintToChat( client, "[Timer] No records found" );
 	}
 }
 
 public Action Command_Bonus_PB( int client, int args )
 {
-	OpenSelectStyleMenu( client, ShowBonusPB_Handler );
+	Timer_OpenSelectStyleMenu( client, ShowBonusPB );
 	
 	return Plugin_Handled;
 }
 
-public int ShowBonusPB_Handler( Menu menu, MenuAction action, int param1, int param2 )
+public void ShowBonusPB( int client, int style )
 {
-	if( action == MenuAction_Select )
+	if( g_iPlayerRecordId[client][ZoneTrack_Main][style] != -1 )
 	{
-		ShowStats( param1, ZT_Bonus, param2, g_PlayerRecordData[param1][view_as<int>( ZT_Bonus )][param2] );
+		SQL_ShowStats( client, g_iPlayerRecordId[client][ZoneTrack_Main][style] );
 	}
-	else if( action == MenuAction_End )
+	else
 	{
-		delete menu;
+		PrintToChat( client, "[Timer] No records found" );
 	}
 }
 
 public Action Command_WR( int client, int args )
 {
-	OpenSelectStyleMenu( client, ShowWR_Handler );
+	Timer_OpenSelectStyleMenu( client, ShowWRMenu );
 	
 	return Plugin_Handled;
 }
 
-public int ShowWR_Handler( Menu menu, MenuAction action, int param1, int param2 )
+public void ShowWRMenu( int client, int style )
 {
-	if( action == MenuAction_Select )
-	{
-		ShowLeaderboard( param1, ZT_Main, param2 );
-	}
-	else if( action == MenuAction_End )
-	{
-		delete menu;
-	}
+	ShowLeaderboard( client, ZoneTrack_Main, style );
 }
 
 public Action Command_Bonus_WR( int client, int args )
 {
-	OpenSelectStyleMenu( client, ShowBonusWR_Handler );
+	Timer_OpenSelectStyleMenu( client, ShowBonusWRMenu );
 	
 	return Plugin_Handled;
 }
 
-public int ShowBonusWR_Handler( Menu menu, MenuAction action, int param1, int param2 )
+public void ShowBonusWRMenu( int client, int style )
 {
-	if( action == MenuAction_Select )
-	{
-		ShowLeaderboard( param1, ZT_Bonus, param2 );
-	}
-	else if( action == MenuAction_End )
-	{
-		delete menu;
-	}
+	ShowLeaderboard( client, ZoneTrack_Bonus, style );
 }
 
-void ShowLeaderboard( int client, ZoneTrack ztTrack, int style )
+void ShowLeaderboard( int client, int track, int style )
 {
-	int track = view_as<int>( ztTrack );
-	if( !g_aMapRecords[track][style].Length )
+	if( !g_aMapTopTimes[track][style].Length )
 	{
+		PrintToChat( client, "[Timer] No records found" );
 		return;
 	}
 	
 	Menu menu = new Menu( WRMenu_Handler );
 	
 	char trackName[32];
-	Timer_GetZoneTrackName( ztTrack, trackName, sizeof( trackName ) );
+	Timer_GetZoneTrackName( track, trackName, sizeof(trackName) );
 	
 	char buffer[256];
 	Format( buffer, sizeof( buffer ), "%s %s %s Leaderboard", trackName, g_StyleSettings[style][StyleName], g_cMapName );
@@ -1202,16 +1255,17 @@ void ShowLeaderboard( int client, ZoneTrack ztTrack, int style )
 	
 	char sTime[32], info[8];
 	
-	int max = ( MAX_WR_CACHE > g_aMapRecords[track][style].Length ) ? g_aMapRecords[track][style].Length : MAX_WR_CACHE;
+	int max = ( MAX_WR_CACHE > g_aMapTopTimes[track][style].Length ) ? g_aMapTopTimes[track][style].Length : MAX_WR_CACHE;
+	Timer_DebugPrint( "ShowLeaderboard: max=%i", max );
 	for( int i = 0; i < max; i++ )
 	{
-		static any recordData[RecordData];
-		g_aMapRecords[track][style].GetArray( i, recordData[0] );
+		char lastname[MAX_NAME_LENGTH];
+		g_aMapTopNames[track][style].GetString( i, lastname, sizeof(lastname) );
+	
+		Timer_FormatTime( g_aMapTopTimes[track][style].Get( i ), sTime, sizeof(sTime) );
 		
-		Timer_FormatTime( recordData[RD_Time], sTime, sizeof( sTime ) );
-		Format( buffer, sizeof( buffer), "[#%i] - %s (%s)", i + 1, recordData[RD_Name], sTime );
-		
-		Format( info, sizeof( info ), "%i,%i", track, style );
+		Format( buffer, sizeof(buffer), "[#%i] - %s (%s)", i + 1, lastname, sTime );
+		Format( info, sizeof(info), "%i,%i", track, style );
 		
 		menu.AddItem( info, buffer );
 	}
@@ -1227,14 +1281,15 @@ public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 		menu.GetItem( param2, info, sizeof( info ) );
 		
 		char infoSplit[2][4];
-		ExplodeString( info, ",", infoSplit, sizeof( infoSplit ), sizeof( infoSplit[] ) );
+		ExplodeString( info, ",", infoSplit, sizeof(infoSplit), sizeof(infoSplit[]) );
 		
 		int track = StringToInt( infoSplit[0] );
 		int style = StringToInt( infoSplit[1] );
+		Timer_DebugPrint( "WRMenu_Handler: track=%i style=%i", track, style );
 		
-		any recordData[RecordData];
-		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
-		ShowStats( param1, view_as<ZoneTrack>( track ), style, recordData );
+		//Timer_DebugPrint( "WRMenu_Handler: Loaded record (recordid=%i, time=%f)", g_aMapTopTimes[track][style].Get( param2, 0 ), g_aMapTopTimes[track][style].Get( param2, 1 ) );
+		
+		SQL_ShowStats( param1, g_aMapTopRecordIds[track][style].Get( param2 ) );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -1242,7 +1297,7 @@ public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 	}
 }
 
-void ShowStats( int client, ZoneTrack track, int style, const any recordData[RecordData] )
+void ShowStats( int client, int track, int style, const any recordData[RecordData] )
 {
 	Menu menu = new Menu( RecordInfo_Handler );
 		
@@ -1268,7 +1323,8 @@ void ShowStats( int client, ZoneTrack track, int style, const any recordData[Rec
 	menu.SetTitle( buffer );
 	
 	Format( buffer, sizeof( buffer ), "Player: %s\n", recordData[RD_Name] );
-	Format( buffer, sizeof( buffer ), "%sDate: %s\n \n", buffer, date );
+	Format( buffer, sizeof( buffer ), "%sDate: %s\n", buffer, date );
+	Format( buffer, sizeof( buffer ), "%sAttempts: %i\n \n", buffer, recordData[RD_Attempts] );
 	Format( buffer, sizeof( buffer ), "%sTime: %s\n \n", buffer, sTime );
 	Format( buffer, sizeof( buffer ), "%sJumps: %i\n", buffer, recordData[RD_Jumps] );
 	Format( buffer, sizeof( buffer ), "%sStrafes: %i %s\n", buffer, recordData[RD_Strafes], sSync );
@@ -1295,7 +1351,7 @@ public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int par
 		ExplodeString( sInfo, ",", sSplitString, sizeof( sSplitString ), sizeof( sSplitString[] ) );
 		
 		int playerid = StringToInt( sSplitString[0] );
-		ZoneTrack track = view_as<ZoneTrack>( StringToInt( sSplitString[1] ) );
+		int track = StringToInt( sSplitString[1] );
 		int style = StringToInt( sSplitString[2] );
 		
 		switch( param2 )
@@ -1362,7 +1418,7 @@ public int Native_GetClientCurrentSync( Handle handler, int numparams )
 		return 0;
 	}
 	
-	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : float( g_nPlayerSyncedFrames[client] * 100 ) / g_nPlayerAirStrafeFrames[client] );
+	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : ( g_nPlayerSyncedFrames[client] * 100.0 ) / g_nPlayerAirStrafeFrames[client] );
 }
 
 public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
@@ -1373,7 +1429,7 @@ public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
 		return 0;
 	}
 	
-	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 ) ? 0.0 : float( g_nPlayerAirStrafeFrames[client] * 100 ) / g_nPlayerAirFrames[client] );
+	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 ) ? 0.0 : ( g_nPlayerAirStrafeFrames[client] * 100.0 ) / g_nPlayerAirFrames[client] );
 }
 
 public int Native_GetWRTime( Handle handler, int numparams )
@@ -1381,12 +1437,9 @@ public int Native_GetWRTime( Handle handler, int numparams )
 	int track = GetNativeCell( 1 );
 	int style = GetNativeCell( 2 );
 	
-	if( g_aMapRecords[track][style].Length )
-	{
-		any recordData[RecordData];
-		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
-		
-		return view_as<int>( recordData[RD_Time] );
+	if( g_aMapTopTimes[track][style].Length )
+	{		
+		return g_aMapTopTimes[track][style].Get( 0 );
 	}
 	
 	return 0;
@@ -1397,18 +1450,18 @@ public int Native_GetWRName( Handle handler, int numparams )
 	int track = GetNativeCell( 1 );
 	int style = GetNativeCell( 2 );
 	
-	if( g_aMapRecords[track][style].Length )
+	if( g_aMapTopNames[track][style].Length )
 	{
-		any recordData[RecordData];
-		g_aMapRecords[track][style].GetArray( 0, recordData[0] );
-		
-		SetNativeString( 3, recordData[RD_Name], GetNativeCell( 4 ) );
+		char lastname[MAX_NAME_LENGTH];
+		g_aMapTopNames[track][style].GetString( 0, lastname, sizeof(lastname) );
+	
+		SetNativeString( 3, lastname, GetNativeCell( 4 ) );
 	}
 }
 
 public int Native_GetClientPBTime( Handle handler, int numparams )
 {
-	return view_as<int>( g_PlayerRecordData[GetNativeCell( 1 )][GetNativeCell( 2 )][GetNativeCell( 3 )][RD_Time] );
+	return view_as<int>( g_fPlayerPersonalBest[GetNativeCell( 1 )][GetNativeCell( 2 )][GetNativeCell( 3 )] );
 }
 
 public int Native_GetClientTimerStatus( Handle handler, int numParams )
@@ -1430,6 +1483,11 @@ public int Native_GetClientTimerStatus( Handle handler, int numParams )
 public int Native_GetClientRank( Handle handler, int numParams )
 {
 	return GetClientRank( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ) );
+}
+
+public int Native_GetStyleCount( Handle handler, int numParams )
+{
+	return g_iTotalStyles;
 }
 
 public int Native_GetStyleSettings( Handle handler, int numParams )
@@ -1454,12 +1512,12 @@ public int Native_GetClientStyle( Handle handler, int numParams )
 
 public int Native_IsClientLoaded( Handle handler, int numParams )
 {
-	return g_bClientLoaded[GetNativeCell( 1 )];
+	return g_iPlayerId[GetNativeCell( 1 )] > -1;
 }
 
 public int Native_IsTimerRunning( Handle handler, int numParams )
 {
-	return !( !g_bTimerRunning[GetNativeCell( 1 )] || g_bTimerPaused[GetNativeCell( 1 )] );
+	return g_bTimerRunning[GetNativeCell( 1 )] && !g_bTimerPaused[GetNativeCell( 1 )];
 }
 
 public int Native_StopTimer( Handle handler, int numParams )
