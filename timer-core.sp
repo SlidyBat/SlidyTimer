@@ -1049,7 +1049,9 @@ public void CacheRecords_Callback( Database db, DBResultSet results, const char[
 	int style = pack.ReadCell();
 	delete pack;
 	
+	g_aMapTopRecordIds[track][style].Clear();
 	g_aMapTopTimes[track][style].Clear();
+	g_aMapTopNames[track][style].Clear();
 	
 	while( results.FetchRow() )
 	{
