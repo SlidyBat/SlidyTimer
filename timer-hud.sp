@@ -467,6 +467,11 @@ void DrawTopLeftOverlay( int client )
 	}
 	
 	int target = GetClientObserverTarget( client );
+	if( !( 0 < target <= MaxClients )
+	{
+		return;
+	}
+	
 	int track = Timer_GetClientZoneTrack( target );
 	
 	if( track == ZoneTrack_None )
