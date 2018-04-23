@@ -4,7 +4,6 @@
 #include <sourcemod>
 #include <slidy-timer>
 #include <clientprefs>
-#include <colourmanip>
 
 #define TOTAL_HUDS 2
 
@@ -49,6 +48,12 @@ bool		g_bHudItems[TOTAL_HUDS][TOTAL_HUD_ITEMS];
 char		g_cHudNames[TOTAL_HUDS][64];
 int		g_iTotalHuds;
 
+StringMap	g_smHudElementCallbacks;
+
+typedef HUDElementCB = function void ( int client, char[] output, int maxlen );
+
+#include "timer-hudelements.sp"
+
 public Plugin myinfo = 
 {
 	name = "Slidy's Timer - HUD component",
@@ -72,6 +77,25 @@ public void OnPluginStart()
 			OnClientCookiesCached( i );
 		}
 	}
+	
+	g_smHudElementCallbacks = new StringMap();
+	AddHudElement( "time", GetTimeString );
+	AddHudElement( "speed", GetSpeedString );
+	AddHudElement( "jumps", GetJumpsString );
+	AddHudElement( "strafes", GetStrafesString );
+	AddHudElement( "sync", GetSyncString );
+	AddHudElement( "strafetime", GetStrafeTimeString );
+	AddHudElement( "wrtime", GetWRTimeString );
+	AddHudElement( "pbtime", GetPBTimeString );
+	AddHudElement( "style", GetStyleString );
+	AddHudElement( "rainbow", GetRainbowString );
+}
+
+stock void AddHudElement( const char[] element, HUDElementCB cb )
+{
+	DataPack pack = new DataPack();
+	pack.WriteFunction( cb );
+	g_smHudElementCallbacks.SetValue( element, pack );
 }
 
 public void OnMapStart()
@@ -96,13 +120,13 @@ public void OnClientCookiesCached( int client )
 {
 	char sValue[8];
 	
-	GetClientCookie( client, g_hSelectedHudCookie, sValue, sizeof( sValue ) );
+	GetClientCookie( client, g_hSelectedHudCookie, sValue, sizeof(sValue) );
 	g_iSelectedHud[client] = StringToInt( sValue );
 	
-	GetClientCookie( client, g_hHudSettingsCookie, sValue, sizeof( sValue ) );
+	GetClientCookie( client, g_hHudSettingsCookie, sValue, sizeof(sValue) );
 	if( strlen( sValue ) == 0 )
 	{
-		IntToString( HUD_DEFAULT, sValue, sizeof( sValue ) );
+		IntToString( HUD_DEFAULT, sValue, sizeof(sValue) );
 		SetClientCookie( client, g_hHudSettingsCookie, sValue );
 		g_iHudSettings[client] = HUD_DEFAULT;
 	}
@@ -127,123 +151,75 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 		{
 			int speed = RoundFloat( GetClientSpeed( target ) );
 			PrintHintText( client, "Speed: %i", speed );
+			
+			Timer_DebugPrint( "OnPlayerRunCmd: Printing hint text (speed=%i)", speed );
 		}
 		return;
 	}
 	
 	static char hudtext[256];
-	hudtext = g_cHudCache[g_iSelectedHud[client]];
+	int curHudChar = 0;
 	
-	static char buffer[64];
-	int type = Timer_GetClientZoneType( client );
-	int track = Timer_GetClientZoneTrack( client );
-	int style = Timer_GetClientStyle( client );
-	float pbtime, wrtime;
+	bool bStartedElement;
+	char element[64];
+	int curElementChar = 0;
 	
-	if( track > ZoneTrack_None )
+	int len = strlen( g_cHudCache[g_iSelectedHud[client]] );
+	for( int i = 0; i < len; i++ )
 	{
-		pbtime = Timer_GetClientPBTime( client, track, style );
-		wrtime = Timer_GetWRTime( track, style );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Speed] )
-	{
-		int speed = RoundFloat( GetClientSpeed( client ) );
-		IntToString( speed, buffer, sizeof( buffer ) );
-		ReplaceString( hudtext, sizeof( hudtext ), "{speed}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Jumps] )
-	{
-		int jumps = Timer_GetClientCurrentJumps( client );
-		IntToString( jumps, buffer, sizeof( buffer ) );
-		ReplaceString( hudtext, sizeof( hudtext ), "{jumps}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Strafes] )
-	{
-		int strafes = Timer_GetClientCurrentStrafes( client );
-		IntToString( strafes, buffer, sizeof( buffer ) );
-		ReplaceString( hudtext, sizeof( hudtext ), "{strafes}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Sync] )
-	{
-		float sync = Timer_GetClientCurrentSync( client );
-		FormatEx( buffer, sizeof( buffer ), "%.2f", sync );
-		ReplaceString( hudtext, sizeof( hudtext ), "{sync}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_StrafeTime] )
-	{
-		float strafetime = Timer_GetClientCurrentStrafeTime( client );
-		FormatEx( buffer, sizeof( buffer ), "%.2f", strafetime );
-		ReplaceString( hudtext, sizeof( hudtext ), "{strafetime}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_WRTime] )
-	{
-		FormatEx( buffer, sizeof( buffer ), "%.2f", wrtime );
-		ReplaceString( hudtext, sizeof( hudtext ), "{wrtime}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_PBTime] )
-	{
-		FormatEx( buffer, sizeof( buffer ), "%.2f", pbtime );
-		ReplaceString( hudtext, sizeof( hudtext ), "{pbtime}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Style] )
-	{
-		Timer_GetStyleName( style, buffer, sizeof( buffer ) );
-		ReplaceString( hudtext, sizeof( hudtext ), "{style}", buffer );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Rainbow] )
-	{
-		ReplaceString( hudtext, sizeof( hudtext ), "{rainbow}", g_cRainbowColour );
-	}
-	
-	if( g_bHudItems[g_iSelectedHud[client]][HUD_Time] )
-	{
-		if( type == Zone_Start )
+		if( bStartedElement )
 		{
-			Timer_GetZoneTrackName( track, buffer, sizeof( buffer ) );
-			
-			FormatEx( buffer, sizeof( buffer ), "%s Start Zone", buffer );
+			if( g_cHudCache[g_iSelectedHud[client]][i] == '}' )
+			{
+				bStartedElement = false;
+				element[curElementChar] = 0;
+				curElementChar = 0;
+				
+				DataPack pack;
+				if( g_smHudElementCallbacks.GetValue( element, pack ) )
+				{
+					pack.Reset();
+					
+					char replacement[64];
+
+					Call_StartFunction( GetMyHandle(), pack.ReadFunction() );
+					Call_PushCell( client );
+					Call_PushStringEx( replacement, sizeof(replacement), 0, SM_PARAM_COPYBACK );
+					Call_PushCell( sizeof(replacement) );
+					Call_Finish();
+					
+					curHudChar += StrCat( hudtext, sizeof(hudtext), replacement );
+				}
+			}
+			else
+			{
+				element[curElementChar++] = g_cHudCache[g_iSelectedHud[client]][i];
+			}
 		}
 		else
 		{
-			TimerStatus ts = Timer_GetClientTimerStatus( client );
-			
-			switch( ts )
+			if( g_cHudCache[g_iSelectedHud[client]][i] == '{' )
 			{
-				case TimerStatus_Stopped:
-				{
-					FormatEx( buffer, sizeof( buffer ), "Time: <font color='#DB1A40'>Stopped</font>\t" );
-				}
-				case TimerStatus_Paused:
-				{
-					FormatEx( buffer, sizeof( buffer ), "Time: <font color='#333399'>Paused</font>\t" );
-				}
-				case TimerStatus_Running:
-				{
-					float time = Timer_GetClientCurrentTime( client );
-					Timer_FormatTime( time, buffer, sizeof( buffer ) );
-					
-					char sTimeColour[8];
-					GetTimeColour( sTimeColour, time, pbtime, wrtime );
-					Format( buffer, sizeof( buffer ), "Time: <font color='%s'>%s</font>", sTimeColour, buffer );
-				}
+				bStartedElement = true;
+			}
+			else
+			{
+				hudtext[curHudChar++] = g_cHudCache[g_iSelectedHud[client]][i];
 			}
 		}
-
-		ReplaceString( hudtext, sizeof( hudtext ), "{time}", buffer );
+		hudtext[curHudChar] = 0;
+	
+		if( !bStartedElement && g_cHudCache[g_iSelectedHud[client]][i] == '{' )
+		{
+			bStartedElement = true;
+		}
 	}
+	
+	static char buffer[64];
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
+		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != client )
 		{
 			continue;
 		}
@@ -260,7 +236,7 @@ bool LoadHuds()
 
 	// load styles from cfg file
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof( path ), "configs/Timer/timer-hud.cfg" );
+	BuildPath( Path_SM, path, sizeof(path), "configs/Timer/timer-hud.cfg" );
 	
 	KeyValues kvHud = new KeyValues( "HUDS" );
 	if( !kvHud.ImportFromFile( path ) || !kvHud.GotoFirstSubKey() )
@@ -274,21 +250,21 @@ bool LoadHuds()
 		kvHud.GetString( "name", g_cHudNames[g_iTotalHuds], sizeof(g_cHudNames[]) );
 		kvHud.GetString( "filename", sFileName, sizeof(sFileName) );
 		
-		BuildPath( Path_SM, path, sizeof( path ), "configs/Timer/HUD/%s.txt", sFileName );
+		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
 		File hud = OpenFile( path, "r" );
 		hud.ReadString( g_cHudCache[g_iTotalHuds], sizeof(g_cHudCache[]) );
 		hud.Close();
 		
-		g_bHudItems[g_iTotalHuds][HUD_Time] =		StrContains( g_cHudCache[g_iTotalHuds], "{time}" );
-		g_bHudItems[g_iTotalHuds][HUD_Jumps] =		StrContains( g_cHudCache[g_iTotalHuds], "{jumps}" );
-		g_bHudItems[g_iTotalHuds][HUD_Strafes] =		StrContains( g_cHudCache[g_iTotalHuds], "{strafes}" );
-		g_bHudItems[g_iTotalHuds][HUD_Sync] =		StrContains( g_cHudCache[g_iTotalHuds], "{sync}" );
-		g_bHudItems[g_iTotalHuds][HUD_StrafeTime] =	StrContains( g_cHudCache[g_iTotalHuds], "{strafetime}" );
-		g_bHudItems[g_iTotalHuds][HUD_WRTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{wrtime}" );
-		g_bHudItems[g_iTotalHuds][HUD_PBTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{pbtime}" );
-		g_bHudItems[g_iTotalHuds][HUD_Speed] =		StrContains( g_cHudCache[g_iTotalHuds], "{speed}" );
-		g_bHudItems[g_iTotalHuds][HUD_Style] =		StrContains( g_cHudCache[g_iTotalHuds], "{style}" );
-		g_bHudItems[g_iTotalHuds][HUD_Rainbow] =		StrContains( g_cHudCache[g_iTotalHuds], "{rainbow}" );
+		g_bHudItems[g_iTotalHuds][HUD_Time] =		StrContains( g_cHudCache[g_iTotalHuds], "{time}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_Jumps] =		StrContains( g_cHudCache[g_iTotalHuds], "{jumps}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_Strafes] =		StrContains( g_cHudCache[g_iTotalHuds], "{strafes}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_Sync] =		StrContains( g_cHudCache[g_iTotalHuds], "{sync}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_StrafeTime] =	StrContains( g_cHudCache[g_iTotalHuds], "{strafetime}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_WRTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{wrtime}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_PBTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{pbtime}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_Speed] =		StrContains( g_cHudCache[g_iTotalHuds], "{speed}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_Style] =		StrContains( g_cHudCache[g_iTotalHuds], "{style}" ) != -1;
+		g_bHudItems[g_iTotalHuds][HUD_Rainbow] =		StrContains( g_cHudCache[g_iTotalHuds], "{rainbow}" ) != -1;
 		
 		g_iTotalHuds++;
 	} while( kvHud.GotoNextKey() );
@@ -301,7 +277,7 @@ bool LoadHuds()
 void SetClientHudPreset( int client, int hud )
 {
 	char sValue[8];
-	IntToString( hud, sValue, sizeof( sValue ) );
+	IntToString( hud, sValue, sizeof(sValue) );
 	
 	SetClientCookie( client, g_hSelectedHudCookie, sValue );
 	
@@ -311,7 +287,7 @@ void SetClientHudPreset( int client, int hud )
 void SetClientHudSettings( int client, int hud )
 {
 	char sValue[8];
-	IntToString( hud, sValue, sizeof( sValue ) );
+	IntToString( hud, sValue, sizeof(sValue) );
 	
 	SetClientCookie( client, g_hHudSettingsCookie, sValue );
 	
@@ -380,7 +356,7 @@ public Action Timer_DrawHud( Handle timer )
 			g_bSwapRainbowDirection = false;
 	}
 	
-	Format( g_cRainbowColour, sizeof( g_cRainbowColour ), "#%02X%02X%02X", g_RainbowColour[0], g_RainbowColour[1], g_RainbowColour[2] );
+	Format( g_cRainbowColour, sizeof(g_cRainbowColour), "#%02X%02X%02X", g_RainbowColour[0], g_RainbowColour[1], g_RainbowColour[2] );
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
@@ -441,19 +417,19 @@ void DrawSpecList( int client )
 		char name[MAX_NAME_LENGTH];
 		static char buffer[256];
 		
-		FormatEx( buffer, sizeof( buffer ), "Spectators (%i):\n", nSpectators );
+		FormatEx( buffer, sizeof(buffer), "Spectators (%i):\n", nSpectators );
 
 		for( int i = 0; i < nSpectators; i++ )
 		{
 			if( i == 7 )
 			{
-				FormatEx( buffer, sizeof( buffer ), "%s...", buffer );
+				FormatEx( buffer, sizeof(buffer), "%s...", buffer );
 				break;
 			}
 
-			if( GetClientName( spectators[i], name, sizeof( name ) ) )
+			if( GetClientName( spectators[i], name, sizeof(name) ) )
 			{
-				FormatEx( buffer, sizeof( buffer ), "%s%s\n", buffer, name );
+				FormatEx( buffer, sizeof(buffer), "%s%s\n", buffer, name );
 			}
 		}
 		
@@ -473,7 +449,7 @@ void DrawButtonsPanel( int client )
 		char buffer[128];
 		
 		int buttons = GetClientButtons( target );
-		FormatEx( buffer, sizeof( buffer ), "[%s]\n    %s\n%s   %s   %s", ( buttons & IN_DUCK ) > 0 ? "DUCK":"     ", ( buttons & IN_FORWARD ) > 0? "W":"-", ( buttons & IN_MOVELEFT ) > 0? "A":"-", ( buttons & IN_BACK ) > 0? "S":"-", ( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
+		FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s", ( buttons & IN_DUCK ) > 0 ? "DUCK":"     ", ( buttons & IN_FORWARD ) > 0? "W":"-", ( buttons & IN_MOVELEFT ) > 0? "A":"-", ( buttons & IN_BACK ) > 0? "S":"-", ( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
 		
 		panel.DrawItem( buffer, ITEMDRAW_RAWLINE );
 		
@@ -504,10 +480,10 @@ void DrawTopLeftOverlay( int client )
 	if( wrtime != 0.0 )
 	{
 		char sWRTime[16];
-		Timer_FormatTime( wrtime, sWRTime, sizeof( sWRTime ) );
+		Timer_FormatTime( wrtime, sWRTime, sizeof(sWRTime) );
 
 		char sWRName[MAX_NAME_LENGTH];
-		Timer_GetWRName( track, style, sWRName, sizeof( sWRName ) );
+		Timer_GetWRName( track, style, sWRName, sizeof(sWRName) );
 
 		float pbtime = Timer_GetClientPBTime( target, track, style );
 
@@ -516,7 +492,7 @@ void DrawTopLeftOverlay( int client )
 		if( pbtime != 0.0 )
 		{
 			char sPBTime[16];
-			Timer_FormatTime( pbtime, sPBTime, sizeof( sPBTime ) );
+			Timer_FormatTime( pbtime, sPBTime, sizeof(sPBTime) );
 			
 			FormatEx(sTopLeft, 64, "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientRank( target, track, style ) );
 		}
@@ -542,22 +518,22 @@ void OpenHudSettingsMenu( int client )
 	
 	char buffer[64];
 	
-	Format( buffer, sizeof( buffer ), "Central HUD Preset: %s\n \n", g_cHudNames[g_iSelectedHud[client]] );
+	Format( buffer, sizeof(buffer), "Central HUD Preset: %s\n \n", g_cHudNames[g_iSelectedHud[client]] );
 	menu.AddItem( "preset", buffer );
 	
-	Format( buffer, sizeof( buffer ), "Central HUD: %s", ( g_iHudSettings[client] & HUD_CENTRAL ) ? "Enabled" : "Disabled" );
+	Format( buffer, sizeof(buffer), "Central HUD: %s", ( g_iHudSettings[client] & HUD_CENTRAL ) ? "Enabled" : "Disabled" );
 	menu.AddItem( "central", buffer );
 	
-	Format( buffer, sizeof( buffer ), "Spectator List: %s", ( g_iHudSettings[client] & HUD_SPECLIST ) ? "Enabled" : "Disabled" );
+	Format( buffer, sizeof(buffer), "Spectator List: %s", ( g_iHudSettings[client] & HUD_SPECLIST ) ? "Enabled" : "Disabled" );
 	menu.AddItem( "speclist", buffer );
 	
-	Format( buffer, sizeof( buffer ), "Buttons Panel: %s", ( g_iHudSettings[client] & HUD_BUTTONS ) ? "Enabled" : "Disabled" );
+	Format( buffer, sizeof(buffer), "Buttons Panel: %s", ( g_iHudSettings[client] & HUD_BUTTONS ) ? "Enabled" : "Disabled" );
 	menu.AddItem( "buttons", buffer );
 	
-	Format( buffer, sizeof( buffer ), "Top Left Overlay: %s", ( g_iHudSettings[client] & HUD_TOPLEFT ) ? "Enabled" : "Disabled" );
+	Format( buffer, sizeof(buffer), "Top Left Overlay: %s", ( g_iHudSettings[client] & HUD_TOPLEFT ) ? "Enabled" : "Disabled" );
 	menu.AddItem( "topleft", buffer );
 	
-	Format( buffer, sizeof( buffer ), "Hide Weapons: %s", ( g_iHudSettings[client] & HUD_HIDEWEAPONS ) ? "Enabled" : "Disabled" );
+	Format( buffer, sizeof(buffer), "Hide Weapons: %s", ( g_iHudSettings[client] & HUD_HIDEWEAPONS ) ? "Enabled" : "Disabled" );
 	menu.AddItem( "hidewep", buffer );
 	
 	menu.Display( client, 20 );
