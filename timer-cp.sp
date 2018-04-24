@@ -141,7 +141,7 @@ public void LoadCheckpoint( int client, int index )
 
 public void DeleteCheckpoint( int client, int index )
 {
-	if( index < g_iSelectedCheckpoint[client] )
+	if( index != 0 && index <= g_iSelectedCheckpoint[client] )
 	{
 		g_iSelectedCheckpoint[client]--;
 	}
@@ -196,13 +196,13 @@ void OpenCPMenu( int client )
 	char buffer[256];
 	Format( buffer, sizeof(buffer), "Teleport\n" );
 	Format( buffer, sizeof(buffer), "%s    >CP: %s\n \n", buffer, ( g_aCheckpoints[client].Length ) ? cpcounter : "N/A" );
-	menu.AddItem( "tele", buffer );
+	menu.AddItem( "tele", buffer, g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
 	
-	menu.AddItem( "previous", "Previous\n" );
-	menu.AddItem( "next", "Next\n \n" );
+	menu.AddItem( "previous", "Previous\n", ( g_iSelectedCheckpoint[client] == 0 ) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
+	menu.AddItem( "next", "Next\n \n", ( g_iSelectedCheckpoint[client] == g_aCheckpoints[client].Length - 1 ) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
 
-	menu.AddItem( "select", "Select checkpoints" );
-	menu.AddItem( "delete", "Delete checkpoints\n" );
+	menu.AddItem( "select", "Select checkpoints", g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
+	menu.AddItem( "delete", "Delete checkpoints\n", g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
 
 	menu.AddItem( "settings", "Settings" );
 
@@ -213,60 +213,54 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 {
 	if( action == MenuAction_Select )
 	{
-		switch ( param2 )
+		char sInfo[16];
+		menu.GetItem( param2, sInfo, sizeof(sInfo) );
+		
+		if( StrEqual( sInfo, "save" ) )
 		{
-			case 0:
+			SaveCheckpoint( param1 );
+			OpenCPMenu( param1 );
+		}
+		else if( StrEqual( sInfo, "tele" ) )
+		{
+			LoadCheckpoint( param1, AUTO_SELECT_CP );
+			OpenCPMenu( param1 );
+		}
+		else if( StrEqual( sInfo, "previous" ) )
+		{
+			PreviousCheckpoint( param1 );
+			OpenCPMenu( param1 );
+		}
+		else if( StrEqual( sInfo, "next" ) )
+		{
+			NextCheckpoint( param1 );
+			OpenCPMenu( param1 );
+		}
+		else if( StrEqual( sInfo, "select" ) )
+		{
+			if( g_aCheckpoints[param1].Length > 0 )
 			{
-				SaveCheckpoint( param1 );
-				OpenCPMenu( param1 );
+				OpenSelectCPMenu( param1, LoadCheckpoint );
 			}
-			
-			case 1:
+			else
 			{
-				LoadCheckpoint( param1, AUTO_SELECT_CP );
-				OpenCPMenu( param1 );
+				PrintToChat( param1, "[Timer] No checkpoints found" );
 			}
-			
-			case 2:
+		}
+		else if( StrEqual( sInfo, "delete" ) )
+		{
+			if( g_aCheckpoints[param1].Length > 0 )
 			{
-				PreviousCheckpoint( param1 );
-				OpenCPMenu( param1 );
+				OpenSelectCPMenu( param1, DeleteCheckpoint );
 			}
-			
-			case 3:
+			else
 			{
-				NextCheckpoint( param1 );
-				OpenCPMenu( param1 );
+				PrintToChat( param1, "[Timer] No checkpoints found" );
 			}
-
-			case 4:
-			{
-				if( g_aCheckpoints[param1].Length > 0 )
-				{
-					OpenSelectCPMenu( param1, LoadCheckpoint );
-				}
-				else
-				{
-					PrintToChat( param1, "[Timer] No checkpoints found" );
-				}
-			}
-
-			case 5:
-			{
-				if( g_aCheckpoints[param1].Length > 0 )
-				{
-					OpenSelectCPMenu( param1, DeleteCheckpoint );
-				}
-				else
-				{
-					PrintToChat( param1, "[Timer] No checkpoints found" );
-				}
-			}
-
-			case 6:
-			{
-				OpenCPSettingsMenu( param1 );
-			}
+		}
+		else if( StrEqual( sInfo, "settings" ) )
+		{
+			OpenCPSettingsMenu( param1 );
 		}
 	}
 	else if( action == MenuAction_End )
@@ -308,6 +302,8 @@ public int CPSelect_Handler( Menu menu, MenuAction action, int param1, int param
 		Call_PushCell( param1 );
 		Call_PushCell( param2 );
 		Call_Finish();
+		
+		OpenCPMenu( param1 );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -348,6 +344,12 @@ public Action Command_Save( int client, int args )
 	int index = AUTO_SELECT_CP;
 	if( args > 0 )
 	{
+		if( !g_aCheckpoints[client].Length )
+		{
+			ReplyToCommand( client, "[Timer] No checkpoints found" );
+			return Plugin_Handled;
+		}
+	
 		char sArg[32];
 		GetCmdArg( 1, sArg, sizeof(sArg) );
 		index = StringToInt( sArg );
@@ -366,6 +368,12 @@ public Action Command_Save( int client, int args )
 
 public Action Command_Tele( int client, int args )
 {
+	if( !g_aCheckpoints[client].Length )
+	{
+		ReplyToCommand( client, "[Timer] No checkpoints found" );
+		return Plugin_Handled;
+	}
+
 	int index = AUTO_SELECT_CP;
 	if( args > 0 )
 	{
@@ -387,6 +395,12 @@ public Action Command_Tele( int client, int args )
 
 public Action Command_Delete( int client, int args )
 {
+	if( !g_aCheckpoints[client].Length )
+	{
+		ReplyToCommand( client, "[Timer] No checkpoints found" );
+		return Plugin_Handled;
+	}
+
 	if( args < 1 )
 	{
 		OpenSelectCPMenu( client, DeleteCheckpoint );
@@ -421,7 +435,11 @@ stock void GetEntityBaseVelocity( int entity, float out[3] )
 stock void SetEntityBaseVelocity( int entity, float basevel[3] )
 {
 	SetEntPropVector( entity, Prop_Data, "m_vecBaseVelocity", basevel );
-	SetEntityFlags( entity, GetEntityFlags( entity ) | FL_BASEVELOCITY );
+	
+	if( basevel[0] != 0.0 || basevel[0] != 0.0 || basevel[0] != 0.0 )
+	{
+		SetEntityFlags( entity, GetEntityFlags( entity ) | FL_BASEVELOCITY );
+	}
 }
 
 stock void GetEntityTargetname( int entity, char[] buffer, int maxlen )
