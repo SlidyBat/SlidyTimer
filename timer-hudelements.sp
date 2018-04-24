@@ -1,7 +1,7 @@
 public void GetSpeedString( int client, char[] output, int maxlen )
 {
 	int speed = RoundFloat( GetClientSpeed( client ) );
-	IntToString( speed, output, maxlen );
+	FormatEx( output, maxlen, "%d%s", speed < 100 ? "\t" : "" );
 }
 
 public void GetJumpsString( int client, char[] output, int maxlen )
@@ -19,25 +19,54 @@ public void GetStrafesString( int client, char[] output, int maxlen )
 public void GetSyncString( int client, char[] output, int maxlen )
 {
 	float sync = Timer_GetClientCurrentSync( client );
-	FormatEx( output, maxlen, "%.2f", sync );
+	if( sync == 0.0 )
+	{
+		FormatEx( output, maxlen, "%.2f\t", sync );
+	}
+	else
+	{
+		FormatEx( output, maxlen, "%.2f", sync );
+	}
 }
 
 public void GetStrafeTimeString( int client, char[] output, int maxlen )
 {
 	float strafetime = Timer_GetClientCurrentStrafeTime( client );
-	FormatEx( output, maxlen, "%.2f", strafetime );
+	if( strafetime == 0.0 )
+	{
+		FormatEx( output, maxlen, "%.2f\t", strafetime );
+	}
+	else
+	{
+		FormatEx( output, maxlen, "%.2f", strafetime );
+	}
 }
 
 public void GetWRTimeString( int client, char[] output, int maxlen )
 {
 	float wrtime = Timer_GetWRTime( Timer_GetClientZoneTrack( client ), Timer_GetClientStyle( client ) );
-	FormatEx( output, maxlen, "%.2f", wrtime );
+	
+	if( wrtime == 0.0 )
+	{
+		FormatEx( output, maxlen, "N/A\t" );
+	}
+	else
+	{
+		Timer_FormatTime( wrtime, output, maxlen );
+	}
 }
 
 public void GetPBTimeString( int client, char[] output, int maxlen )
 {
 	float pbtime = Timer_GetClientPBTime( client, Timer_GetClientZoneTrack( client ), Timer_GetClientStyle( client ) );
-	FormatEx( output, maxlen, "%.2f", pbtime );
+	if( pbtime == 0.0 )
+	{
+		FormatEx( output, maxlen, "N/A\t" );
+	}
+	else
+	{
+		Timer_FormatTime( pbtime, output, maxlen );
+	}
 }
 
 public void GetStyleString( int client, char[] output, int maxlen )
@@ -57,7 +86,7 @@ public void GetTimeString( int client, char[] output, int maxlen )
 	if( type == Zone_Start )
 	{
 		Timer_GetZoneTrackName( Timer_GetClientZoneTrack( client ), output, maxlen );
-		FormatEx( output, maxlen, "%s Start Zone", output );
+		FormatEx( output, maxlen, "%s Start Zone\t", output );
 	}
 	else
 	{
@@ -83,7 +112,7 @@ public void GetTimeString( int client, char[] output, int maxlen )
 				
 				char sTimeColour[8];
 				GetTimeColour( sTimeColour, time, Timer_GetClientPBTime( client, track, style ), Timer_GetWRTime( track, style ) );
-				Format( output, maxlen, "Time: <font color='%s'>%s</font>", sTimeColour, output );
+				Format( output, maxlen, "Time: <font color='%s'>%s\t</font>", sTimeColour, output );
 			}
 		}
 	}
