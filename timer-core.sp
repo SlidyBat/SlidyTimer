@@ -825,6 +825,10 @@ public void UpdatePlayerInfo_Callback( Database db, DBResultSet results, const c
 	}
 	
 	int client = GetClientOfUserId( uid );
+	if( !client )
+	{
+		return;
+	}
 	
 	Call_StartForward( g_hForward_OnClientLoaded );
 	Call_PushCell( client );
