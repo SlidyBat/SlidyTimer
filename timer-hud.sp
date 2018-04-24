@@ -467,7 +467,7 @@ void DrawTopLeftOverlay( int client )
 	}
 	
 	int target = GetClientObserverTarget( client );
-	if( !( 0 < target <= MaxClients )
+	if( !( 0 < target <= MaxClients ) )
 	{
 		return;
 	}

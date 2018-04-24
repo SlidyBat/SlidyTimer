@@ -1,7 +1,7 @@
 public void GetSpeedString( int client, char[] output, int maxlen )
 {
 	int speed = RoundFloat( GetClientSpeed( client ) );
-	FormatEx( output, maxlen, "%d%s", speed < 100 ? "\t" : "" );
+	FormatEx( output, maxlen, "%d%s", (speed < 100) ? "\t" : "" );
 }
 
 public void GetJumpsString( int client, char[] output, int maxlen )
