@@ -13,6 +13,7 @@ enum
 {
 	GlowSprite,
 	HaloSprite,
+	BeamSprite,
 	BlueLightning,
 	Barrel,
 	TOTAL_SPRITES
@@ -118,6 +119,7 @@ public void OnMapStart()
 	
 	g_Sprites[GlowSprite] = PrecacheModel( "materials/sprites/blueglow1.vmt" );
 	g_Sprites[HaloSprite] = PrecacheModel( "materials/sprites/glow01.vmt" );
+	g_Sprites[BeamSprite] = PrecacheModel( "materials/sprites/laserbeam.vmt" );
 	g_Sprites[BlueLightning] = PrecacheModel( "materials/sprites/trails/bluelightningscroll3.vmt" );
 	g_Sprites[Barrel] = PrecacheModel( "models/props/de_train/barrel.mdl" );
 	
@@ -827,8 +829,13 @@ public Action Timer_DrawZones( Handle timer, any data )
 					float pos[3];
 					GetZoningPoint( i, pos );
 
-					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 0.5, 800 );
-					TE_SendToClient( i );
+					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 1.0, 249 );
+					TE_SendToAll();
+					
+					float playerpos[3];
+					GetClientAbsOrigin( i, playerpos );
+					TE_SetupBeamPoints( playerpos, pos, g_Sprites[BeamSprite], g_Sprites[HaloSprite], 0, 0, 0.1, 1.0, 1.0, 0, 0.0, {255, 255, 255, 75}, 0);
+					TE_SendToAll();
 				}
 				else if( g_iZoningStage[i] == 1 )
 				{
@@ -842,11 +849,16 @@ public Action Timer_DrawZones( Handle timer, any data )
 					
 					DrawZoneFromPoints( points, { 255, 255, 102, 255 } );
 					
-					TE_SetupGlowSprite( g_fZonePointCache[i][0], g_Sprites[GlowSprite], 0.1, 0.1, 100 );
-					TE_SendToClient( i );
+					TE_SetupGlowSprite( g_fZonePointCache[i][0], g_Sprites[GlowSprite], 0.1, 1.0, 249 );
+					TE_SendToAll();
 					
-					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 0.1, 100 );
-					TE_SendToClient( i );
+					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 1.0, 249 );
+					TE_SendToAll();
+					
+					float playerpos[3];
+					GetClientAbsOrigin( i, playerpos );
+					TE_SetupBeamPoints( playerpos, pos, g_Sprites[BeamSprite], g_Sprites[HaloSprite], 0, 0, 0.1, 1.0, 1.0, 0, 0.0, {255, 255, 255, 75}, 0);
+					TE_SendToAll();
 				}
 				else
 				{
@@ -856,11 +868,11 @@ public Action Timer_DrawZones( Handle timer, any data )
 					
 					DrawZoneFromPoints( points, { 255, 255, 102, 255 } );
 					
-					TE_SetupGlowSprite( g_fZonePointCache[i][0], g_Sprites[GlowSprite], 0.1, 0.1, 100 );
-					TE_SendToClient( i );
+					TE_SetupGlowSprite( g_fZonePointCache[i][0], g_Sprites[GlowSprite], 0.1, 1.0, 249 );
+					TE_SendToAll();
 					
-					TE_SetupGlowSprite( g_fZonePointCache[i][1], g_Sprites[GlowSprite], 0.1, 0.1, 100 );
-					TE_SendToClient( i );
+					TE_SetupGlowSprite( g_fZonePointCache[i][1], g_Sprites[GlowSprite], 0.1, 1.0, 249 );
+					TE_SendToAll();
 				}
 			}
 		}
