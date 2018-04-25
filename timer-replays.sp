@@ -73,6 +73,7 @@ ConVar		g_cvEndDelay;
 
 int			g_iBotType[MAXPLAYERS + 1];
 int			g_iBotId[MAXPLAYERS + 1];
+bool			g_bReplayBotPaused[MAXPLAYERS + 1];
 
 int			g_iCurrentFrame[MAXPLAYERS + 1];
 
@@ -247,6 +248,8 @@ public void OnClientPutInServer( int client )
 
 public void OnClientDisconnect( int client )
 {
+	g_bReplayBotPaused[client] = false;
+
 	for( int i = 0; i < g_nExpectedStyleBots; i++ )
 	{
 		if( client == g_iMultireplayBotIndexes[i] )
@@ -434,8 +437,6 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			
 			g_aPlayerFrameData[client].PushArray( frameData[0] );
 			g_iCurrentFrame[client]++;
-			
-			//PrintToServer( "Frame %i saved", g_iCurrentFrame[client] );
 		}
 	}
 	else
@@ -462,16 +463,21 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				SetEntityMoveType( client, MOVETYPE_NONE );
 				TeleportEntity( client, pos, angles, NULL_VECTOR );
 				
-				CreateTimer( g_cvStartDelay.FloatValue, Timer_StartBotDelayed, GetClientUserId( client ), TIMER_FLAG_NO_MAPCHANGE );
+				if( !g_bReplayBotPaused[client] )
+				{
+					g_bReplayBotPaused[client] = true;
+					CreateTimer( g_cvStartDelay.FloatValue, Timer_StartBotDelayed, GetClientUserId( client ), TIMER_FLAG_NO_MAPCHANGE );
+				}
 			}
 			else if( g_iCurrentFrame[client] < g_aPlayerFrameData[client].Length )
 			{
-				SetEntityMoveType( client, MOVETYPE_WALK );
+				SetEntityMoveType( client, MOVETYPE_NOCLIP );
 			
 				g_aPlayerFrameData[client].GetArray( g_iCurrentFrame[client], frameData[0] );
 				
-				static float tmp[3];
+				float tmp[3];
 				GetClientAbsOrigin( client, tmp );
+				
 				pos[0] = frameData[FD_Pos][0];
 				pos[1] = frameData[FD_Pos][1];
 				pos[2] = frameData[FD_Pos][2];
@@ -490,8 +496,19 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			}
 			else
 			{
+				g_aPlayerFrameData[client].GetArray( g_aPlayerFrameData[client].Length - 1, frameData[0] );
+				
+				angles[0] = frameData[FD_Angles][0];
+				angles[1] = frameData[FD_Angles][1];
+				
+				TeleportEntity( client, NULL_VECTOR, angles, view_as<float>({ 0.0, 0.0, 0.0 }) );
 				SetEntityMoveType( client, MOVETYPE_NONE );
-				CreateTimer( g_cvEndDelay.FloatValue, Timer_EndBotDelayed, GetClientUserId( client ), TIMER_FLAG_NO_MAPCHANGE );
+				
+				if( !g_bReplayBotPaused[client] )
+				{
+					g_bReplayBotPaused[client] = true;
+					CreateTimer( g_cvEndDelay.FloatValue, Timer_EndBotDelayed, GetClientUserId( client ), TIMER_FLAG_NO_MAPCHANGE );
+				}
 			}
 		}
 	}
@@ -602,7 +619,7 @@ void SaveReplay( int client, float time, int track, int style )
 	
 	file.Close();
 	
-	for( int i = 0; i < g_nStyleBots; i++ )
+	for( int i = 0; i < g_nExpectedStyleBots; i++ )
 	{
 		if( g_StyleBotReplayingStyle[i] == style && g_StyleBotReplayingTrack[i] == track )
 		{
@@ -629,6 +646,14 @@ void SaveReplay( int client, float time, int track, int style )
 			SetClientName( idx, name );
 			
 			break;
+		}
+	}
+	
+	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
+	{
+		if( g_MultireplayCurrentlyReplayingStyle[i] == style && g_MultireplayCurrentlyReplayingTrack[i] == track )
+		{
+			StartReplay( i, track, style );
 		}
 	}
 }
@@ -850,12 +875,15 @@ public Action Command_Replay( int client, int args )
 public Action Timer_StartBotDelayed( Handle timer, int userid )
 {
 	int client = GetClientOfUserId( userid );
+	g_bReplayBotPaused[client] = false;
 	g_iCurrentFrame[client]++;
 }
 
 public Action Timer_EndBotDelayed( Handle timer, int userid )
 {
 	int client = GetClientOfUserId( userid );
+	g_bReplayBotPaused[client] = false;
+	
 	if( g_iBotType[client] == ReplayBot_Style )
 	{
 		g_iCurrentFrame[client] = 0;
