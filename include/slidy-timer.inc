@@ -358,27 +358,27 @@ forward void Timer_OnWRBeaten( int client, int track, int style, float time, flo
  * Called when a client enters a zone
  *
  * @param client					Client index of player that entered zone
- * @param zone_id					id of zone (useful for identifying zone in db)
+ * @param zoneId					id of zone (useful for identifying zone in db)
  * @param zoneType					type of zone (ie. start, end, checkpoint ...)
  * @param zoneTrack					track of zone (ie. main/bonus)
  * @param zone_subindex				subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
  *
  * @noreturn
  */
-forward void Timer_OnEnterZone( int client, int zone_id, int zoneType, int zoneTrack, int zone_subindex );
+forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTrack, int zone_subindex );
 
 /**
  * Called when a client exits a zone
  *
  * @param client					Client index of player that exited zone
- * @param zone_id					id of zone (useful for identifying zone in db)
+ * @param zoneId					id of zone (useful for identifying zone in db)
  * @param zoneType					type of zone (ie. start, end, checkpoint ...)
  * @param zoneTrack					track of zone (ie. main/bonus)
  * @param zone_subindex				subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
  *
  * @noreturn
  */
-forward void Timer_OnExitZone( int client, int zone_id, int zoneType, int zoneTrack, int zone_subindex );
+forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTrack, int zone_subindex );
 
 /**
  * Called when clients timer starts
@@ -579,6 +579,17 @@ native void Timer_StopTimer( int client );
  * @noreturn
  */
 native void Timer_TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex = 0 );
+
+/**
+ * Returns whether the client is inside specified zone
+ *
+ * @param client					Client index.
+ * @param zoneType					Type of desired zone.
+ * @param zoneTrack					Track of desired zone.
+ * @param subindex					Optional subindex of desired zone, for checkpoints/anticheat.
+ * @noreturn
+ */
+native bool Timer_IsClientInsideZone( int client, int zoneType, int zoneTrack, int subindex = 0 );
 
 stock void Timer_OpenSelectStyleMenu( int client, SelectStyleCB cb )
 {

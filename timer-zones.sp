@@ -44,7 +44,7 @@ int			g_Sprites[TOTAL_SPRITES];
 ArrayList		g_aZones;
 ArrayList		g_aZoneSpawnCache;
 
-int			g_PlayerCurrentZoneType[MAXPLAYERS + 1];
+int			g_PlayerCurrentZoneType[MAXPLAYERS + 1] = { Zone_None, ... };
 int			g_PlayerCurrentZoneTrack[MAXPLAYERS + 1];
 int			g_PlayerCurrentZoneSubIndex[MAXPLAYERS + 1];
 
@@ -97,6 +97,7 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
 	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
 	CreateNative( "Timer_TeleportClientToZone", Native_TeleportClientToZone );
+	CreateNative( "Timer_IsClientInsideZone", Native_IsClientInsideZone );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
 	RegPluginLibrary("timer-zones");
@@ -643,6 +644,16 @@ stock void ClearZones()
 		g_aZones.Clear();
 		g_aZoneSpawnCache.Clear();
 	}
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) &&
+			!IsFakeClient( i ) &&
+			!IsClientInsideZone( i, g_PlayerCurrentZoneType[i], g_PlayerCurrentZoneTrack[i], g_PlayerCurrentZoneSubIndex[i] ) )
+		{
+			g_PlayerCurrentZoneType[i] = Zone_None;
+		}
+	}
 }
 
 stock void DrawZoneFromPoints( float points[8][3], const int color[4] = { 255, 178, 0, 255 }, int client = 0 )
@@ -697,7 +708,6 @@ public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroa
 	{
 		if( IsClientInGame( i ) && IsPlayerAlive( i ) )
 		{
-			Timer_DebugPrint( "Hook_RoundStartPost: zonetype=%i", g_PlayerCurrentZoneTrack[i] );
 			TeleportClientToZone( i, Zone_Start, ZoneTrack_Main );
 		}
 	}
@@ -762,6 +772,19 @@ public Action Entity_EndTouch( int caller, int activator )
 	}
 }
 
+bool IsClientInsideZone( int client, int type, int track, int subindex = 0 )
+{
+	float pos[3];
+	GetClientAbsOrigin( client, pos );
+	
+	int index = GetZoneIndex( type, track, subindex );
+	if( index == -1 )
+	{
+		return false;
+	}
+	
+	return IsPointInsideZone( pos, index );
+}
 
 /* Commands */
 
@@ -804,7 +827,6 @@ public Action Command_JoinTeam( int client, const char[] command, int args )
 
 	if( value > 1 )
 	{
-		Timer_DebugPrint( "Command_JoinTeam: zonetype=%i", g_PlayerCurrentZoneTrack[client] );
 		TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	}
 
@@ -860,6 +882,8 @@ public Action Timer_DrawZones( Handle timer, any data )
 					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 1.0, 249 );
 					TE_SendToAll();
 					
+					pos[2] -= 150.0;
+					
 					float playerpos[3];
 					GetClientAbsOrigin( i, playerpos );
 					TE_SetupBeamPoints( playerpos, pos, g_Sprites[BeamSprite], g_Sprites[HaloSprite], 0, 0, 0.1, 1.0, 1.0, 0, 0.0, {255, 255, 255, 75}, 0);
@@ -912,6 +936,12 @@ public int Native_TeleportClientToZone(Handle handler, int numParams)
 {
 	TeleportClientToZone( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ), GetNativeCell( 4 ) );
 }
+
+public int Native_IsClientInsideZone(Handle handler, int numParams)
+{
+	return IsClientInsideZone( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ), GetNativeCell( 4 ) );
+}
+
 
 /* Database stuff */
 
@@ -988,10 +1018,10 @@ public void LoadZones_Callback( Database db, DBResultSet results, const char[] e
 		return;
 	}
 	
+	ClearZones();
+	
 	if( results.RowCount > 0 )
 	{
-		ClearZones();
-
 		while( results.FetchRow() )
 		{
 			any zone[ZONE_DATA];
@@ -1054,7 +1084,6 @@ public void InsertZone_Callback( Database db, DBResultSet results, const char[] 
 		return;
 	}
 	
-	ClearZones();
 	SQL_LoadZones();
 }
 
@@ -1105,6 +1134,28 @@ public void GetEyeAnglePosition( int client, float pos[3] )
 	{
 		TR_GetEndPosition( pos );
 	}
+}
+
+stock bool IsPointInsideZone( const float pos[3], int zoneindex )
+{
+	float a[3];
+	a[0] = g_aZones.Get( zoneindex, ZD_x1 );
+	a[1] = g_aZones.Get( zoneindex, ZD_y1 );
+	a[2] = g_aZones.Get( zoneindex, ZD_z1 );
+	float b[3];
+	b[0] = g_aZones.Get( zoneindex, ZD_x2 );
+	b[1] = g_aZones.Get( zoneindex, ZD_y2 );
+	b[2] = g_aZones.Get( zoneindex, ZD_z2 );
+	
+	for( int i = 0; i < 3; i++ )
+	{
+		if( a[i] >= pos[i] == b[i] >= pos[i] )
+		{
+			return false;
+		}
+	}
+	
+	return true;
 }
 
 public bool TraceRay_NoClient( int entity, int contentsMask, any data )
