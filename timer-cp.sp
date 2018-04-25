@@ -72,6 +72,12 @@ public void OnPluginStart()
 
 void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 {
+	int target = GetClientObserverTarget( client );
+	if( !( 0 < target <= MaxClients ) )
+	{
+		return;
+	}
+
 	if( index == AUTO_SELECT_CP )
 	{
 		index = g_aCheckpoints[client].Length;
@@ -83,23 +89,23 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	any cp[Checkpoint];
 	float temp[3];
 	
-	GetClientAbsOrigin( client, temp );
+	GetClientAbsOrigin( target, temp );
 	CopyVector( temp, cp[CP_Pos] );
-	GetClientEyeAngles( client, temp );
+	GetClientEyeAngles( target, temp );
 	CopyVector( temp, cp[CP_Ang] );
-	GetEntityAbsVelocity( client, temp );
+	GetEntityAbsVelocity( target, temp );
 	CopyVector( temp, cp[CP_Vel] );
-	GetEntityBaseVelocity( client, temp );
+	GetEntityBaseVelocity( target, temp );
 	CopyVector( temp, cp[CP_Basevel] );
-	cp[CP_Gravity] = GetEntityGravity( client );
-	cp[CP_LaggedMovement] = GetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue" );
-	GetEntityTargetname( client, cp[CP_Targetname], 32 );
-	cp[CP_MoveType] = GetEntityMoveType( client );
-	cp[CP_Flags] = GetEntityFlags( client );
-	cp[CP_Ducked] = view_as<bool>(GetEntProp( client, Prop_Send, "m_bDucked" ));
-	cp[CP_Ducking] = view_as<bool>(GetEntProp( client, Prop_Send, "m_bDucking" ));
-	cp[CP_DuckAmount] = GetEntPropFloat( client, Prop_Send, "m_flDuckAmount" );
-	cp[CP_DuckSpeed] = GetEntPropFloat( client, Prop_Send, "m_flDuckSpeed" );
+	cp[CP_Gravity] = GetEntityGravity( target );
+	cp[CP_LaggedMovement] = GetEntPropFloat( target, Prop_Data, "m_flLaggedMovementValue" );
+	GetEntityTargetname( target, cp[CP_Targetname], 32 );
+	cp[CP_MoveType] = GetEntityMoveType( target );
+	cp[CP_Flags] = GetEntityFlags( target );
+	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
+	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
+	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
+	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 }
