@@ -42,6 +42,8 @@ char g_cReplayFolders[][] =
 
 Database g_hDatabase;
 
+ConVar 		bot_quota;
+
 float			g_fFrameTime;
 float			g_fTickRate;
 char			g_cCurrentMap[PLATFORM_MAX_PATH];
@@ -87,10 +89,13 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+	bot_quota = FindConVar( "bot_quota" );
+	bot_quota.AddChangeHook( OnBotQuotaChanged );
+	
 	RegConsoleCmd( "sm_replay", Command_Replay );
-
+	
 	g_cvMultireplayBots = CreateConVar( "sm_timer_multireplay_bots", "2", "Total amount of MultiReplay bots", _, true, 0.0, true, float( MAX_MULTIREPLAY_BOTS ) );
-	g_cvMultireplayBots.AddChangeHook( OnConVarChanged );
+	g_cvMultireplayBots.AddChangeHook( OnMultireplayBotsChanged );
 	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
 	
 	g_cvStartDelay = CreateConVar( "sm_timer_replay_start_delay", "3.0", "Delay at beginning of replays before bots start", _, true, 0.0, false );
@@ -289,6 +294,8 @@ public void Timer_OnStylesLoaded( int totalstyles )
 	
 	CreateMultireplayBots();
 	CreateStyleBots();
+	
+	bot_quota.IntValue = g_nExpectedMultireplayBots + g_nExpectedStyleBots;
 }
 
 void CreateMultireplayBots()
@@ -859,7 +866,18 @@ public Action Timer_EndBotDelayed( Handle timer, int userid )
 	}
 }
 
-public void OnConVarChanged( ConVar convar, const char[] oldValue, const char[] newValue )
+public void OnMultireplayBotsChanged( ConVar convar, const char[] oldValue, const char[] newValue )
 {
-	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
+	if( g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue; )
+	{
+		g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
+	}
+}
+
+public void OnBotQuotaChanged( ConVar convar, const char[] oldValue, const char[] newValue )
+{
+	if( bot_quota.IntValue != g_nExpectedMultireplayBots + g_nExpectedStyleBots )
+	{
+		bot_quota.IntValue = g_nExpectedMultireplayBots + g_nExpectedStyleBots
+	}
 }
