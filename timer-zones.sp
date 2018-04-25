@@ -35,7 +35,7 @@ float			g_fZonePointCache[MAXPLAYERS + 1][2][3];
 
 bool			g_bSnapToWall[MAXPLAYERS + 1] = { true, ... };
 bool			g_bSnapToGrid[MAXPLAYERS + 1] = { true, ... };
-bool			g_bZoneEyeAngle[MAXPLAYERS + 1] = { true, ... };
+bool			g_bZoneEyeAngle[MAXPLAYERS + 1] = { false, ... };
 
 int        	g_nZoningPlayers;
 
@@ -143,7 +143,11 @@ public void OnClientDisconnnect( int client )
 	StopZoning( client );
 	g_bSnapToGrid[client] = true;
 	g_bSnapToWall[client] = true;
-	g_bZoneEyeAngle[client] = true;
+	g_bZoneEyeAngle[client] = false;
+	
+	g_PlayerCurrentZoneType[client] = Zone_None;
+	g_PlayerCurrentZoneTrack[client] = ZoneTrack_None;
+	g_PlayerCurrentZoneSubIndex[client] = 0;
 }
 
 void StartZoning( int client )
@@ -693,6 +697,7 @@ public Action Hook_RoundStartPost( Event event, const char[] name, bool dontBroa
 	{
 		if( IsClientInGame( i ) && IsPlayerAlive( i ) )
 		{
+			Timer_DebugPrint( "Hook_RoundStartPost: zonetype=%i", g_PlayerCurrentZoneTrack[i] );
 			TeleportClientToZone( i, Zone_Start, ZoneTrack_Main );
 		}
 	}
@@ -792,14 +797,14 @@ public Action Command_Bonus( int client, int args )
 public Action Command_JoinTeam( int client, const char[] command, int args )
 {
 	char arg[32];
-	int value;
-
 	GetCmdArg( 1, arg, 32 );
-	value = StringToInt( arg );
+	
+	int value = StringToInt( arg );
 	ChangeClientTeam( client, value );
 
 	if( value > 1 )
 	{
+		Timer_DebugPrint( "Command_JoinTeam: zonetype=%i", g_PlayerCurrentZoneTrack[client] );
 		TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	}
 
