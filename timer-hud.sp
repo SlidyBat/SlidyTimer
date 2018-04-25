@@ -441,6 +441,10 @@ void DrawSpecList( int client )
 void DrawButtonsPanel( int client )
 {
 	int target = GetClientObserverTarget( client );
+	if( !( 0 < target <= MaxClients ) )
+	{
+		return;
+	}
 	
 	if( GetClientMenu( client, null ) == MenuSource_None || GetClientMenu( client, null ) == MenuSource_RawPanel )
 	{
