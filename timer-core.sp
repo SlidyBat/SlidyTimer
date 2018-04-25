@@ -631,7 +631,7 @@ public void Timer_OnEnterZone( int client, int id, int zoneType, int zoneTrack, 
 		}
 		case Zone_End:
 		{
-			if( g_bTimerRunning[client] && !g_bTimerPaused[client] && Timer_GetClientZoneTrack( client ) == zoneTrack && Timer_GetClientZoneType( client ) != Zone_None )
+			if( g_bTimerRunning[client] && !g_bTimerPaused[client] && Timer_GetClientZoneTrack( client ) == zoneTrack && Timer_GetClientZoneType( client ) == Zone_None )
 			{
 				FinishTimer( client );
 			}
