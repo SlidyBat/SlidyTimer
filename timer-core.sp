@@ -277,7 +277,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				buttons &= ~IN_JUMP;
 			}
 			
-			if( settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
+			if( !g_bNoclip[client] && settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
 			{
 				float speed = GetClientSpeed( client );
 				float scale = settings[PreSpeed] / speed;
