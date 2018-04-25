@@ -4,6 +4,7 @@
 #include <cstrike>
 #include <slidy-timer>
 
+ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
 
 public Plugin myinfo = 
@@ -17,6 +18,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
+	g_cvCreateSpawnPoints = CreateConVar( "sm_create_spawnpoints", "10", "Number of spawn points to create", _, true, 0.0, true, 2048.0 );
+
 	RegConsoleCmd( "sm_spec", Command_Spec );
 	
 	HookEvent( "game_end", HookEvent_GameEnd, EventHookMode_Pre );
@@ -45,6 +48,35 @@ public void OnMapStart()
 		File_Copy( "maps/replay.nav", path );
 		Format( path, sizeof( path ), "%s.nav file generated", g_cCurrentMap );
 		ForceChangeLevel( g_cCurrentMap, path );	
+	}
+	
+	if ( g_cvCreateSpawnPoints.IntValue > 0 )
+	{
+		int entity = -1;
+		float origin[3];
+
+		if( (entity = FindEntityByClassname( entity, "info_player_terrorist" )) != INVALID_ENT_REFERENCE ||
+			(entity = FindEntityByClassname( entity, "info_player_counterterrorist" )) != INVALID_ENT_REFERENCE ||
+			(entity = FindEntityByClassname( entity, "info_player_start" )) != INVALID_ENT_REFERENCE )
+		{
+			GetEntPropVector( entity, Prop_Send, "m_vecOrigin", origin );
+		}
+
+		if(entity != -1)
+		{
+			for( int i = 1; i <= g_cvCreateSpawnPoints.IntValue; i++ )
+			{
+				for(int team = 1; team <= 2; team++)
+				{
+					int spawnpoint = CreateEntityByName( (team == 1) ? "info_player_terrorist" : "info_player_counterterrorist" );
+
+					if( DispatchSpawn( spawnpoint ) )
+					{
+						TeleportEntity( spawnpoint, origin, view_as<float>( { 0.0, 0.0, 0.0 } ), NULL_VECTOR );
+					}
+				}
+			}
+		}
 	}
 
 	SetConVars();
@@ -310,68 +342,24 @@ stock void SetClientObserverTarget( int client, int target )
 
 stock void SetConVars()
 {
-	ConVar convar;
-
-	convar = FindConVar( "bot_quota_mode" );
-	convar.SetString( "normal" );
-	
-	convar = FindConVar( "bot_quota" );
-	convar.IntValue = 0;
-
-	convar = FindConVar( "bot_join_after_player" );
-	convar.BoolValue = false;
-
-	convar = FindConVar( "mp_autoteambalance" );
-	convar.BoolValue = false;
-
-	convar = FindConVar( "mp_limitteams" );
-	convar.IntValue = 0;
-
-	convar = FindConVar( "bot_zombie" );
-	convar.BoolValue = true;
-
-	convar = FindConVar( "sv_clamp_unsafe_velocities" );
-	convar.BoolValue = false;
-
-	convar = FindConVar( "mp_maxrounds" );
-	convar.IntValue = 0;
-
-	convar = FindConVar( "mp_timelimit" );
-	convar.IntValue = 9999;
-
-	convar = FindConVar( "mp_roundtime" );
-	convar.IntValue = 60;
-
-	convar = FindConVar( "mp_freezetime" );
-	convar.IntValue = 0;
-
-	convar = FindConVar( "mp_ignore_round_win_conditions" );
-	convar.BoolValue = false;
-
-	convar = FindConVar( "mp_match_end_changelevel" );
-	convar.BoolValue = true;
-
-	convar = FindConVar( "sv_accelerate_use_weapon_speed" );
-	convar.BoolValue = false;
-
-	convar = FindConVar( "mp_free_armor" );
-	convar.BoolValue = true;
-
-	convar = FindConVar( "sv_full_alltalk" );
-	convar.IntValue = 1;
-
-	convar = FindConVar( "sv_alltalk" );
-	convar.BoolValue = true;
-
-	convar = FindConVar( "sv_talk_enemy_dead" );
-	convar.BoolValue = true;
-
-	convar = FindConVar( "sv_friction" );
-	convar.FloatValue = 4.0;
-
-	convar = FindConVar( "sv_accelerate" );
-	convar.FloatValue - 5.0;
-	
-	convar = FindConVar( "sv_airaccelerate" );
-	convar.FloatValue = 1000.0;
+	FindConVar( "bot_quota_mode" ).SetString( "normal" );
+	FindConVar( "bot_join_after_player" ).BoolValue = false;
+	FindConVar( "mp_autoteambalance" ).BoolValue = false;
+	FindConVar( "mp_limitteams" ).IntValue = 0;
+	FindConVar( "bot_zombie" ).BoolValue = true;
+	FindConVar( "sv_clamp_unsafe_velocities" ).BoolValue = false;
+	FindConVar( "mp_maxrounds" ).IntValue = 0;
+	FindConVar( "mp_timelimit" ).IntValue = 9999;
+	FindConVar( "mp_roundtime" ).IntValue = 60;
+	FindConVar( "mp_freezetime" ).IntValue = 0;
+	FindConVar( "mp_ignore_round_win_conditions" ).BoolValue = false;
+	FindConVar( "mp_match_end_changelevel" ).BoolValue = true;
+	FindConVar( "sv_accelerate_use_weapon_speed" ).BoolValue = false;
+	FindConVar( "mp_free_armor" ).BoolValue = true;
+	FindConVar( "sv_full_alltalk" ).IntValue = 1;
+	FindConVar( "sv_alltalk" ).BoolValue = true;
+	FindConVar( "sv_talk_enemy_dead" ).BoolValue = true;
+	FindConVar( "sv_friction" ).FloatValue = 4.0;
+	FindConVar( "sv_accelerate" ).FloatValue = 5.0;
+	FindConVar( "sv_airaccelerate" ).FloatValue = 1000.0;
 }
