@@ -109,7 +109,7 @@ public void OnAllPluginsLoaded()
 
 public void OnLibraryAdded( const char[] name )
 {
-	if( StrEqual( "timer-replays" ) )
+	if( StrEqual( name, "timer-replays" ) )
 	{
 		g_bReplays = true;
 	}
@@ -117,7 +117,7 @@ public void OnLibraryAdded( const char[] name )
 
 public void OnLibraryRemoved( const char[] name )
 {
-	if( StrEqual( "timer-replays" ) )
+	if( StrEqual( name, "timer-replays" ) )
 	{
 		g_bReplays = false;
 	}
