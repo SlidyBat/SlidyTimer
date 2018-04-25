@@ -30,17 +30,18 @@ char			g_cCurrentMap[PLATFORM_MAX_PATH];
 bool			g_bZoning[MAXPLAYERS + 1];
 int			g_iZoningStage[MAXPLAYERS + 1];
 int			g_iCurrentSelectedTrack[MAXPLAYERS + 1];
-float		g_fZonePointCache[MAXPLAYERS + 1][2][3];
+float			g_fZonePointCache[MAXPLAYERS + 1][2][3];
 
 bool			g_bSnapToWall[MAXPLAYERS + 1] = { true, ... };
-bool			g_bZoneEyeAngle[MAXPLAYERS + 1];
+bool			g_bSnapToGrid[MAXPLAYERS + 1] = { true, ... };
+bool			g_bZoneEyeAngle[MAXPLAYERS + 1] = { true, ... };
 
 int        	g_nZoningPlayers;
 
 int			g_Sprites[TOTAL_SPRITES];
 
-ArrayList	g_aZones;
-ArrayList	g_aZoneSpawnCache;
+ArrayList		g_aZones;
+ArrayList		g_aZoneSpawnCache;
 
 int			g_PlayerCurrentZoneType[MAXPLAYERS + 1];
 int			g_PlayerCurrentZoneTrack[MAXPLAYERS + 1];
@@ -138,8 +139,9 @@ public void OnMapEnd()
 public void OnClientDisconnnect( int client )
 {
 	StopZoning( client );
+	g_bSnapToGrid[client] = true;
 	g_bSnapToWall[client] = true;
-	g_bZoneEyeAngle[client] = false;
+	g_bZoneEyeAngle[client] = true;
 }
 
 void StartZoning( int client )
@@ -337,6 +339,8 @@ void OpenCreateZoneMenu( int client )
 		Format( buffer, sizeof( buffer ), "Set point %i\n \n", g_iZoningStage[client] + 1 );
 		menu.AddItem( "select", buffer );
 		
+		Format( buffer, sizeof( buffer ), "Snap To Grid: %s", g_bSnapToGrid[client] ? "Enabled" : "Disabled" );
+		menu.AddItem( "gridsnap", buffer );
 		Format( buffer, sizeof( buffer ), "Snap To Wall: %s", g_bSnapToWall[client] ? "Enabled" : "Disabled" );
 		menu.AddItem( "wallsnap", buffer );
 		Format( buffer, sizeof( buffer ), "Zone Point: %s", g_bZoneEyeAngle[client] ? "Eye Angles" : "Position" );
@@ -381,9 +385,13 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 				}
 				case 1:
 				{
-					g_bSnapToWall[param1] = !g_bSnapToWall[param1];
+					g_bSnapToGrid[param1] = !g_bSnapToGrid[param1];
 				}
 				case 2:
+				{
+					g_bSnapToWall[param1] = !g_bSnapToWall[param1];
+				}
+				case 3:
 				{
 					g_bZoneEyeAngle[param1] = !g_bZoneEyeAngle[param1];
 				}
@@ -441,10 +449,9 @@ void GetZoningPoint( int client, float pos[3] )
 		GetClientAbsOrigin( client, pos );
 	}
 
-	SnapToGrid( pos, 1.0 ); // SNAPS TO GRID, MIGHT MAKE SETTING LATER
+	SnapToGrid( pos, g_bSnapToGrid[client] ? 16.0 : 1.0 );
 	
 	// TODO: maybe implement zone to edge
-
 	if( g_bSnapToWall[client] )
 	{
 		GetWallSnapPosition( client, pos );
@@ -820,7 +827,7 @@ public Action Timer_DrawZones( Handle timer, any data )
 					float pos[3];
 					GetZoningPoint( i, pos );
 
-					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 0.1, 100 );
+					TE_SetupGlowSprite( pos, g_Sprites[GlowSprite], 0.1, 0.5, 800 );
 					TE_SendToClient( i );
 				}
 				else if( g_iZoningStage[i] == 1 )
