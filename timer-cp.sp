@@ -112,6 +112,7 @@ public void LoadCheckpoint( int client, int index )
 	}
 	
 	Timer_StopTimer( client );
+	Timer_BlockTimer( client, 1 );
 	
 	any cp[Checkpoint];
 	

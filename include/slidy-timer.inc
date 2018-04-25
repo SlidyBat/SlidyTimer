@@ -570,6 +570,17 @@ native bool Timer_IsTimerRunning( int client );
 native void Timer_StopTimer( int client );
 
 /**
+ * Blocks client timer from starting for specified number of ticks
+ * Useful for stopping timer exploits/abuse
+ *
+ * @param client					Client index.
+ * @param ticks						Number of ticks to block timer start for
+ *
+ * @noreturn
+ */
+native void Timer_BlockTimer( int client, int ticks );
+
+/**
  * Stops client timer
  *
  * @param client					Client index.
@@ -645,6 +656,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_IsClientLoaded" );
 	MarkNativeAsOptional( "Timer_IsTimerRunning" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
+	MarkNativeAsOptional( "Timer_BlockTimer" );
 	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 }
 #endif

@@ -59,6 +59,9 @@ int			g_nPlayerAirStrafeFrames[MAXPLAYERS + 1];
 
 bool			g_bNoclip[MAXPLAYERS + 1];
 
+int			g_iClientBlockTickStart[MAXPLAYERS + 1];
+int			g_nClientBlockTicks[MAXPLAYERS + 1];
+
 ConVar		sv_autobunnyhopping;
 
 public void OnPluginStart()
@@ -127,6 +130,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_IsClientLoaded", Native_IsClientLoaded );
 	CreateNative( "Timer_IsTimerRunning", Native_IsTimerRunning );
 	CreateNative( "Timer_StopTimer", Native_StopTimer );
+	CreateNative( "Timer_BlockTimer", Native_BlockTimer );
 
 	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
 	RegPluginLibrary( "timer-core" );
@@ -172,6 +176,9 @@ public void OnClientAuthorized( int client, const char[] auth )
 public void OnClientDisconnect( int client )
 {
 	g_iPlayerId[client] = -1;
+	
+	g_iClientBlockTickStart[client] = 0;
+	g_nClientBlockTicks[client] = 0;
 }
 
 public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
@@ -656,6 +663,11 @@ public void Timer_OnExitZone( int client, int id, int zoneType, int zoneTrack, i
 	{
 		case Zone_Start:
 		{
+			if( GetGameTickCount() - g_iClientBlockTickStart[client] <= g_nClientBlockTicks[client] ) // anti abuse system
+			{
+				return;
+			}
+			
 			StartTimer( client );
 			
 			if( !( GetEntityFlags( client ) & FL_ONGROUND ) )
@@ -1529,4 +1541,12 @@ public int Native_IsTimerRunning( Handle handler, int numParams )
 public int Native_StopTimer( Handle handler, int numParams )
 {
 	StopTimer( GetNativeCell( 1 ) );
+}
+
+public int Native_BlockTimer( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+
+	g_iClientBlockTickStart[client] = GetGameTickCount();
+	g_nClientBlockTicks[client] = GetNativeCell( 2 );
 }
