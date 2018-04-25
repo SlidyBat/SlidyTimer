@@ -7,6 +7,8 @@
 
 #define AUTO_SELECT_CP -1
 
+#define DEFAULT_CP_SETTINGS ( (1 << 0) | (1 << 1) | (1 << 2) )
+
 typedef CPSelectCallback = function void ( int client, int cpindex );
 
 enum Checkpoint
@@ -26,15 +28,15 @@ enum Checkpoint
 	Float:CP_DuckSpeed
 }
 
-ArrayList			g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
+ArrayList				g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
 int					g_iSelectedCheckpoint[MAXPLAYERS + 1];
 CPSelectCallback	g_CPSelectCallback[MAXPLAYERS + 1];
 
-int					g_iCPSettings[MAXPLAYERS + 1];
+int					g_iCPSettings[MAXPLAYERS + 1] = { DEFAULT_CP_SETTINGS, ... };
 
 enum (<<= 1)
 {
-	CPSettings_UsePos,
+	CPSettings_UsePos = 1,
 	CPSettings_UseAng,
 	CPSettings_UseVel,
 }
@@ -59,7 +61,7 @@ public void OnPluginStart()
 {
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		g_aCheckpoints[i] = new ArrayList( ByteCountToCells( view_as<int>(Checkpoint) ) );
+		g_aCheckpoints[i] = new ArrayList( view_as<int>(Checkpoint) );
 	}
 	
 	RegConsoleCmd( "sm_cp", Command_OpenCheckpointMenu, "Opens checkpoint menu" );
@@ -127,7 +129,6 @@ public void LoadCheckpoint( int client, int index )
 					(g_iCPSettings[client] & CPSettings_UseVel) ? vel : NULL_VECTOR );
 	
 	SetEntityBaseVelocity( client, basevel );
-	
 	SetEntityGravity( client, cp[CP_Gravity] );
 	SetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue", cp[CP_LaggedMovement] );
 	SetEntityTargetname( client, cp[CP_Targetname] );
@@ -198,11 +199,11 @@ void OpenCPMenu( int client )
 	Format( buffer, sizeof(buffer), "%s    >CP: %s\n \n", buffer, ( g_aCheckpoints[client].Length ) ? cpcounter : "N/A" );
 	menu.AddItem( "tele", buffer, g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
 	
-	menu.AddItem( "previous", "Previous\n", ( g_iSelectedCheckpoint[client] == 0 ) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
-	menu.AddItem( "next", "Next\n \n", ( g_iSelectedCheckpoint[client] == g_aCheckpoints[client].Length - 1 ) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
+	menu.AddItem( "previous", "Previous\n", ( g_aCheckpoints[client].Length && g_iSelectedCheckpoint[client] != 0 ) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
+	menu.AddItem( "next", "Next\n \n", ( g_aCheckpoints[client].Length && g_iSelectedCheckpoint[client] != g_aCheckpoints[client].Length - 1 ) ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
 
 	menu.AddItem( "select", "Select checkpoints", g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
-	menu.AddItem( "delete", "Delete checkpoints\n", g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
+	menu.AddItem( "delete", "Delete checkpoints", g_aCheckpoints[client].Length ? ITEMDRAW_DEFAULT : ITEMDRAW_DISABLED );
 
 	menu.AddItem( "settings", "Settings" );
 
@@ -303,7 +304,7 @@ public int CPSelect_Handler( Menu menu, MenuAction action, int param1, int param
 		Call_PushCell( param2 );
 		Call_Finish();
 		
-		OpenCPMenu( param1 );
+		OpenSelectCPMenu( param1, g_CPSelectCallback[param1] );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -321,14 +322,21 @@ void OpenCPSettingsMenu( int client )
 	{
 		char buffer[64];
 		Format( buffer, sizeof(buffer), "%s: %s", g_cCPSettingNames[i], ( g_iCPSettings[client] & (1 << i) ) ? "Enabled" : "Disabled" );
+		menu.AddItem( "cpsetting", buffer );
 	}
+	
+	menu.ExitBackButton = true;
 	
 	menu.Display( client, MENU_TIME_FOREVER );
 }
 
 public int CPSettings_Handler( Menu menu, MenuAction action, int param1, int param2 )
 {
-	if( action == MenuAction_Select )
+	if( action == MenuAction_Cancel && param2 == MenuCancel_ExitBack )
+	{
+		OpenCPMenu( param1 );
+	}
+	else if( action == MenuAction_Select )
 	{
 		g_iCPSettings[param1] ^= (1 << param2);
 		OpenCPSettingsMenu( param1 );
