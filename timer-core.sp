@@ -341,7 +341,7 @@ void ClearPlayerData( int client )
 
 void StartTimer( int client )
 {
-	if( g_bNoclip[client] )
+	if( g_bNoclip[client] || Timer_GetClientZoneType( client ) == Zone_End )
 	{
 		return;
 	}
@@ -485,7 +485,7 @@ stock int GetRankForTime( float time, int track, int style )
 		float maptime = g_aMapTopTimes[track][style].Get( i );
 		if( time < maptime )
 		{
-			return ++i;
+			return i + 1;
 		}
 	}
 	
@@ -631,7 +631,7 @@ public void Timer_OnEnterZone( int client, int id, int zoneType, int zoneTrack, 
 		}
 		case Zone_End:
 		{
-			if( g_bTimerRunning[client] && !g_bTimerPaused[client] && Timer_GetClientZoneTrack( client ) == zoneTrack )
+			if( g_bTimerRunning[client] && !g_bTimerPaused[client] && Timer_GetClientZoneTrack( client ) == zoneTrack && Timer_GetClientZoneType( client ) != Zone_None )
 			{
 				FinishTimer( client );
 			}
@@ -1424,7 +1424,7 @@ public int Native_GetClientCurrentSync( Handle handler, int numparams )
 		return 0;
 	}
 	
-	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 ) ? 100.0 : ( g_nPlayerSyncedFrames[client] * 100.0 ) / g_nPlayerAirStrafeFrames[client] );
+	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 || g_nPlayerSyncedFrames[client] == 0 ) ? 100.0 : ( g_nPlayerSyncedFrames[client] * 100.0 ) / g_nPlayerAirStrafeFrames[client] );
 }
 
 public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
@@ -1435,7 +1435,7 @@ public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
 		return 0;
 	}
 	
-	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 ) ? 0.0 : ( g_nPlayerAirStrafeFrames[client] * 100.0 ) / g_nPlayerAirFrames[client] );
+	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 || g_nPlayerAirStrafeFrames[client] == 0 ) ? 0.0 : ( g_nPlayerAirStrafeFrames[client] * 100.0 ) / g_nPlayerAirFrames[client] );
 }
 
 public int Native_GetWRTime( Handle handler, int numparams )
