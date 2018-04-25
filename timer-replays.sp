@@ -868,7 +868,7 @@ public Action Timer_EndBotDelayed( Handle timer, int userid )
 
 public void OnMultireplayBotsChanged( ConVar convar, const char[] oldValue, const char[] newValue )
 {
-	if( g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue; )
+	if( g_nExpectedMultireplayBots != g_cvMultireplayBots.IntValue )
 	{
 		g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
 	}
@@ -878,6 +878,6 @@ public void OnBotQuotaChanged( ConVar convar, const char[] oldValue, const char[
 {
 	if( bot_quota.IntValue != g_nExpectedMultireplayBots + g_nExpectedStyleBots )
 	{
-		bot_quota.IntValue = g_nExpectedMultireplayBots + g_nExpectedStyleBots
+		bot_quota.IntValue = g_nExpectedMultireplayBots + g_nExpectedStyleBots;
 	}
 }
