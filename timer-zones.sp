@@ -57,6 +57,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-zones" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	g_aZones = new ArrayList( ZONE_DATA ); // arraylist that holds all current map zone data

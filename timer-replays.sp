@@ -88,6 +88,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-replays" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	bot_quota = FindConVar( "bot_quota" );

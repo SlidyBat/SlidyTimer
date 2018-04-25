@@ -16,6 +16,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-misc" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	g_cvCreateSpawnPoints = CreateConVar( "sm_create_spawnpoints", "10", "Number of spawn points to create", _, true, 0.0, true, 2048.0 );

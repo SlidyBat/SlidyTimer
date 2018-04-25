@@ -57,6 +57,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-cp" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	for( int i = 1; i <= MaxClients; i++ )

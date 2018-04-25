@@ -63,6 +63,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-hud" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	g_hSelectedHudCookie = RegClientCookie( "Timer_HUD_Preset", "Selected HUD preset for Slidy's Timer", CookieAccess_Protected );
