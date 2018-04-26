@@ -31,6 +31,8 @@ enum
 	TOTAL_HUD_ITEMS
 }
 
+bool g_bReplays; // if replays module is loaded
+
 Handle g_hHudSynchronizer;
 
 int		g_RainbowColour[3];
@@ -63,8 +65,17 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-hud" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
+	g_bReplays = LibraryExists( "timer-replays" );
+
 	g_hSelectedHudCookie = RegClientCookie( "Timer_HUD_Preset", "Selected HUD preset for Slidy's Timer", CookieAccess_Protected );
 	g_hHudSettingsCookie = RegClientCookie( "Timer_HUD_Settings", "Selected HUD settings for Slidy's Timer", CookieAccess_Protected );
 	
@@ -89,6 +100,27 @@ public void OnPluginStart()
 	AddHudElement( "pbtime", GetPBTimeString );
 	AddHudElement( "style", GetStyleString );
 	AddHudElement( "rainbow", GetRainbowString );
+}
+
+public void OnAllPluginsLoaded()
+{
+	g_bReplays = LibraryExists( "timer-replays" );
+}
+
+public void OnLibraryAdded( const char[] name )
+{
+	if( StrEqual( name, "timer-replays" ) )
+	{
+		g_bReplays = true;
+	}
+}
+
+public void OnLibraryRemoved( const char[] name )
+{
+	if( StrEqual( name, "timer-replays" ) )
+	{
+		g_bReplays = false;
+	}
 }
 
 stock void AddHudElement( const char[] element, HUDElementCB cb )
@@ -147,7 +179,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	
 	if( target != client )
 	{
-		if( IsFakeClient( target ) ) // draw replay bot hud
+		if( g_bReplays && IsFakeClient( target ) ) // draw replay bot hud
 		{
 			int speed = RoundFloat( GetClientSpeed( target ) );
 			PrintHintText( client, "Speed: %i", speed );
@@ -433,7 +465,7 @@ void DrawSpecList( int client )
 			}
 		}
 		
-		SetHudTextParams( 0.9, 0.3, 0.1, 255, 255, 255, 255 );
+		SetHudTextParams( 0.7, 0.3, 0.1, 255, 255, 255, 255 );
 		ShowSyncHudText( client, g_hHudSynchronizer, buffer );
 	}
 }

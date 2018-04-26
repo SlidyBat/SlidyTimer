@@ -88,6 +88,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-replays" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	bot_quota = FindConVar( "bot_quota" );
@@ -268,6 +275,8 @@ public void OnClientDisconnect( int client )
 			return;
 		}
 	}
+	
+	g_iBotType[client] = ReplayBot_None;
 }
 
 public Action Timer_OnTimerStart( int client )
@@ -423,6 +432,19 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 	
 	if( !IsFakeClient( client ) )
 	{
+		if( IsClientObserver( client ) )
+		{
+			int target = GetClientObserverTarget( client );
+			if( !( 0 < target <= MaxClients ) )
+			{
+				return;
+			}
+			
+			if( g_iBotType[target] != ReplayBot_None && (GetEntProp( client, Prop_Data, "m_afButtonPressed" ) & IN_USE) )
+			{
+				OpenReplayMenu( client, ZoneTrack_Main, 0 );
+			}
+		}
 		if( Timer_IsTimerRunning( client ) )
 		{
 			// its a player, save frame data

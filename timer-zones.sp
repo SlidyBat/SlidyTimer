@@ -57,6 +57,13 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	RegPluginLibrary( "timer-zones" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	g_aZones = new ArrayList( ZONE_DATA ); // arraylist that holds all current map zone data
@@ -149,6 +156,27 @@ public void OnClientDisconnnect( int client )
 	g_PlayerCurrentZoneType[client] = Zone_None;
 	g_PlayerCurrentZoneTrack[client] = ZoneTrack_None;
 	g_PlayerCurrentZoneSubIndex[client] = 0;
+}
+
+public Action OnPlayerRunCmd( int client )
+{
+	if( g_iZoningStage[client] == 0 || g_iZoningStage[client] == 1 )
+	{
+		if( GetEntProp( client, Prop_Data, "m_afButtonPressed" ) & IN_USE )
+		{
+			Timer_StopTimer( client );
+			GetZoningPoint( client, g_fZonePointCache[client][g_iZoningStage[client]] );
+	
+			if( g_iZoningStage[client] == 1 )
+			{
+				g_fZonePointCache[client][1][2] += 150.0;
+			}
+			
+			g_iZoningStage[client]++;
+			
+			OpenCreateZoneMenu( param1 );
+		}
+	}
 }
 
 void StartZoning( int client )
