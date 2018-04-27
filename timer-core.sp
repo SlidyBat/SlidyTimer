@@ -135,7 +135,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	RegPluginLibrary( "timer-core" );
 	
 	sv_autobunnyhopping = FindConVar( "sv_autobunnyhopping" );
-	sv_autobunnyhopping.BoolValue = false;
+	//sv_autobunnyhopping.BoolValue = false; old 1 not sure if this is needed since 0 is the default value
+	SetConVarBool(sv_autobunnyhopping, false);
 
 	return APLRes_Success;
 }
@@ -170,6 +171,8 @@ public void OnClientAuthorized( int client, const char[] auth )
 	}
 	
 	StopTimer( client );
+	//should we always start with auto ?
+	SendConVarValue(client, sv_autobunnyhopping, "1");
 }
 
 public void OnClientDisconnect( int client )
