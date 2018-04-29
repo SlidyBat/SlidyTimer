@@ -29,7 +29,7 @@ Database		g_hDatabase;
 char			g_cCurrentMap[PLATFORM_MAX_PATH];
 
 bool			g_bZoning[MAXPLAYERS + 1];
-int			g_iZoningStage[MAXPLAYERS + 1];
+int			g_iZoningStage[MAXPLAYERS + 1] = { -1, ... };
 int			g_iCurrentSelectedTrack[MAXPLAYERS + 1];
 float			g_fZonePointCache[MAXPLAYERS + 1][2][3];
 
@@ -57,10 +57,17 @@ public Plugin myinfo =
 	url = ""
 }
 
-public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
-	RegPluginLibrary( "timer-zones" );
-	
+	// zone natives
+	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
+	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
+	CreateNative( "Timer_TeleportClientToZone", Native_TeleportClientToZone );
+	CreateNative( "Timer_IsClientInsideZone", Native_IsClientInsideZone );
+
+	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
+	RegPluginLibrary("timer-zones");
+
 	return APLRes_Success;
 }
 
@@ -74,13 +81,16 @@ public void OnPluginStart()
 	// Commands
 	RegAdminCmd( "sm_zone", Command_Zone, ADMFLAG_CHANGEMAP );
 	RegAdminCmd( "sm_zones", Command_Zone, ADMFLAG_CHANGEMAP );
-	RegConsoleCmd( "sm_test", Command_Test );
 	
 	RegConsoleCmd( "sm_r", Command_Restart );
 	RegConsoleCmd( "sm_restart", Command_Restart );
 	RegConsoleCmd( "sm_start", Command_Restart );
 	RegConsoleCmd( "sm_b", Command_Bonus );
 	RegConsoleCmd( "sm_bonus", Command_Bonus );
+	RegConsoleCmd( "sm_end", Command_End );
+	RegConsoleCmd( "sm_bonusend", Command_BonusEnd );
+	RegConsoleCmd( "sm_bend", Command_BonusEnd );
+	RegConsoleCmd( "sm_endb", Command_BonusEnd );
 	
 	AddCommandListener( Command_JoinTeam, "jointeam" );
 	
@@ -96,20 +106,6 @@ public void OnPluginStart()
 		g_hDatabase = Timer_GetDatabase();
 		SetSQLInfo();
 	}
-}
-
-public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
-{
-	// zone natives
-	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
-	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
-	CreateNative( "Timer_TeleportClientToZone", Native_TeleportClientToZone );
-	CreateNative( "Timer_IsClientInsideZone", Native_IsClientInsideZone );
-
-	// registers library, check "bool LibraryExists(const char[] name)" in order to use with other plugins
-	RegPluginLibrary("timer-zones");
-
-	return APLRes_Success;
 }
 
 public void OnLibraryAdded( const char[] name )
@@ -160,7 +156,7 @@ public void OnClientDisconnnect( int client )
 
 public Action OnPlayerRunCmd( int client )
 {
-	if( g_iZoningStage[client] == 0 || g_iZoningStage[client] == 1 )
+	if( g_bZoning[client] && (g_iZoningStage[client] == 0 || g_iZoningStage[client] == 1) )
 	{
 		if( GetEntProp( client, Prop_Data, "m_afButtonPressed" ) & IN_USE )
 		{
@@ -174,7 +170,7 @@ public Action OnPlayerRunCmd( int client )
 			
 			g_iZoningStage[client]++;
 			
-			OpenCreateZoneMenu( param1 );
+			OpenCreateZoneMenu( client );
 		}
 	}
 }
@@ -194,6 +190,7 @@ void StartZoning( int client )
 void StopZoning( int client )
 {
 	g_bZoning[client] = false;
+	g_iZoningStage[client] = -1;
 	g_nZoningPlayers--;
 }
 
@@ -356,6 +353,13 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 	g_PlayerCurrentZoneType[client] = zoneType;
 	g_PlayerCurrentZoneTrack[client] = zoneTrack;
 	g_PlayerCurrentZoneSubIndex[client] = subindex;
+	
+	DataPack pack = new DataPack();
+	pack.WriteCell( client );
+	pack.WriteCell( zoneType );
+	pack.WriteCell( zoneTrack );
+	pack.WriteCell( subindex );
+	RequestFrame( DelaySetZone, pack );
 	
 	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
 }
@@ -818,6 +822,12 @@ bool IsClientInsideZone( int client, int type, int track, int subindex = 0 )
 
 public Action Command_Zone( int client, int args ) // TODO: determine if players should be permitted to zone before zones have been loaded
 {
+	if( !g_bLoaded )
+	{
+		ReplyToCommand( client, "[Timer] Zones have not been loaded yet ..." );
+		return Plugin_Handled;
+	}
+
 	OpenZonesMenu( client );
 	
 	return Plugin_Handled;
@@ -829,6 +839,8 @@ public Action Command_Restart( int client, int args )
 	{
 		ChangeClientTeam( client, CS_TEAM_T );
 	}
+	
+	Timer_BlockTimer( client, 1 );
 	TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	
 	return Plugin_Handled;
@@ -840,7 +852,35 @@ public Action Command_Bonus( int client, int args )
 	{
 		ChangeClientTeam( client, CS_TEAM_T );
 	}
+	
+	Timer_BlockTimer( client, 1 );
 	TeleportClientToZone( client, Zone_Start, ZoneTrack_Bonus );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_End( int client, int args )
+{
+	if( !IsPlayerAlive( client ) )
+	{
+		ChangeClientTeam( client, CS_TEAM_T );
+	}
+	
+	Timer_BlockTimer( client, 1 );
+	TeleportClientToZone( client, Zone_End, ZoneTrack_Main );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_BonusEnd( int client, int args )
+{
+	if( !IsPlayerAlive( client ) )
+	{
+		ChangeClientTeam( client, CS_TEAM_T );
+	}
+	
+	Timer_BlockTimer( client, 1 );
+	TeleportClientToZone( client, Zone_End, ZoneTrack_Bonus );
 	
 	return Plugin_Handled;
 }
@@ -860,14 +900,6 @@ public Action Command_JoinTeam( int client, const char[] command, int args )
 
 	return Plugin_Handled;
 }
-
-public Action Command_Test( int client, int args ) // TODO: determine if players should be permitted to zone before zones have been loaded
-{
-	PrintZones();
-	
-	return Plugin_Handled;
-}
-
 
 /* Timers */
 
@@ -1191,18 +1223,17 @@ public bool TraceRay_NoClient( int entity, int contentsMask, any data )
 	return ( entity != data && !( 0 < entity <= MaxClients ) );
 }
 
-stock void PrintZones()
+public void DelaySetZone( DataPack pack )
 {
-	for( int i = 0; i < g_aZones.Length; i++ )
-	{
-		any zone[ZONE_DATA];
-		g_aZones.GetArray( i, zone );
-		
-		for( int j = 0; j < ZONE_DATA; j++ )
-		{
-			char buffer[512];
-			Format( buffer, sizeof( buffer ), "%i", zone[j] );
-			PrintToServer( buffer );
-		}
-	}
+	RequestFrame( SetZone, pack );
+}
+
+public void SetZone( DataPack pack )
+{
+	pack.Reset();
+	int client = pack.ReadCell();
+	g_PlayerCurrentZoneType[client] = pack.ReadCell();
+	g_PlayerCurrentZoneTrack[client] = pack.ReadCell();
+	g_PlayerCurrentZoneSubIndex[client] = pack.ReadCell();
+	delete pack;
 }
