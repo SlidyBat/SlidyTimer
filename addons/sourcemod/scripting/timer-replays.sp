@@ -91,6 +91,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 {
 	CreateNative( "Timer_GetReplayBotCurrentFrame", Native_GetReplayBotCurrentFrame );
 	CreateNative( "Timer_GetReplayBotTotalFrames", Native_GetReplayBotTotalFrames );
+	CreateNative( "Timer_GetReplayBotPlayerName", Native_GetReplayBotPlayerName );
 
 	RegPluginLibrary( "timer-replays" );
 	
@@ -921,6 +922,22 @@ public int Native_GetReplayBotTotalFrames( Handle handler, int numParams )
 	}
 	
 	return g_aPlayerFrameData[client].Length;
+}
+
+public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	if( g_iBotType[client] == ReplayBot_None || g_aPlayerFrameData[client] == null )
+	{
+		return 0;
+	}
+	
+	int botid = g_iBotId[client];
+	int track = (g_iBotType[client] == ReplayBot_Style) ? g_StyleBotReplayingTrack[botid] : g_MultireplayCurrentlyReplayingTrack[botid];
+	int style = (g_iBotType[client] == ReplayBot_Style) ? g_StyleBotReplayingStyle[botid] : g_MultireplayCurrentlyReplayingStyle[botid];
+
+	SetNativeString( 2, g_cReplayRecordNames[track][style], GetNativeCell( 3 ) );
+	return 1;
 }
 
 public Action Timer_StartBotDelayed( Handle timer, int userid )

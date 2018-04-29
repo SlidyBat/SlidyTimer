@@ -31,6 +31,14 @@ enum
 	TOTAL_HUD_ITEMS
 }
 
+enum
+{
+	HudType_StartZone,
+	HudType_Timing,
+	HudType_ReplayBot,
+	TOTAL_HUD_TYPES
+}
+
 bool g_bReplays; // if replays module is loaded
 
 Handle g_hHudSynchronizer;
@@ -45,8 +53,7 @@ int		g_iSelectedHud[MAXPLAYERS + 1];
 Handle	g_hHudSettingsCookie;
 int		g_iHudSettings[MAXPLAYERS + 1];
 
-char		g_cHudCache[TOTAL_HUDS][256];
-bool		g_bHudItems[TOTAL_HUDS][TOTAL_HUD_ITEMS];
+char		g_cHudCache[TOTAL_HUD_TYPES][TOTAL_HUDS][256];
 char		g_cHudNames[TOTAL_HUDS][64];
 int		g_iTotalHuds;
 
@@ -100,6 +107,9 @@ public void OnPluginStart()
 	AddHudElement( "pbtime", GetPBTimeString );
 	AddHudElement( "style", GetStyleString );
 	AddHudElement( "rainbow", GetRainbowString );
+	AddHudElement( "zonetrack", GetZoneTrackString );
+	AddHudElement( "zonetype", GetZoneTypeString );
+	AddHudElement( "replayname", GetReplayBotNameString );
 }
 
 public void OnAllPluginsLoaded()
@@ -172,21 +182,25 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 {
 	if( IsFakeClient( client ) || !( g_iHudSettings[client] & HUD_CENTRAL ) )
 	{
-		return;
+		return Plugin_Continue;
 	}
 	
 	int target = GetClientObserverTarget( client );
-	
-	if( target != client )
+	if( target == -1 )
 	{
-		if( g_bReplays && IsFakeClient( target ) ) // draw replay bot hud
-		{
-			int speed = RoundFloat( GetClientSpeed( target ) );
-			PrintHintText( client, "Speed: %i", speed );
-		}
-		return;
+		return Plugin_Continue;
 	}
-	
+
+	int hudtype;
+	if( g_bReplays && IsFakeClient( target ) ) // draw replay bot hud
+	{
+		hudtype = HudType_ReplayBot;
+	}
+	else
+	{
+		hudtype = Timer_GetClientZoneType( client ) ? HudType_StartZone : HudType_Timing;
+	}
+
 	static char hudtext[256];
 	int curHudChar = 0;
 	
@@ -194,12 +208,12 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	char element[64];
 	int curElementChar = 0;
 	
-	int len = strlen( g_cHudCache[g_iSelectedHud[client]] );
+	int len = strlen( g_cHudCache[hudtype][g_iSelectedHud[client]] );
 	for( int i = 0; i < len; i++ )
 	{
 		if( bStartedElement )
 		{
-			if( g_cHudCache[g_iSelectedHud[client]][i] == '}' )
+			if( g_cHudCache[hudtype][g_iSelectedHud[client]][i] == '}' )
 			{
 				bStartedElement = false;
 				element[curElementChar] = 0;
@@ -223,23 +237,23 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 			}
 			else
 			{
-				element[curElementChar++] = g_cHudCache[g_iSelectedHud[client]][i];
+				element[curElementChar++] = g_cHudCache[hudtype][g_iSelectedHud[client]][i];
 			}
 		}
 		else
 		{
-			if( g_cHudCache[g_iSelectedHud[client]][i] == '{' )
+			if( g_cHudCache[hudtype][g_iSelectedHud[client]][i] == '{' )
 			{
 				bStartedElement = true;
 			}
 			else
 			{
-				hudtext[curHudChar++] = g_cHudCache[g_iSelectedHud[client]][i];
+				hudtext[curHudChar++] = g_cHudCache[hudtype][g_iSelectedHud[client]][i];
 			}
 		}
 		hudtext[curHudChar] = 0;
 	
-		if( !bStartedElement && g_cHudCache[g_iSelectedHud[client]][i] == '{' )
+		if( !bStartedElement && g_cHudCache[hudtype][g_iSelectedHud[client]][i] == '{' )
 		{
 			bStartedElement = true;
 		}
@@ -258,6 +272,8 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	}
 	
 	PrintHintText( client, hudtext );
+
+	return Plugin_Continue;
 }
 
 bool LoadHuds()
@@ -276,25 +292,31 @@ bool LoadHuds()
 	
 	do
 	{
-		char sFileName[32];
 		kvHud.GetString( "name", g_cHudNames[g_iTotalHuds], sizeof(g_cHudNames[]) );
-		kvHud.GetString( "filename", sFileName, sizeof(sFileName) );
+
+		File hudFile;
+		char sFileName[32];
+
+		kvHud.GetString( "starthud_filename", sFileName, sizeof(sFileName) );
 		
 		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		File hud = OpenFile( path, "r" );
-		hud.ReadString( g_cHudCache[g_iTotalHuds], sizeof(g_cHudCache[]) );
-		hud.Close();
+		hudFile = OpenFile( path, "r" );
+		hudFile.ReadString( g_cHudCache[HudType_StartZone][g_iTotalHuds], sizeof(g_cHudCache[][]) );
+		hudFile.Close();
+
+		kvHud.GetString( "timinghud_filename", sFileName, sizeof(sFileName) );
 		
-		g_bHudItems[g_iTotalHuds][HUD_Time] =		StrContains( g_cHudCache[g_iTotalHuds], "{time}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_Jumps] =		StrContains( g_cHudCache[g_iTotalHuds], "{jumps}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_Strafes] =		StrContains( g_cHudCache[g_iTotalHuds], "{strafes}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_Sync] =		StrContains( g_cHudCache[g_iTotalHuds], "{sync}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_StrafeTime] =	StrContains( g_cHudCache[g_iTotalHuds], "{strafetime}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_WRTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{wrtime}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_PBTime] = 		StrContains( g_cHudCache[g_iTotalHuds], "{pbtime}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_Speed] =		StrContains( g_cHudCache[g_iTotalHuds], "{speed}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_Style] =		StrContains( g_cHudCache[g_iTotalHuds], "{style}" ) != -1;
-		g_bHudItems[g_iTotalHuds][HUD_Rainbow] =		StrContains( g_cHudCache[g_iTotalHuds], "{rainbow}" ) != -1;
+		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
+		hudFile = OpenFile( path, "r" );
+		hudFile.ReadString( g_cHudCache[HudType_Timing][g_iTotalHuds], sizeof(g_cHudCache[][]) );
+		hudFile.Close();
+
+		kvHud.GetString( "replayhud_filename", sFileName, sizeof(sFileName) );
+		
+		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
+		hudFile = OpenFile( path, "r" );
+		hudFile.ReadString( g_cHudCache[HudType_ReplayBot][g_iTotalHuds], sizeof(g_cHudCache[][]) );
+		hudFile.Close();
 		
 		g_iTotalHuds++;
 	} while( kvHud.GotoNextKey() );

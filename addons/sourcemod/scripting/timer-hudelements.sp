@@ -118,3 +118,18 @@ public void GetTimeString( int client, char[] output, int maxlen )
 		}
 	}
 }
+
+public void GetZoneTrackString( int client, char[] output, int maxlen )
+{
+	Timer_GetZoneTrackName( Timer_GetClientZoneTrack( client ), output, maxlen );
+}
+
+public void GetZoneTypeString( int client, char[] output, int maxlen )
+{
+	Timer_GetZoneTypeName( Timer_GetClientZoneType( client ), output, maxlen );
+}
+
+public void GetReplayBotNameString( int client, char[] output, int maxlen )
+{
+	Timer_GetReplayBotPlayerName( client, output, maxlen );
+}
