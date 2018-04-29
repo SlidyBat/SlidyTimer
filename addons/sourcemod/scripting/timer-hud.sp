@@ -198,7 +198,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	}
 	else
 	{
-		hudtype = Timer_GetClientZoneType( client ) ? HudType_StartZone : HudType_Timing;
+		hudtype = (Timer_GetClientZoneType( client ) == Zone_Start) ? HudType_StartZone : HudType_Timing;
 	}
 
 	static char hudtext[256];
