@@ -33,6 +33,7 @@ int					g_iSelectedCheckpoint[MAXPLAYERS + 1];
 CPSelectCallback	g_CPSelectCallback[MAXPLAYERS + 1];
 
 int					g_iCPSettings[MAXPLAYERS + 1] = { DEFAULT_CP_SETTINGS, ... };
+bool					g_bCPMenuOpen[MAXPLAYERS + 1];
 
 enum (<<= 1)
 {
@@ -115,6 +116,11 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
+	
+	if( g_bCPMenuOpen[client] )
+	{
+		OpenCPMenu( client );
+	}
 }
 
 public void LoadCheckpoint( int client, int index )
@@ -152,6 +158,11 @@ public void LoadCheckpoint( int client, int index )
 	SetEntProp( client, Prop_Send, "m_bDucking", cp[CP_Ducking] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
+	
+	if( g_bCPMenuOpen[client] )
+	{
+		OpenCPMenu( client );
+	}
 }
 
 public void DeleteCheckpoint( int client, int index )
@@ -174,6 +185,11 @@ void NextCheckpoint( int client )
 	{
 		g_iSelectedCheckpoint[client]++;
 		LoadCheckpoint( client, AUTO_SELECT_CP );
+		
+		if( g_bCPMenuOpen[client] )
+		{
+			OpenCPMenu( client );
+		}
 	}
 }
 
@@ -187,6 +203,11 @@ void PreviousCheckpoint( int client )
 	{
 		g_iSelectedCheckpoint[client]--;
 		LoadCheckpoint( client, AUTO_SELECT_CP );
+		
+		if( g_bCPMenuOpen[client] )
+		{
+			OpenCPMenu( client );
+		}
 	}
 }
 
@@ -222,6 +243,8 @@ void OpenCPMenu( int client )
 	menu.AddItem( "settings", "Settings" );
 
 	menu.Display( client, MENU_TIME_FOREVER );
+	
+	g_bCPMenuOpen[client] = true;
 }
 
 public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
@@ -238,7 +261,14 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 		}
 		else if( StrEqual( sInfo, "tele" ) )
 		{
-			LoadCheckpoint( param1, AUTO_SELECT_CP );
+			if( !g_aCheckpoints[param1].Length )
+			{
+				PrintToChat( param1, "[Timer] No checkpoints found" );
+			}
+			else
+			{
+				LoadCheckpoint( param1, AUTO_SELECT_CP );
+			}
 			OpenCPMenu( param1 );
 		}
 		else if( StrEqual( sInfo, "previous" ) )
@@ -280,6 +310,7 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 	}
 	else if( action == MenuAction_End )
 	{
+		g_bCPMenuOpen[param1] = false;
 		delete menu;
 	}
 }
