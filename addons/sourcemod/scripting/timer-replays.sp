@@ -421,12 +421,7 @@ void InitializeBot( int client, int replaytype, int botid )
 }
 
 public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
-{
-	if( !IsClientInGame( client ) || !IsPlayerAlive( client ) )
-	{
-		return;
-	}
-	
+{	
 	any frameData[FrameData];
 	float pos[3];
 	
@@ -461,7 +456,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			g_iCurrentFrame[client]++;
 		}
 	}
-	else
+	else if( IsPlayerAlive( client ) ) // only alive bots
 	{
 		vel[0] = 0.0;
 		vel[1] = 0.0;
