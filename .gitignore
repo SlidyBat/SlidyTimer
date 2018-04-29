@@ -5,3 +5,4 @@
 /addons/sourcemod/scripting/compile.exe
 /addons/sourcemod/scripting/compile.dat
 .vscode/settings.json
+.vscode/tasks.json
