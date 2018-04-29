@@ -81,40 +81,29 @@ public void GetRainbowString( int client, char[] output, int maxlen )
 
 public void GetTimeString( int client, char[] output, int maxlen )
 {
-	int type = Timer_GetClientZoneType( client );
+	TimerStatus ts = Timer_GetClientTimerStatus( client );
 	
-	if( type == Zone_Start )
+	switch( ts )
 	{
-		int track = Timer_GetClientZoneTrack( client );
-		Timer_GetZoneTrackName( track, output, maxlen );
-		FormatEx( output, maxlen, "%s Start Zone%s", output, (track == ZoneTrack_Main) ? "\t" : "" );
-	}
-	else
-	{
-		TimerStatus ts = Timer_GetClientTimerStatus( client );
-		
-		switch( ts )
+		case TimerStatus_Stopped:
 		{
-			case TimerStatus_Stopped:
-			{
-				FormatEx( output, maxlen, "Time: <font color='#DB1A40'>Stopped</font>\t" );
-			}
-			case TimerStatus_Paused:
-			{
-				FormatEx( output, maxlen, "Time: <font color='#333399'>Paused</font>\t" );
-			}
-			case TimerStatus_Running:
-			{
-				float time = Timer_GetClientCurrentTime( client );
-				Timer_FormatTime( time, output, maxlen );
-				
-				int track = Timer_GetClientZoneTrack( client );
-				int style = Timer_GetClientStyle( client );
-				
-				char sTimeColour[8];
-				GetTimeColour( sTimeColour, time, Timer_GetClientPBTime( client, track, style ), Timer_GetWRTime( track, style ) );
-				Format( output, maxlen, "Time: <font color='%s'>%s\t</font>", sTimeColour, output );
-			}
+			FormatEx( output, maxlen, "Time: <font color='#DB1A40'>Stopped</font>\t" );
+		}
+		case TimerStatus_Paused:
+		{
+			FormatEx( output, maxlen, "Time: <font color='#333399'>Paused</font>\t" );
+		}
+		case TimerStatus_Running:
+		{
+			float time = Timer_GetClientCurrentTime( client );
+			Timer_FormatTime( time, output, maxlen );
+			
+			int track = Timer_GetClientZoneTrack( client );
+			int style = Timer_GetClientStyle( client );
+			
+			char sTimeColour[8];
+			GetTimeColour( sTimeColour, time, Timer_GetClientPBTime( client, track, style ), Timer_GetWRTime( track, style ) );
+			Format( output, maxlen, "Time: <font color='%s'>%s\t</font>", sTimeColour, output );
 		}
 	}
 }
