@@ -85,8 +85,9 @@ public void GetTimeString( int client, char[] output, int maxlen )
 	
 	if( type == Zone_Start )
 	{
-		Timer_GetZoneTrackName( Timer_GetClientZoneTrack( client ), output, maxlen );
-		FormatEx( output, maxlen, "%s Start Zone\t", output );
+		int track = Timer_GetClientZoneTrack( client );
+		Timer_GetZoneTrackName( track, output, maxlen );
+		FormatEx( output, maxlen, "%s Start Zone%s", output, (track == ZoneTrack_Main) ? "\t" : "" );
 	}
 	else
 	{
