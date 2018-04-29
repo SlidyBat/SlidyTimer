@@ -89,6 +89,9 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetReplayBotCurrentFrame", Native_GetReplayBotCurrentFrame );
+	CreateNative( "Timer_GetReplayBotTotalFrames", Native_GetReplayBotTotalFrames );
+
 	RegPluginLibrary( "timer-replays" );
 	
 	return APLRes_Success;
@@ -126,7 +129,7 @@ public void OnPluginStart()
 	for( int i = 0; i < 2; i++ )
 	{
 		BuildPath( Path_SM, path, sizeof( path ), "data/Timer/%s", g_cReplayFolders[i] );
-
+		
 		if( !DirExists( path ) )
 		{
 			CreateDirectory( path, sizeof( path ) );
@@ -896,6 +899,28 @@ public Action Command_Replay( int client, int args )
 	OpenReplayMenu( client, ZoneTrack_Main, 0 );
 	
 	return Plugin_Handled;
+}
+
+public int Native_GetReplayBotCurrentFrame( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	if( g_iBotType[client] == ReplayBot_None || g_aPlayerFrameData[client] == null )
+	{
+		return -1;
+	}
+	
+	return g_iCurrentFrame[client];
+}
+
+public int Native_GetReplayBotTotalFrames( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	if( g_iBotType[client] == ReplayBot_None || g_aPlayerFrameData[client] == null )
+	{
+		return -1;
+	}
+	
+	return g_aPlayerFrameData[client].Length;
 }
 
 public Action Timer_StartBotDelayed( Handle timer, int userid )
