@@ -341,22 +341,11 @@ void CreateStyleBots()
 
 void InitializeBot( int client, int replaytype, int botid )
 {
-	char name[MAX_NAME_LENGTH];
-
 	if( replaytype == ReplayBot_Multireplay )
 	{
 		g_iMultireplayBotIndexes[botid] = client;
 		g_MultireplayCurrentlyReplayingTrack[botid] = ZoneTrack_None;
 		g_MultireplayCurrentlyReplayingStyle[botid] = -1;
-		
-		if( botid == 0 )
-		{
-			Format( name, sizeof( name ), "MultiReplay (!replay)" );
-		}
-		else
-		{
-			Format( name, sizeof( name ), "MultiReplay %i (!replay)", botid + 1 );
-		}
 	}
 	else if( replaytype == ReplayBot_Style )
 	{
@@ -378,22 +367,12 @@ void InitializeBot( int client, int replaytype, int botid )
 					g_StyleBotReplayingTrack[botid] = track;
 					g_StyleBotReplayingStyle[botid] = style;
 					
-					char sTrack[32];
-					Timer_GetZoneTrackName( track, sTrack, sizeof(sTrack) );
-					char sStyle[16];
-					strcopy( sStyle, sizeof(sStyle), settings[StylePrefix] );
-					
 					if( g_fReplayRecordTimes[track][style] == 0.0 )
 					{
-						Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
 						delete g_aPlayerFrameData[client];
 					}
 					else
 					{
-						char sTime[32];
-						Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
-						Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
-						
 						delete g_aPlayerFrameData[client];
 						g_aPlayerFrameData[client] = g_aReplayFrames[track][style].Clone();
 					}
@@ -414,7 +393,7 @@ void InitializeBot( int client, int replaytype, int botid )
 	g_iBotId[client] = botid;
 	g_iBotType[client] = replaytype;
 	
-	SetClientName( client, name );
+	SetBotName( client );
 	ChangeClientTeam( client, CS_TEAM_CT );
 	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 }
@@ -650,16 +629,7 @@ void SaveReplay( int client, float time, int track, int style )
 			g_aPlayerFrameData[idx] = g_aReplayFrames[track][style].Clone();
 			g_iCurrentFrame[idx] = 0;
 			
-			char sTrack[16];
-			Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
-			char sStyle[16];
-			Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
-			char sTime[16];
-			Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
-			
-			char name[MAX_NAME_LENGTH + 32];
-			Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
-			SetClientName( idx, name );
+			SetBotName( idx );
 			
 			break;
 		}
@@ -674,6 +644,48 @@ void SaveReplay( int client, float time, int track, int style )
 	}
 }
 
+void SetBotName( int client )
+{
+	int replaytype = g_iBotType[client];
+	int botid = g_iBotId[client];
+	
+	char name[MAX_NAME_LENGTH];
+	
+	if( replaytype == ReplayBot_Multireplay && g_MultireplayCurrentlyReplayingStyle[botid] == -1 )
+	{
+		if( botid == 0 )
+		{
+			Format( name, sizeof( name ), "MultiReplay (!replay)" );
+		}
+		else
+		{
+			Format( name, sizeof( name ), "MultiReplay %i (!replay)", botid + 1 );
+		}
+	}
+	else
+	{
+		int track = (replaytype == ReplayBot_Multireplay) ? g_MultireplayCurrentlyReplayingTrack[botid] : g_StyleBotReplayingTrack[botid];
+		int style = (replaytype == ReplayBot_Multireplay) ? g_MultireplayCurrentlyReplayingStyle[botid] : g_StyleBotReplayingStyle[botid];
+
+		char sTrack[16];
+		Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
+		char sStyle[16];
+		Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
+		
+		if( g_fReplayRecordTimes[track][style] == 0.0 )
+		{
+			Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
+		}
+		else
+		{
+			char sTime[32];
+			Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
+			Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
+		}
+	}
+	SetClientName( client, name );
+}
+
 void StartReplay( int botid, int track, int style )
 {
 	int idx = g_iMultireplayBotIndexes[botid];
@@ -686,16 +698,7 @@ void StartReplay( int botid, int track, int style )
 	
 	g_iCurrentFrame[idx] = 0;
 	
-	// TODO: can make some functions for replay bot names to make this bit more organised
-	char sTrack[16];
-	Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
-	char sStyle[16];
-	Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
-	char sTime[16];
-	Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
-	char name[MAX_NAME_LENGTH + 32];
-	Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
-	SetClientName( idx, name );
+	SetBotName( idx );
 }
 
 void QueueReplay( int client, int track, int style )
@@ -728,16 +731,7 @@ void StopReplayBot( int botidx )
 	delete g_aPlayerFrameData[botidx];
 	g_aPlayerFrameData[botidx] = new ArrayList( FRAME_DATA_SIZE );
 	
-	char name[MAX_NAME_LENGTH];
-	if( botid == 0 )
-	{
-		Format( name, sizeof( name ), "MultiReplay (!replay)" );
-	}
-	else
-	{
-		Format( name, sizeof( name ), "MultiReplay %i (!replay)", botid + 1 );
-	}
-	SetClientName( botidx, name );
+	SetBotName( botidx );
 	
 	Timer_TeleportClientToZone( botidx, Zone_Start, ZoneTrack_Main );
 }
@@ -874,6 +868,22 @@ public void GetName_Callback( Database db, DBResultSet results, const char[] err
 	int track = pack.ReadCell();
 	int style = pack.ReadCell();
 	delete pack;
+	
+	for( int i = 0; i < g_nExpectedStyleBots; i++ )
+	{
+		if( g_StyleBotReplayingTrack[i] == track && g_StyleBotReplayingStyle[i] == style )
+		{
+			SetBotName( g_iStyleBotIndexes[i] );
+		}
+	}
+	
+	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
+	{
+		if( g_MultireplayCurrentlyReplayingTrack[i] == track && g_MultireplayCurrentlyReplayingStyle[i] == style )
+		{
+			SetBotName( g_iMultireplayBotIndexes[i] );
+		}
+	}
 	
 	if( results.FetchRow() )
 	{
