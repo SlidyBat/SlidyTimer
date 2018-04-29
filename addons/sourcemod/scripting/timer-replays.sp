@@ -1,7 +1,6 @@
 #include <sourcemod>
 #include <sdktools>
 #include <cstrike>
-#include <smlib>
 #include <slidy-timer>
 
 #pragma newdecls required
@@ -925,4 +924,37 @@ public void OnBotQuotaChanged( ConVar convar, const char[] oldValue, const char[
 	{
 		bot_quota.IntValue = g_nExpectedMultireplayBots + g_nExpectedStyleBots;
 	}
+}
+
+// https://github.com/bcserv/smlib/blob/master/scripting/include/smlib/files.inc#L354
+stock bool File_Copy( const char[] source, const char[] destination )
+{
+	File file_source = OpenFile(source, "rb");
+
+	if( file_source == null )
+	{
+		return false;
+	}
+
+	File file_destination = OpenFile( destination, "wb" );
+
+	if( file_destination == null )
+	{
+		delete file_source;
+		return false;
+	}
+
+	int buffer[32];
+	int cache;
+
+	while( !IsEndOfFile( file_source ) )
+	{
+		cache = ReadFile( file_source, buffer, sizeof(buffer), 1 );
+		WriteFile( file_destination, buffer, cache, 1 );
+	}
+
+	delete file_source;
+	delete file_destination;
+
+	return true;
 }
