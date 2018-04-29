@@ -170,7 +170,7 @@ public void OnClientCookiesCached( int client )
 
 public Action OnPlayerRunCmd( int client, int& buttons )
 {
-	if( IsFakeClient( client ) || !IsPlayerAlive( client ) || !( g_iHudSettings[client] & HUD_CENTRAL ) )
+	if( IsFakeClient( client ) || !( g_iHudSettings[client] & HUD_CENTRAL ) )
 	{
 		return;
 	}
@@ -183,8 +183,6 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 		{
 			int speed = RoundFloat( GetClientSpeed( target ) );
 			PrintHintText( client, "Speed: %i", speed );
-			
-			Timer_DebugPrint( "OnPlayerRunCmd: Printing hint text (speed=%i)", speed );
 		}
 		return;
 	}
