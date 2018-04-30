@@ -227,7 +227,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 					char replacement[64];
 
 					Call_StartFunction( GetMyHandle(), pack.ReadFunction() );
-					Call_PushCell( client );
+					Call_PushCell( target );
 					Call_PushStringEx( replacement, sizeof(replacement), 0, SM_PARAM_COPYBACK );
 					Call_PushCell( sizeof(replacement) );
 					Call_Finish();
