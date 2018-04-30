@@ -208,8 +208,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	char element[64];
 	int curElementChar = 0;
 	
-	int len = strlen( g_cHudCache[hudtype][g_iSelectedHud[client]] );
-	for( int i = 0; i < len; i++ )
+	for( int i = 0; g_cHudCache[hudtype][g_iSelectedHud[client]][i] != '\0'; i++ )
 	{
 		if( bStartedElement )
 		{
