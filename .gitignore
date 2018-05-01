@@ -1,5 +1,5 @@
+*.inc
 !slidy-timer.inc
-/addons/sourcemod/scripting/include/*
 /addons/sourcemod/scripting/compiled
 /addons/sourcemod/scripting/spcomp.exe
 /addons/sourcemod/scripting/compile.exe
