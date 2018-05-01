@@ -195,7 +195,8 @@ public void OnMapEnd()
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		if( IsClientConnected( i ) && IsFakeClient( i ) )
+		delete g_aPlayerFrameData[i];
+		if( !IsClientInKickQueue( i ) && IsFakeClient( i ) )
 		{
 			KickClient( i );
 		}
