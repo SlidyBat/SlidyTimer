@@ -1397,7 +1397,7 @@ public int Native_GetDatabase( Handle handler, int numParams )
 	return view_as<int>( CloneHandle( g_hDatabase, handler ) );
 }
 
-public int Native_GetClientCurrentTime( Handle handler, int numparams )
+public int Native_GetClientCurrentTime( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
 	if( !g_bTimerRunning[client] )
@@ -1408,7 +1408,7 @@ public int Native_GetClientCurrentTime( Handle handler, int numparams )
 	return view_as<int>( g_nPlayerFrames[client] * g_fFrameTime );
 }
 
-public int Native_GetClientCurrentJumps( Handle handler, int numparams )
+public int Native_GetClientCurrentJumps( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
 	if( !g_bTimerRunning[client] )
@@ -1419,7 +1419,7 @@ public int Native_GetClientCurrentJumps( Handle handler, int numparams )
 	return g_nPlayerJumps[client];
 }
 
-public int Native_GetClientCurrentStrafes( Handle handler, int numparams )
+public int Native_GetClientCurrentStrafes( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
 	if( !g_bTimerRunning[client] )
@@ -1430,7 +1430,7 @@ public int Native_GetClientCurrentStrafes( Handle handler, int numparams )
 	return g_nPlayerStrafes[client];
 }
 
-public int Native_GetClientCurrentSync( Handle handler, int numparams )
+public int Native_GetClientCurrentSync( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
 	if( !g_bTimerRunning[client] )
@@ -1441,7 +1441,7 @@ public int Native_GetClientCurrentSync( Handle handler, int numparams )
 	return view_as<int>( ( g_nPlayerAirStrafeFrames[client] == 0 || g_nPlayerSyncedFrames[client] == 0 ) ? 100.0 : ( g_nPlayerSyncedFrames[client] * 100.0 ) / g_nPlayerAirStrafeFrames[client] );
 }
 
-public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
+public int Native_GetClientCurrentStrafeTime( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
 	if( !g_bTimerRunning[client] )
@@ -1452,7 +1452,7 @@ public int Native_GetClientCurrentStrafeTime( Handle handler, int numparams )
 	return view_as<int>( ( g_nPlayerAirFrames[client] == 0 || g_nPlayerAirStrafeFrames[client] == 0 ) ? 0.0 : ( g_nPlayerAirStrafeFrames[client] * 100.0 ) / g_nPlayerAirFrames[client] );
 }
 
-public int Native_GetWRTime( Handle handler, int numparams )
+public int Native_GetWRTime( Handle handler, int numParams )
 {
 	int track = GetNativeCell( 1 );
 	int style = GetNativeCell( 2 );
@@ -1465,7 +1465,7 @@ public int Native_GetWRTime( Handle handler, int numparams )
 	return 0;
 }
 
-public int Native_GetWRName( Handle handler, int numparams )
+public int Native_GetWRName( Handle handler, int numParams )
 {
 	int track = GetNativeCell( 1 );
 	int style = GetNativeCell( 2 );
@@ -1479,7 +1479,7 @@ public int Native_GetWRName( Handle handler, int numparams )
 	}
 }
 
-public int Native_GetClientPBTime( Handle handler, int numparams )
+public int Native_GetClientPBTime( Handle handler, int numParams )
 {
 	return view_as<int>( g_fPlayerPersonalBest[GetNativeCell( 1 )][GetNativeCell( 2 )][GetNativeCell( 3 )] );
 }

@@ -1,8 +1,38 @@
 #include <sourcemod>
 #include <sdkhooks>
-#include <smlib>
+#include <sdktools>
 #include <cstrike>
 #include <slidy-timer>
+
+/*
+ * Collision groups
+ * Taken from hl2sdk-ob-valve/public/const.h
+ */
+enum Collision_Group_t
+{
+	COLLISION_GROUP_NONE  = 0,
+	COLLISION_GROUP_DEBRIS,				// Collides with nothing but world and static stuff
+	COLLISION_GROUP_DEBRIS_TRIGGER,		// Same as debris, but hits triggers
+	COLLISION_GROUP_INTERACTIVE_DEB,	// Collides with everything except other interactive debris or debris
+	COLLISION_GROUP_INTERACTIVE,		// Collides with everything except interactive debris or debris
+	COLLISION_GROUP_PLAYER,
+	COLLISION_GROUP_BREAKABLE_GLASS,
+	COLLISION_GROUP_VEHICLE,
+	COLLISION_GROUP_PLAYER_MOVEMENT,	// For HL2, same as Collision_Group_Player, for
+										// TF2, this filters out other players and CBaseObjects
+	COLLISION_GROUP_NPC,				// Generic NPC group
+	COLLISION_GROUP_IN_VEHICLE,			// for any entity inside a vehicle
+	COLLISION_GROUP_WEAPON,				// for any weapons that need collision detection
+	COLLISION_GROUP_VEHICLE_CLIP,		// vehicle clip brush to restrict vehicle movement
+	COLLISION_GROUP_PROJECTILE,			// Projectiles!
+	COLLISION_GROUP_DOOR_BLOCKER,		// Blocks entities not permitted to get near moving doors
+	COLLISION_GROUP_PASSABLE_DOOR,		// Doors that the player shouldn't collide with
+	COLLISION_GROUP_DISSOLVING,			// Things that are dissolving are in this group
+	COLLISION_GROUP_PUSHAWAY,			// Nonsolid on client and server, pushaway in player code
+
+	COLLISION_GROUP_NPC_ACTOR,			// Used so NPCs in scripts ignore the player.
+	COLLISION_GROUP_NPC_SCRIPTED		// USed for NPCs in scripts that should not collide with each other
+};
 
 ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
@@ -369,4 +399,36 @@ stock void SetConVars()
 	FindConVar( "sv_friction" ).FloatValue = 4.0;
 	FindConVar( "sv_accelerate" ).FloatValue = 5.0;
 	FindConVar( "sv_airaccelerate" ).FloatValue = 1000.0;
+}
+
+stock bool File_Copy( const char[] source, const char[] destination )
+{
+	File file_source = OpenFile(source, "rb");
+
+	if( file_source == null )
+	{
+		return false;
+	}
+
+	File file_destination = OpenFile( destination, "wb" );
+
+	if( file_destination == null )
+	{
+		delete file_source;
+		return false;
+	}
+
+	int buffer[32];
+	int cache;
+
+	while( !IsEndOfFile( file_source ) )
+	{
+		cache = ReadFile( file_source, buffer, sizeof(buffer), 1 );
+		WriteFile( file_destination, buffer, cache, 1 );
+	}
+
+	delete file_source;
+	delete file_destination;
+
+	return true;
 }

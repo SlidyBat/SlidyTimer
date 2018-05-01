@@ -982,22 +982,22 @@ public Action Timer_DrawZones( Handle timer, any data )
 
 /* Natives */
 
-public int Native_GetClientZoneType(Handle handler, int numParams)
+public int Native_GetClientZoneType( Handle handler, int numParams )
 {
 	return g_PlayerCurrentZoneType[GetNativeCell( 1 )];
 }
 
-public int Native_GetClientZoneTrack(Handle handler, int numParams)
+public int Native_GetClientZoneTrack( Handle handler, int numParams )
 {
 	return g_PlayerCurrentZoneTrack[GetNativeCell( 1 )];
 }
 
-public int Native_TeleportClientToZone(Handle handler, int numParams)
+public int Native_TeleportClientToZone( Handle handler, int numParams )
 {
 	TeleportClientToZone( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ), GetNativeCell( 4 ) );
 }
 
-public int Native_IsClientInsideZone(Handle handler, int numParams)
+public int Native_IsClientInsideZone( Handle handler, int numParams )
 {
 	return IsClientInsideZone( GetNativeCell( 1 ), GetNativeCell( 2 ), GetNativeCell( 3 ), GetNativeCell( 4 ) );
 }
