@@ -1,2 +1,2 @@
 	<font size='30'><font color='{rainbow}'>c00l</font>Timer
-	{zonetrack} {zonetype} Zone
+   {zonetrack} {zonetype} Zone
