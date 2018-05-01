@@ -539,7 +539,7 @@ void LoadReplay( int track, int style )
 	if( FileExists( path ) )
 	{
 		File file = OpenFile( path, "rb" );
-		static any header[ReplayHeader];
+		any header[ReplayHeader];
 		
 		if( !file.Read( header[0], sizeof( header ), 4 ) )
 		{
