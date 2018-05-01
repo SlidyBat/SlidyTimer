@@ -167,11 +167,12 @@ public void OnClientAuthorized( int client, const char[] auth )
 	{
 		Timer_DebugPrint( "OnClientAuthorized: %N", client );
 		SQL_LoadPlayerID( client );
+		
+		sv_autobunnyhopping.ReplicateToClient( client, "1" );
 	}
 	
 	StopTimer( client );
 	//should we always start with auto ?
-	sv_autobunnyhopping.ReplicateToClient( client, "1" );
 }
 
 public void OnClientDisconnect( int client )
