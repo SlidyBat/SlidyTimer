@@ -57,14 +57,14 @@ ConVar		g_cvMultireplayBots;
 int			g_nMultireplayBots;
 int			g_nExpectedMultireplayBots;
 int			g_iMultireplayBotIndexes[MAX_MULTIREPLAY_BOTS];
-int			g_MultireplayCurrentlyReplayingTrack[MAX_MULTIREPLAY_BOTS];
-int			g_MultireplayCurrentlyReplayingStyle[MAX_MULTIREPLAY_BOTS];
+int			g_MultireplayCurrentlyReplayingTrack[MAX_MULTIREPLAY_BOTS] = { ZoneTrack_None, ... };
+int			g_MultireplayCurrentlyReplayingStyle[MAX_MULTIREPLAY_BOTS] = { -1, ... };
 
 int			g_nStyleBots;
 int			g_nExpectedStyleBots;
 int			g_iStyleBotIndexes[MAX_STYLE_BOTS];
-int			g_StyleBotReplayingTrack[MAX_STYLE_BOTS];
-int			g_StyleBotReplayingStyle[MAX_STYLE_BOTS];
+int			g_StyleBotReplayingTrack[MAX_STYLE_BOTS] = { ZoneTrack_None, ... };
+int			g_StyleBotReplayingStyle[MAX_STYLE_BOTS] = { -1, ... };
 bool			g_bStyleBotLoaded[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
 ConVar		g_cvStartDelay;
@@ -105,7 +105,7 @@ public void OnPluginStart()
 	
 	RegConsoleCmd( "sm_replay", Command_Replay );
 	
-	g_cvMultireplayBots = CreateConVar( "sm_timer_multireplay_bots", "2", "Total amount of MultiReplay bots", _, true, 0.0, true, float( MAX_MULTIREPLAY_BOTS ) );
+	g_cvMultireplayBots = CreateConVar( "sm_timer_multireplay_bots", "1", "Total amount of MultiReplay bots", _, true, 0.0, true, float( MAX_MULTIREPLAY_BOTS ) );
 	g_cvMultireplayBots.AddChangeHook( OnMultireplayBotsChanged );
 	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
 	
@@ -164,6 +164,11 @@ public void OnAllPluginsLoaded()
 	{
 		Timer_OnDatabaseLoaded();
 	}
+}
+
+public void OnConfigsExecuted()
+{
+	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
 }
 
 public void OnMapStart()
@@ -251,6 +256,10 @@ public void OnClientPutInServer( int client )
 		}
 		else
 		{
+			if( bot_quota.IntValue != g_nExpectedMultireplayBots + g_nExpectedStyleBots )
+			{
+				bot_quota.IntValue = g_nExpectedMultireplayBots + g_nExpectedStyleBots;
+			}
 			KickClient( client );
 		}
 	}
@@ -873,25 +882,25 @@ public void GetName_Callback( Database db, DBResultSet results, const char[] err
 	int style = pack.ReadCell();
 	delete pack;
 	
-	for( int i = 0; i < g_nExpectedStyleBots; i++ )
-	{
-		if( g_StyleBotReplayingTrack[i] == track && g_StyleBotReplayingStyle[i] == style )
-		{
-			SetBotName( g_iStyleBotIndexes[i] );
-		}
-	}
-	
-	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
-	{
-		if( g_MultireplayCurrentlyReplayingTrack[i] == track && g_MultireplayCurrentlyReplayingStyle[i] == style )
-		{
-			SetBotName( g_iMultireplayBotIndexes[i] );
-		}
-	}
-	
 	if( results.FetchRow() )
 	{
 		results.FetchString( 0, g_cReplayRecordNames[track][style], MAX_NAME_LENGTH );
+		
+		for( int i = 0; i < g_nExpectedStyleBots; i++ )
+		{
+			if( g_StyleBotReplayingTrack[i] == track && g_StyleBotReplayingStyle[i] == style )
+			{
+				SetBotName( g_iStyleBotIndexes[i] );
+			}
+		}
+
+		for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
+		{
+			if( g_MultireplayCurrentlyReplayingTrack[i] == track && g_MultireplayCurrentlyReplayingStyle[i] == style )
+			{
+				SetBotName( g_iMultireplayBotIndexes[i] );
+			}
+		}
 	}
 }
 
@@ -936,7 +945,14 @@ public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
 	int track = (g_iBotType[client] == ReplayBot_Style) ? g_StyleBotReplayingTrack[botid] : g_MultireplayCurrentlyReplayingTrack[botid];
 	int style = (g_iBotType[client] == ReplayBot_Style) ? g_StyleBotReplayingStyle[botid] : g_MultireplayCurrentlyReplayingStyle[botid];
 
-	SetNativeString( 2, g_cReplayRecordNames[track][style], GetNativeCell( 3 ) );
+	if( track == -1 || style == -1 )
+	{
+		SetNativeString( 2, "N/A", GetNativeCell( 3 ) );
+	}
+	else
+	{
+		SetNativeString( 2, g_cReplayRecordNames[track][style], GetNativeCell( 3 ) );
+	}
 	return 1;
 }
 
