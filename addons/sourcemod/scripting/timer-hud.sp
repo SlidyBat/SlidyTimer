@@ -39,6 +39,8 @@ enum
 	TOTAL_HUD_TYPES
 }
 
+float	g_fTickInterval;
+
 bool g_bReplays; // if replays module is loaded
 
 Handle g_hHudSynchronizer;
@@ -81,6 +83,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_fTickInterval = GetTickInterval();
+
 	g_bReplays = LibraryExists( "timer-replays" );
 
 	g_hSelectedHudCookie = RegClientCookie( "Timer_HUD_Preset", "Selected HUD preset for Slidy's Timer", CookieAccess_Protected );
