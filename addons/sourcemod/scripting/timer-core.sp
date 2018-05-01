@@ -301,9 +301,10 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 		
 		if( buttons & IN_JUMP )
 		{
-			if( !( GetEntityMoveType( client ) & MOVETYPE_LADDER )
-				&& !( GetEntityFlags( client ) & FL_ONGROUND )
-				&& ( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
+			if( settings[AutoBhop] &&
+				!( GetEntityMoveType( client ) & MOVETYPE_LADDER ) &&
+				!( GetEntityFlags( client ) & FL_ONGROUND ) &&
+				( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
 			{
 				buttons &= ~IN_JUMP;
 			}
