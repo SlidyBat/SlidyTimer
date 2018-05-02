@@ -313,15 +313,15 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 		// blocking keys (only in air)
 		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
 		{
-			if( settings[PreventLeft] && ( buttons & IN_LEFT ) ||
-				settings[PreventRight] && ( buttons & IN_RIGHT ) ||
+			if( settings[PreventLeft] && ( buttons & IN_MOVELEFT ) ||
+				settings[PreventRight] && ( buttons & IN_MOVERIGHT ) ||
 				settings[PreventForward] && ( buttons & IN_FORWARD ) ||
 				settings[PreventBack] && ( buttons & IN_BACK ) )
 			{
 				bButtonError = true;
 			}
 			else if( settings[HSW] && 
-					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_LEFT ) || ( buttons & IN_RIGHT ) ) ) )
+					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_MOVELEFT ) || ( buttons & IN_MOVERIGHT ) ) ) )
 			{
 				bButtonError = true;
 			}
