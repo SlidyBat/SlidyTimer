@@ -292,7 +292,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				float scale = settings[PreSpeed] / speed;
 				
 				float vVel[3];
-				GetEntPropVector(client, Prop_Data, "m_vecAbsVelocity", vVel);
+				GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", vVel );
 				ScaleVector( vVel, scale );
 				
 				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
@@ -693,14 +693,41 @@ public void Timer_OnExitZone( int client, int id, int zoneType, int zoneTrack, i
 
 public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBroadcast )
 {
-	int client = GetClientOfUserId( event.GetInt( "userid" ) );
+	int userid = event.GetInt( "userid" );
+	int client = GetClientOfUserId( userid );
 	if( Timer_IsTimerRunning( client ) )
 	{	
 		if( ++g_nPlayerJumps[client] == 6 )
 		{
 			g_iPlayerSSJ[client] = RoundFloat( GetClientSpeed( client ) );
 		}
+		
+		int style = Timer_GetClientStyle( client );
+		if( g_StyleSettings[style][MaxSpeed] != 0.0 && GetClientSpeedSq( client ) > g_StyleSettings[style][MaxSpeed]*g_StyleSettings[style][MaxSpeed] )
+		{
+			DataPack pack = new DataPack();
+			pack.WriteCell( userid );
+			pack.WriteFloat( g_StyleSettings[style][MaxSpeed] );
+			RequestFrame( LimitSpeed, pack );
+		}
 	}
+}
+
+public void LimitSpeed( DataPack pack )
+{
+	pack.Reset();
+	int client = GetClientOfUserId( pack.ReadCell() );
+	float maxspeed = pack.ReadFloat() * 0.9;
+	delete pack;
+	
+	float speed = GetClientSpeed( client );
+	float scale = maxspeed / speed;
+	
+	float vel[3];
+	GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", vel );
+	ScaleVector( vel, scale );
+	
+	TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vel );
 }
 
 /* Database stuff */
