@@ -617,13 +617,13 @@ void SaveReplay( int client, float time, int track, int style )
 	
 	File file = OpenFile( path, "wb" );
 	
-	file.Write( header[0], sizeof( header ), 4 );
+	file.Write( header[0], sizeof(header), 4 );
 	
 	any frameData[FrameData];
 	for( int i = 0; i < header[HD_Size]; i++ )
 	{
 		g_aReplayFrames[track][style].GetArray( i, frameData[0] );
-		file.Write( frameData[0], sizeof( frameData ), 4 );
+		file.Write( frameData[0], sizeof(frameData), 4 );
 	}
 	
 	file.Close();

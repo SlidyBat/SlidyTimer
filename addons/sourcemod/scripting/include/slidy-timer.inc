@@ -158,6 +158,15 @@ stock void NormalizeAngle( float& ang )
 	}
 }
 
+stock bool FakePrecacheSound( const char[] path )
+{
+	char pathStar[PLATFORM_MAX_PATH];
+	Format( pathStar, sizeof(pathStar), "*%s", path );
+	
+	AddToStringTable( FindStringTable( "soundprecache" ), pathStar );
+	return true;
+}
+
 public int SelectStyle_Handler( Menu menu, MenuAction action, int param1, int param2 )
 {
 	if( action == MenuAction_Select )
