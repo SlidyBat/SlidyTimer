@@ -308,9 +308,12 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 			OpenCPSettingsMenu( param1 );
 		}
 	}
-	else if( action == MenuAction_End )
+	else if( action == MenuAction_Cancel )
 	{
 		g_bCPMenuOpen[param1] = false;
+	}
+	else if( action == MenuAction_End )
+	{
 		delete menu;
 	}
 }
