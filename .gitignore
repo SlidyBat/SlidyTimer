@@ -1,2 +1,8 @@
-
-*.json
+*.inc
+!slidy-timer.inc
+/addons/sourcemod/scripting/compiled
+/addons/sourcemod/scripting/spcomp.exe
+/addons/sourcemod/scripting/compile.exe
+/addons/sourcemod/scripting/compile.dat
+.vscode/settings.json
+.vscode/tasks.json
