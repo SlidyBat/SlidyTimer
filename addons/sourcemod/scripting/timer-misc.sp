@@ -3,6 +3,7 @@
 #include <sdktools>
 #include <cstrike>
 #include <slidy-timer>
+#include <menu_targeting>
 
 /*
  * Collision groups
@@ -348,21 +349,8 @@ public Action Command_Spec( int client, int args )
 	{
 		char arg[MAX_NAME_LENGTH];
 		GetCmdArgString( arg, sizeof( arg ) );
-		
-		int target = FindTarget( client, arg, true, false );
 
-		if( target > -1 )
-		{
-			if( IsClientInGame( target ) && IsPlayerAlive( target ) )
-			{
-				SetClientObserverTarget( client, target )
-			}
-			else
-			{
-				ReplyToCommand( client, "[Timer] %N is not alive", target );
-			}
-		}
-		else
+		if( !SelectTarget( client, arg, SetClientObserverTarget ) )
 		{
 			ReplyToCommand( client, "[Timer] No matching players" );	
 		}
@@ -371,10 +359,17 @@ public Action Command_Spec( int client, int args )
 	return Plugin_Handled;
 }
 
-stock void SetClientObserverTarget( int client, int target )
+public void SetClientObserverTarget( int client, int target )
 {
-	SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", target );
-	SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
+	if( IsClientInGame( target ) && IsPlayerAlive( target ) )
+	{
+		SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", target );
+		SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
+	}
+	else
+	{
+		ReplyToCommand( client, "[Timer] %N is not alive", target );
+	}
 }
 
 stock void SetConVars()
@@ -391,6 +386,8 @@ stock void SetConVars()
 	FindConVar( "mp_freezetime" ).IntValue = 0;
 	FindConVar( "mp_ignore_round_win_conditions" ).BoolValue = false;
 	FindConVar( "mp_match_end_changelevel" ).BoolValue = true;
+	FindConVar( "mp_do_warmup_period" ).BoolValue = false;
+	FindConVar( "mp_warmuptime" ).IntValue = 0;
 	FindConVar( "sv_accelerate_use_weapon_speed" ).BoolValue = false;
 	FindConVar( "mp_free_armor" ).BoolValue = true;
 	FindConVar( "sv_full_alltalk" ).IntValue = 1;
