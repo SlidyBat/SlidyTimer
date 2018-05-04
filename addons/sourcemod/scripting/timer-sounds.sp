@@ -14,7 +14,7 @@ enum
 	TOTAL_SOUND_TYPES
 }
 
-char[TOTAL_SOUND_TYPES][] g_cSoundTypePath = 
+char g_cSoundTypePath[TOTAL_SOUND_TYPES][] = 
 {
 	"timer-finishsounds",
 	"timer-pbsounds",
@@ -33,6 +33,7 @@ public void Timer_OnFinishPost( int client, int track, int style, float time, fl
 {
 	if( wrtime == 0.0 || time < wrtime )
 	{
+		Timer_DebugPrint( "Timer_OnFinishPost: Exiting" );
 		return; // will be handled by OnWRBeaten forward
 	}
 
@@ -40,11 +41,13 @@ public void Timer_OnFinishPost( int client, int track, int style, float time, fl
 	{
 		// pb sound
 		PlayRandomSound( SoundType_PBSound, client );		
+		Timer_DebugPrint( "Timer_OnFinishPost: Playing PB sound" );
 	}
 	else
 	{
 		// normal finish sound
 		PlayRandomSound( SoundType_FinishSound, client );
+		Timer_DebugPrint( "Timer_OnFinishPost: Playing finish sound" );
 	}
 }
 
@@ -52,6 +55,7 @@ public void Timer_OnWRBeaten( int client, int track, int style, float time, floa
 {
 	// play wr sound
 	PlayRandomSound( SoundType_WRSound );
+	Timer_DebugPrint( "Timer_OnFinishPost: Playing WR sound" );
 }
 
 void PrecacheSounds()
@@ -61,12 +65,12 @@ void PrecacheSounds()
 		g_nSounds[i] = 0;
 
 		char path[PLATFORM_MAX_PATH];
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/%s.txt", g_cSoundTypePath[i] )
+		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/%s.txt", g_cSoundTypePath[i] );
 		
-		File file = OpenFile( path );
+		File file = OpenFile( path, "r" );
 
 		char line[PLATFORM_MAX_PATH];
-		while( file.ReadLine( line, sizeof(line) ) && g_nSounds < MAX_SOUNDS )
+		while( file.ReadLine( line, sizeof(line) ) && g_nSounds[i] < MAX_SOUNDS )
 		{
 			Format( g_cSounds[i][g_nSounds[i]], sizeof(g_cSounds[][]), "*%s", line );
 			g_nSounds[i]++;
@@ -85,6 +89,7 @@ void PlayRandomSound( int soundtype, int client = 0 ) // client=0 means play to 
 {
 	if( g_nSounds[soundtype] == 0 )
 	{
+		Timer_DebugPrint( "PlayRandomSound: No sounds loaded, exiting" );
 		return;
 	}
 

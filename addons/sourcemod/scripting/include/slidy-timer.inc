@@ -3,6 +3,8 @@
 #endif
 #define _slidy_timer_included
 
+#include <sdktools>
+
 #define TIMER_PLUGIN_VERSION "0.2"
 #define MENU_PREFIX "Timer"
 #define MAX_STYLES 24 // for now, until i actually implement them
