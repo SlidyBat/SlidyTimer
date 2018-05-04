@@ -118,6 +118,8 @@ public void OnPluginStart()
 	
 	g_aReplayQueue = new ArrayList( 3 );
 	
+	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
+	
 	char path[PLATFORM_MAX_PATH];
 
 	BuildPath( Path_SM, path, sizeof( path ), "data/Timer" );
@@ -169,6 +171,7 @@ public void OnAllPluginsLoaded()
 public void OnConfigsExecuted()
 {
 	g_nExpectedMultireplayBots = g_cvMultireplayBots.IntValue;
+	CreateMultireplayBots();
 }
 
 public void OnMapStart()
@@ -178,7 +181,14 @@ public void OnMapStart()
 
 public void OnMapEnd()
 {
+	Timer_DebugPrint( "OnMapEnd: Resetting everything" );
+
 	g_aReplayQueue.Clear();
+	
+	g_nMultireplayBots = 0;
+	g_nExpectedMultireplayBots = 0;
+	g_nStyleBots = 0;
+	g_nExpectedStyleBots = 0;
 	
 	int totalstyles = Timer_GetStyleCount();
 	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
@@ -196,15 +206,18 @@ public void OnMapEnd()
 	for( int i = 1; i <= MaxClients; i++ )
 	{
 		delete g_aPlayerFrameData[i];
-		if( !IsClientInKickQueue( i ) && IsFakeClient( i ) )
-		{
-			KickClient( i );
-		}
+	}
+	
+	for( int i = 0; i < g_nExpectedMultireplayBots + g_nExpectedStyleBots; i++ )
+	{
+		ServerCommand( "bot_kick" );
 	}
 }
 
 public void OnClientPutInServer( int client )
 {
+	Timer_DebugPrint( "OnClientPutInServer: %N expectedstyle=%i expectedmultireplay=%i", client, g_nExpectedStyleBots, g_nExpectedMultireplayBots );
+
 	if( !IsFakeClient( client ) )
 	{
 		if( g_aPlayerFrameData[client] != null )
@@ -214,7 +227,7 @@ public void OnClientPutInServer( int client )
 		g_aPlayerFrameData[client] = new ArrayList( FRAME_DATA_SIZE );
 	}
 	else
-	{
+	{	
 		if( g_nMultireplayBots < g_nExpectedMultireplayBots )
 		{
 			int botid = -1;
@@ -268,7 +281,10 @@ public void OnClientPutInServer( int client )
 
 public void OnClientDisconnect( int client )
 {
+	Timer_DebugPrint( "OnClientDisconnect: %N", client );
+
 	g_bReplayBotPaused[client] = false;
+	g_iBotType[client] = ReplayBot_None;
 
 	for( int i = 0; i < g_nExpectedStyleBots; i++ )
 	{
@@ -288,8 +304,6 @@ public void OnClientDisconnect( int client )
 			return;
 		}
 	}
-	
-	g_iBotType[client] = ReplayBot_None;
 }
 
 public Action Timer_OnTimerStart( int client )
@@ -308,6 +322,8 @@ public void Timer_OnFinishPost( int client, int track, int style, float time, fl
 
 public void Timer_OnStylesLoaded( int totalstyles )
 {
+	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
+
 	// load specific bots
 	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
 	{
@@ -317,6 +333,8 @@ public void Timer_OnStylesLoaded( int totalstyles )
 		}
 	}
 	
+	Timer_DebugPrint( "Timer_OnStylesLoaded: Creating bots" );
+	
 	CreateMultireplayBots();
 	CreateStyleBots();
 	
@@ -325,7 +343,7 @@ public void Timer_OnStylesLoaded( int totalstyles )
 
 void CreateMultireplayBots()
 {
-	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
+	for( int i = 0; i < g_nExpectedMultireplayBots - g_nMultireplayBots; i++ )
 	{
 		ServerCommand( "bot_add_ct" );
 	}
@@ -550,6 +568,8 @@ void LoadReplay( int track, int style )
 		}
 		
 		g_fReplayRecordTimes[track][style] = header[HD_Time];
+		
+		Timer_DebugPrint( "LoadReplay: track=%i style=%i time=%f", track, style, g_fReplayRecordTimes[track][style] );
 		
 		char query[128];
 		Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE steamaccountid = '%i'", header[HD_SteamAccountId] );
