@@ -148,7 +148,7 @@ stock int GetClientObserverTarget( int client )
 	return target;
 }
 
-stock void NormalizeAngle( float& ang )
+stock float NormalizeAngle( float ang )
 {
 	if( ang > 180 )
 	{
@@ -158,6 +158,8 @@ stock void NormalizeAngle( float& ang )
 	{
 		ang += 360;
 	}
+	
+	return ang;
 }
 
 stock bool FakePrecacheSound( const char[] path )
