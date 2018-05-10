@@ -68,10 +68,13 @@ Handle g_hCookieSettings;
 int g_Settings[MAXPLAYERS + 1];
 
 Handle g_hCookieJumpInterval;
-int g_iJumpInterval[MAXPLAYERS + 1];
+int g_iJumpInterval[MAXPLAYERS + 1] = { 6, ... };
 
 Handle g_hCookieSSJEnabled;
 bool g_bSSJEnabled[MAXPLAYERS + 1];
+
+Handle g_hCookieSSJRepeat;
+bool g_bSSJRepeat[MAXPLAYERS + 1];
 
 int g_nJumps[MAXPLAYERS + 1];
 int g_nSyncedTicks[MAXPLAYERS + 1];
@@ -98,6 +101,8 @@ public void OnPluginStart()
 {
 	g_hCookieSettings = RegClientCookie( "sm_ssj_settings", "SSJ settings", CookieAccess_Protected );
 	g_hCookieJumpInterval = RegClientCookie( "sm_ssj_jumpinterval", "SSJ jump interval", CookieAccess_Protected );
+	g_hCookieSSJEnabled = RegClientCookie( "sm_ssj_enabled", "SSJ enabled", CookieAccess_Protected );
+	g_hCookieSSJRepeat = RegClientCookie( "sm_ssj_repeat", "SSJ repeat every interval", CookieAccess_Protected );
 
 	RegConsoleCmd( "sm_ssj", Command_SSJ );
 }
@@ -127,6 +132,12 @@ public void OnClientPutInServer( int client )
 	{
 		g_bSSJEnabled[client] = false;
 		SetClientCookieBool( client, g_hCookieSSJEnabled, false );
+	}
+
+	if( !GetClientCookieBool( client, g_hCookieSSJRepeat, g_bSSJRepeat[client] ) )
+	{
+		g_bSSJRepeat[client] = false;
+		SetClientCookieBool( client, g_hCookieSSJRepeat, false );
 	}
 
 	ResetStats( client );
@@ -192,19 +203,24 @@ public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBro
 
 	g_aJumpStats[client].PushArray( stats[0] );
 
-	if( g_aJumpStats[client].Length > MAX_SSJ_JUMP_INTERVAL )
-	{
-		g_aJumpStats[client].Erase( 0 );
-	}
+	g_nJumps[client]++;
+
+	Timer_DebugPrint( "HookEvent_PlayerJump: %N jump=%i jumpinterval=%i tick=%i", client, g_nJumps[client], g_iJumpInterval[client], GetGameTickCount() );
 
 	if( g_nJumps[client] == 1 && g_Settings[client] & SSJ_PRESPEED )
 	{
 		PrintToChat( client, "[Timer] Prespeed: %.2f", stats[SSJ_Speed] );
 	}
-	else if( ++g_nJumps[client] % g_iJumpInterval[client] == 0 )
+	else if( g_nJumps[client] != 1 && g_nJumps[client] % g_iJumpInterval[client] == 0 )
 	{
-		PrintStats( client );
-
+		if( g_bSSJEnabled[client] )
+		{
+			if( g_bSSJRepeat[client] || (!g_bSSJRepeat[client] && g_nJumps[client] == g_iJumpInterval[client]) )
+			{
+				Timer_DebugPrint( "HookEvent_PlayerJump: Printing stats" );
+				PrintStats( client );	
+			}
+		}
 		g_fDistanceTravelled[client] = 0.0;
 		g_fTotalGain[client] = 0.0;
 	}
@@ -261,23 +277,22 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 	wishspeed = NormalizeVector(wishvel, wishdir);
 	if( wishspeed > maxspeed && maxspeed != 0.0 )
 	{
-		wishspeed = GetEntPropFloat(client, Prop_Send, "m_flMaxspeed");
+		wishspeed = maxspeed;
 	}
 
 	if( wishspeed )
 	{
 		wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
 		
-		currentgain = GetVectorDotProduct( absvel, wishdir );
-		if( currentgain < 30.0 )
+		currentspeed = GetVectorDotProduct( absvel, wishdir );
+		if( wishspd - currentspeed > 0.0 )
 		{
 			g_nSyncedTicks[client]++;
-			gaincoeff = (wishspd - FloatAbs( currentgain )) / wishspd;
+			gaincoeff = (wishspd - currentspeed) / wishspd;
 		}
 		if( g_bTouchesWall[client] && g_nTouchTicks[client] && gaincoeff > 0.5 )
 		{
-			gaincoeff -= 1;
-			gaincoeff = FloatAbs(gaincoeff);
+			gaincoeff = 1.0 - gaincoeff;
 		}
 
 		g_fTotalGain[client] += gaincoeff;
@@ -286,12 +301,11 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 
 void PrintStats( int client )
 {
-	int lastIdx = g_aJumpStats[client].Length - 1;
 	any stats[SSJStats];
-	g_aJumpStats[client].GetArray( lastIdx, stats[0] );
+	g_aJumpStats[client].GetArray( g_aJumpStats[client].Length - 1, stats[0] );
 
 	any lastStats[SSJStats];
-	g_aJumpStats[client].GetArray( lastIdx - g_iJumpInterval[client], lastStats[0] );
+	g_aJumpStats[client].GetArray( g_aJumpStats[client].Length - g_iJumpInterval[client], lastStats[0] );
 
 	char message[256];
 	Format( message, sizeof(message), "[Timer]" );
@@ -306,7 +320,7 @@ void PrintStats( int client )
 	//"Δ Height",
 	//"Δ Time"
 
-	int tickcount = stats[SSJ_Tick] - lastStats[SSJ_Tick];
+	int tickcount = (stats[SSJ_Tick] - lastStats[SSJ_Tick]) + 1;
 	float gain = g_fTotalGain[client] / tickcount;
 
 	if( g_Settings[client] & SSJ_JUMPNUMBER )
@@ -332,7 +346,7 @@ void PrintStats( int client )
 	{
 		int strafedticks = stats[SSJ_StrafedTicks] - lastStats[SSJ_StrafedTicks];
 		float strafetime = float(strafedticks) / tickcount;
-		Format( message, sizeof(message), "%s Jump: %.2f", message, strafetime * 100.0 );
+		Format( message, sizeof(message), "%s Strafe %: %.2f", message, strafetime * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_GAIN )
 	{
@@ -351,9 +365,15 @@ void PrintStats( int client )
 		float displacement[3];
 		SubtractVectors( endpos, startpos, displacement );
 
-		float efficiency = (gain * GetVectorLength( displacement )) / g_fDistanceTravelled[client];
+		float displacementLength = GetVectorLength( displacement );
+		if( displacementLength > g_fDistanceTravelled[client] )
+		{
+			displacementLength = g_fDistanceTravelled[client];
+		}
+		
+		float efficiency = displacementLength / g_fDistanceTravelled[client];
 
-		Format( message, sizeof(message), "%s Efficiency: %.2f", message, efficiency );
+		Format( message, sizeof(message), "%s Efficiency: %.2f", message, efficiency * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_DELTAHEIGHT )
 	{
@@ -365,6 +385,8 @@ void PrintStats( int client )
 		float time = tickcount * GetTickInterval();
 		Format( message, sizeof(message), "%s Δ Time: %.2f", message, time );
 	}
+
+	PrintToChat( client, message );
 }
 
 void OpenSSJMenu( int client )
@@ -374,15 +396,20 @@ void OpenSSJMenu( int client )
 
 	char buffer[256];
 
-	Format( buffer, sizeof(buffer), "SSJ: %s\n \n", g_bSSJEnabled[client] ? "Enabled" : "Disabled" );
-	menu.AddItem( "toggle", buffer );
+	Format( buffer, sizeof(buffer), "SSJ: %s", g_bSSJEnabled[client] ? "Enabled" : "Disabled" );
+	menu.AddItem( "togglessj", buffer );
 
-	Format( buffer, sizeof(buffer), "--\n \nJump stats interval: %i", g_iJumpInterval[client] );
-	menu.AddItem( "-", buffer );
+	Format( buffer, sizeof(buffer), "Repeating: %s\n \n", g_bSSJRepeat[client] ? "Enabled" : "Disabled" );
+	menu.AddItem( "togglerepeat", buffer );
+
+	Format( buffer, sizeof(buffer), "++\nJump stats interval: %i", g_iJumpInterval[client] );
+	menu.AddItem( "+", buffer );
 	
-	menu.AddItem( "+", "++\n \n" );
+	menu.AddItem( "-", "--\n \n" );
 
 	menu.AddItem( "ssjsettings", "Settings" );
+
+	menu.Display( client, MENU_TIME_FOREVER );
 }
 
 public int SSJMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
@@ -394,14 +421,13 @@ public int SSJMenu_Handler( Menu menu, MenuAction action, int param1, int param2
 			case 0:
 			{
 				g_bSSJEnabled[param1] = !g_bSSJEnabled[param1];
+				SetClientCookieBool( param1, g_hCookieSSJEnabled, g_bSSJEnabled[param1] );
 				OpenSSJMenu( param1 );
 			}
 			case 1:
 			{
-				if( g_iJumpInterval[param1] > 1 )
-				{
-					g_iJumpInterval[param1]--;
-				}
+				g_bSSJRepeat[param1] = !g_bSSJRepeat[param1];
+				SetClientCookieBool( param1, g_hCookieSSJRepeat, g_bSSJRepeat[param1] );
 				OpenSSJMenu( param1 );
 			}
 			case 2:
@@ -409,10 +435,20 @@ public int SSJMenu_Handler( Menu menu, MenuAction action, int param1, int param2
 				if( g_iJumpInterval[param1] < MAX_SSJ_JUMP_INTERVAL )
 				{
 					g_iJumpInterval[param1]++;
+					SetClientCookieInt( param1, g_hCookieJumpInterval, g_iJumpInterval[param1] );					
 				}
 				OpenSSJMenu( param1 );
 			}
 			case 3:
+			{
+				if( g_iJumpInterval[param1] > 1 )
+				{
+					g_iJumpInterval[param1]--;
+					SetClientCookieInt( param1, g_hCookieJumpInterval, g_iJumpInterval[param1] );
+				}
+				OpenSSJMenu( param1 );
+			}
+			case 4:
 			{
 				OpenSSJSettingsMenu( param1 );
 			}
@@ -448,8 +484,10 @@ public int SSJSettingsMenu_Handler( Menu menu, MenuAction action, int param1, in
 	}
 	else if( action == MenuAction_Select )
 	{
-		g_Settings[param1] ^= (1 << (param2 - 1));
+		g_Settings[param1] ^= (1 << param2);
 		OpenSSJSettingsMenu( param1 );
+
+		SetClientCookieInt( param1, g_hCookieSettings, g_Settings[param1] );
 	}
 	else if( action == MenuAction_End )
 	{
