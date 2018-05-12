@@ -90,11 +90,22 @@ enum styleSettings
 	Float:ExpMultiplier
 };
 
-enum FrameData
+enum ReplayFrameData
 {
-	Float:FD_Pos[3],
-	Float:FD_Angles[2],
-	FD_Buttons
+	Float:Frame_Pos[3],
+	Float:Frame_Angles[2],
+	Frame_Buttons
+}
+
+enum
+{
+	Timer_FrameCount,
+	Timer_Jumps,
+	Timer_AirFrames,
+	Timer_SyncedFrames,
+	Timer_StrafedFrames,
+	Timer_Strafes,
+	TIMER_DATA_SIZE
 }
 
 enum RecordData
@@ -336,7 +347,7 @@ forward void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle );
  * @param pbtime					Clients personal best time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
  * @param wrtime					WR time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
  *
- * @return							Plugin_Handled or Plugin_Stop to stop style change
+ * @return							Plugin_Handled or Plugin_Stop to stop client from finishing
  */
 forward Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime );
 
@@ -401,6 +412,26 @@ forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTra
  * @return							Plugin_Handled or Plugin_Stop to stop client from starting
  */
 forward Action Timer_OnTimerStart( int client );
+
+/**
+ * Called when a replay is about to be saved due to being best available replay (not necessarily WR)
+ *
+ * @param client					Client index of player
+ * @param frames					Reference to the frames that will be saved, can be edited or changed
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop replay from being saved
+ */
+forward Action Timer_OnReplaySavedPre( int client, ArrayList& frames );
+
+/**
+ * Called after a replay is saved due to being best available replay (not necessarily WR)
+ *
+ * @param client					Client index of player
+ * @param frames					Frames that will be saved
+ *
+ * @noreturn
+ */
+forward Action Timer_OnReplaySavedPost( int client, ArrayList& frames );
 
 /**
  * Gets clients current time
@@ -655,6 +686,25 @@ native int Timer_GetReplayBotCurrentFrame( int client );
 native int Timer_GetReplayBotTotalFrames( int client );
 
 /**
+ * Returns current saved replay frames for client
+ *
+ * @param client					Client index
+ *
+ * @return							ArrayList containing all the frames for specified client or null if no frames exist
+ */
+native ArrayList Timer_GetClientReplayFrames( int client );
+
+/**
+ * Sets current saved replay frames for client
+ *
+ * @param client					Client index
+ * @param frames					ArrayList containing all the frames, the current frames will be deleted and provided ones will be cloned
+ *
+ * @noreturn
+ */
+native void Timer_SetClientReplayFrames( int client, ArrayList frames );
+
+/**
  * Returns what frame the specified bot is on
  *
  * @param client					Client index of replay bot
@@ -698,6 +748,8 @@ public SharedPlugin __pl_slidy_timer =
 #if !defined REQUIRE_PLUGIN
 public void __pl_slidy_timer_SetNTVOptional()
 {
+	MarkNativeAsOptional( "Timer_GetClientTimerData" );
+	MarkNativeAsOptional( "Timer_SetClientTimerData" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentTime" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentJumps" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentStrafes" );
@@ -725,5 +777,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetReplayBotCurrentFrame" );
 	MarkNativeAsOptional( "Timer_GetReplayBotTotalFrames" );
 	MarkNativeAsOptional( "Timer_GetReplayBotPlayerName" );
+	MarkNativeAsOptional( "Timer_GetClientReplayFrames" );
+	MarkNativeAsOptional( "Timer_SetClientReplayFrames" );
 }
 #endif

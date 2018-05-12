@@ -111,6 +111,8 @@ public void OnPluginStart()
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetClientTimerData", Native_GetClientTimerData );
+	CreateNative( "Timer_SetClientTimerData", Native_SetClientTimerData );
 	CreateNative( "Timer_GetClientCurrentTime", Native_GetClientCurrentTime );
 	CreateNative( "Timer_GetClientCurrentJumps", Native_GetClientCurrentJumps );
 	CreateNative( "Timer_GetClientCurrentStrafes", Native_GetClientCurrentStrafes );
@@ -223,6 +225,60 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			bButtonError = true;
 		}
 		
+		if( Timer_GetClientZoneType( client ) == Zone_Start )
+		{
+			if( buttons & IN_JUMP && !settings[StartBhop] )
+			{
+				buttons &= ~IN_JUMP;
+			}
+			
+			if( !g_bNoclip[client] && settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
+			{
+				float speed = GetClientSpeed( client );
+				float scale = settings[PreSpeed] / speed;
+				
+				float vVel[3];
+				GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", vVel );
+				ScaleVector( vVel, scale );
+				
+				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
+			}
+		}
+		
+		if( buttons & IN_JUMP )
+		{
+			if( settings[AutoBhop] &&
+				!( GetEntityMoveType( client ) & MOVETYPE_LADDER ) &&
+				!( GetEntityFlags( client ) & FL_ONGROUND ) &&
+				( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
+			{
+				buttons &= ~IN_JUMP;
+			}
+		}
+		
+		// blocking keys (only in air)
+		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
+		{
+			if( settings[PreventLeft] && ( buttons & IN_MOVELEFT ) ||
+				settings[PreventRight] && ( buttons & IN_MOVERIGHT ) ||
+				settings[PreventForward] && ( buttons & IN_FORWARD ) ||
+				settings[PreventBack] && ( buttons & IN_BACK ) )
+			{
+				bButtonError = true;
+			}
+			else if( settings[HSW] && 
+					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_MOVELEFT ) || ( buttons & IN_MOVERIGHT ) ) ) )
+			{
+				bButtonError = true;
+			}
+		}
+		
+		if( bButtonError )
+		{
+			vel[0] = 0.0;
+			vel[1] = 0.0;
+		}
+
 		if( g_bTimerRunning[client] && !g_bTimerPaused[client] )
 		{
 			g_nPlayerFrames[client]++;
@@ -277,60 +333,6 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 					g_nPlayerStrafes[client]++;
 				}
 			}
-		}
-		
-		if( Timer_GetClientZoneType( client ) == Zone_Start )
-		{
-			if( buttons & IN_JUMP && !settings[StartBhop] )
-			{
-				buttons &= ~IN_JUMP;
-			}
-			
-			if( !g_bNoclip[client] && settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
-			{
-				float speed = GetClientSpeed( client );
-				float scale = settings[PreSpeed] / speed;
-				
-				float vVel[3];
-				GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", vVel );
-				ScaleVector( vVel, scale );
-				
-				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
-			}
-		}
-		
-		if( buttons & IN_JUMP )
-		{
-			if( settings[AutoBhop] &&
-				!( GetEntityMoveType( client ) & MOVETYPE_LADDER ) &&
-				!( GetEntityFlags( client ) & FL_ONGROUND ) &&
-				( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
-			{
-				buttons &= ~IN_JUMP;
-			}
-		}
-		
-		// blocking keys (only in air)
-		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
-		{
-			if( settings[PreventLeft] && ( buttons & IN_MOVELEFT ) ||
-				settings[PreventRight] && ( buttons & IN_MOVERIGHT ) ||
-				settings[PreventForward] && ( buttons & IN_FORWARD ) ||
-				settings[PreventBack] && ( buttons & IN_BACK ) )
-			{
-				bButtonError = true;
-			}
-			else if( settings[HSW] && 
-					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_MOVELEFT ) || ( buttons & IN_MOVERIGHT ) ) ) )
-			{
-				bButtonError = true;
-			}
-		}
-		
-		if( bButtonError )
-		{
-			vel[0] = 0.0;
-			vel[1] = 0.0;
 		}
 		
 		lastYaw[client] = angles[1];
@@ -1420,6 +1422,40 @@ public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int par
 }
 
 /* Natives */
+
+public int Native_GetClientTimerData( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+
+	any data[TIMER_DATA_SIZE];
+	data[Timer_FrameCount] = g_nPlayerFrames[client];
+	data[Timer_Jumps] = g_nPlayerJumps[client];
+	data[Timer_AirFrames] = g_nPlayerAirFrames[client];
+	data[Timer_SyncedFrames] = g_nPlayerSyncedFrames[client];
+	data[Timer_StrafedFrames] = g_nPlayerAirStrafeFrames[client];
+	data[Timer_Strafes] = g_nPlayerStrafes[client];
+	
+	SetNativeArray( 2, data, TIMER_DATA_SIZE );
+	
+	return 1;
+}
+
+public int Native_SetClientTimerData( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	any data[TIMER_DATA_SIZE];
+	GetNativeArray( 2, data, TIMER_DATA_SIZE );
+	
+	g_nPlayerFrames[client] = data[Timer_FrameCount];
+	g_nPlayerJumps[client] = data[Timer_Jumps];
+	g_nPlayerAirFrames[client] = data[Timer_AirFrames];
+	g_nPlayerSyncedFrames[client] = data[Timer_SyncedFrames];
+	g_nPlayerAirStrafeFrames[client] = data[Timer_StrafedFrames];
+	g_nPlayerStrafes[client] = data[Timer_Strafes];
+	
+	return 1;
+}
 
 public int Native_GetDatabase( Handle handler, int numParams )
 {

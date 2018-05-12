@@ -47,6 +47,9 @@ float			g_fFrameTime;
 float			g_fTickRate;
 char			g_cCurrentMap[PLATFORM_MAX_PATH];
 
+Handle		g_hForward_OnReplaySavedPre;
+Handle		g_hForward_OnReplaySavedPost;
+
 ArrayList		g_aReplayQueue;
 
 ArrayList		g_aReplayFrames[TOTAL_ZONE_TRACKS][MAX_STYLES];
@@ -92,6 +95,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetReplayBotCurrentFrame", Native_GetReplayBotCurrentFrame );
 	CreateNative( "Timer_GetReplayBotTotalFrames", Native_GetReplayBotTotalFrames );
 	CreateNative( "Timer_GetReplayBotPlayerName", Native_GetReplayBotPlayerName );
+	CreateNative( "Timer_GetClientReplayFrames", Native_GetClientReplayFrames );
+	CreateNative( "Timer_SetClientReplayFrames", Native_SetClientReplayFrames );
 
 	RegPluginLibrary( "timer-replays" );
 	
@@ -100,6 +105,9 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_CellByRef );
+	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Event, Param_Cell, Param_Cell );
+
 	bot_quota = FindConVar( "bot_quota" );
 	bot_quota.AddChangeHook( OnBotQuotaChanged );
 	
@@ -432,7 +440,7 @@ void InitializeBot( int client, int replaytype, int botid )
 
 public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
 {	
-	any frameData[FrameData];
+	any frameData[ReplayFrameData];
 	float pos[3];
 	
 	if( !IsFakeClient( client ) )
@@ -455,12 +463,12 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			// its a player, save frame data
 			GetClientAbsOrigin( client, pos );
 			
-			frameData[FD_Pos][0] = pos[0];
-			frameData[FD_Pos][1] = pos[1];
-			frameData[FD_Pos][2] = pos[2];
-			frameData[FD_Angles][0] = angles[0];
-			frameData[FD_Angles][1] = angles[1];
-			frameData[FD_Buttons] = buttons;
+			frameData[Frame_Pos][0] = pos[0];
+			frameData[Frame_Pos][1] = pos[1];
+			frameData[Frame_Pos][2] = pos[2];
+			frameData[Frame_Angles][0] = angles[0];
+			frameData[Frame_Angles][1] = angles[1];
+			frameData[Frame_Buttons] = buttons;
 			
 			g_aPlayerFrameData[client].PushArray( frameData[0] );
 			g_iCurrentFrame[client]++;
@@ -480,12 +488,12 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			{
 				g_aPlayerFrameData[client].GetArray( g_iCurrentFrame[client], frameData[0] );
 				
-				pos[0] = frameData[FD_Pos][0];
-				pos[1] = frameData[FD_Pos][1];
-				pos[2] = frameData[FD_Pos][2];
+				pos[0] = frameData[Frame_Pos][0];
+				pos[1] = frameData[Frame_Pos][1];
+				pos[2] = frameData[Frame_Pos][2];
 				
-				angles[0] = frameData[FD_Angles][0];
-				angles[1] = frameData[FD_Angles][1];
+				angles[0] = frameData[Frame_Angles][0];
+				angles[1] = frameData[Frame_Angles][1];
 				
 				SetEntityMoveType( client, MOVETYPE_NONE );
 				TeleportEntity( client, pos, angles, NULL_VECTOR );
@@ -505,17 +513,17 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				float tmp[3];
 				GetClientAbsOrigin( client, tmp );
 				
-				pos[0] = frameData[FD_Pos][0];
-				pos[1] = frameData[FD_Pos][1];
-				pos[2] = frameData[FD_Pos][2];
+				pos[0] = frameData[Frame_Pos][0];
+				pos[1] = frameData[Frame_Pos][1];
+				pos[2] = frameData[Frame_Pos][2];
 				
 				MakeVectorFromPoints( tmp, pos, tmp );
 				ScaleVector( tmp, g_fTickRate );
 				
-				angles[0] = frameData[FD_Angles][0];
-				angles[1] = frameData[FD_Angles][1];
+				angles[0] = frameData[Frame_Angles][0];
+				angles[1] = frameData[Frame_Angles][1];
 				
-				buttons = frameData[FD_Buttons];
+				buttons = frameData[Frame_Buttons];
 				
 				TeleportEntity( client, NULL_VECTOR, angles, tmp );
 				
@@ -525,8 +533,8 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			{
 				g_aPlayerFrameData[client].GetArray( g_aPlayerFrameData[client].Length - 1, frameData[0] );
 				
-				angles[0] = frameData[FD_Angles][0];
-				angles[1] = frameData[FD_Angles][1];
+				angles[0] = frameData[Frame_Angles][0];
+				angles[1] = frameData[Frame_Angles][1];
 				
 				TeleportEntity( client, NULL_VECTOR, angles, view_as<float>({ 0.0, 0.0, 0.0 }) );
 				SetEntityMoveType( client, MOVETYPE_NONE );
@@ -582,7 +590,7 @@ void LoadReplay( int track, int style )
 		g_aReplayFrames[track][style] = new ArrayList( FRAME_DATA_SIZE );
 		g_aReplayFrames[track][style].Resize( header[HD_Size] );
 
-		any frameData[FrameData];
+		any frameData[ReplayFrameData];
 		for( int i = 0; i < header[HD_Size]; i++ )
 		{
 			if( file.Read( frameData[0], sizeof( frameData ), 4 ) >= 0 )
@@ -603,10 +611,21 @@ void SaveReplay( int client, float time, int track, int style )
 		return;
 	}
 	
-	g_fReplayRecordTimes[track][style] = time;
-	
 	delete g_aReplayFrames[track][style];
 	g_aReplayFrames[track][style] = g_aPlayerFrameData[client].Clone();
+	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnReplaySavedPre );
+	Call_PushCell( client );
+	Call_PushCellRef( g_aReplayFrames[track][style] );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
+	g_fReplayRecordTimes[track][style] = time;
 	
 	any header[ReplayHeader];
 	header[HD_MagicNumber] = MAGIC_NUMBER;
@@ -639,7 +658,7 @@ void SaveReplay( int client, float time, int track, int style )
 	
 	file.Write( header[0], sizeof(header), 4 );
 	
-	any frameData[FrameData];
+	any frameData[ReplayFrameData];
 	for( int i = 0; i < header[HD_Size]; i++ )
 	{
 		g_aReplayFrames[track][style].GetArray( i, frameData[0] );
@@ -676,6 +695,11 @@ void SaveReplay( int client, float time, int track, int style )
 			StartReplay( i, track, style );
 		}
 	}
+	
+	Call_StartForward( g_hForward_OnReplaySavedPost );
+	Call_PushCell( client );
+	Call_PushCell( g_aReplayFrames[track][style] );
+	Call_Finish();
 }
 
 void SetBotName( int client )
@@ -974,6 +998,22 @@ public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
 	{
 		SetNativeString( 2, g_cReplayRecordNames[track][style], GetNativeCell( 3 ) );
 	}
+	return 1;
+}
+
+public int Native_GetClientReplayFrames( Handle handler, int numParams )
+{
+	return view_as<int>( g_aPlayerFrameData[GetNativeCell( 1 )].Clone() );
+}
+
+public int Native_SetClientReplayFrames( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	delete g_aPlayerFrameData[client];
+	
+	ArrayList newframes = GetNativeCell( 2 );
+	g_aPlayerFrameData[client] = newframes.Clone();
+
 	return 1;
 }
 
