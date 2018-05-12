@@ -24,6 +24,15 @@ char g_cSoundTypePath[TOTAL_SOUND_TYPES][] =
 int	g_nSounds[TOTAL_SOUND_TYPES];
 char g_cSounds[TOTAL_SOUND_TYPES][MAX_SOUNDS][PLATFORM_MAX_PATH];
 
+public Plugin myinfo = 
+{
+	name = "Slidy's Timer - Sounds component",
+	author = "SlidyBat",
+	description = "Sounds component of Slidy's Timer",
+	version = TIMER_PLUGIN_VERSION,
+	url = ""
+}
+
 public void OnMapStart()
 {
 	PrecacheSounds();

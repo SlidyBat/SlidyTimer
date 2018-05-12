@@ -89,11 +89,11 @@ public void GetTimeString( int client, char[] output, int maxlen )
 		{
 			case TimerStatus_Stopped:
 			{
-				FormatEx( output, maxlen, "Time: <font color='#DB1A40'>Stopped</font>\t" );
+				FormatEx( output, maxlen, "<font color='#DB1A40'>Stopped</font>\t" );
 			}
 			case TimerStatus_Paused:
 			{
-				FormatEx( output, maxlen, "Time: <font color='#333399'>Paused</font>\t" );
+				FormatEx( output, maxlen, "<font color='#333399'>Paused</font>\t" );
 			}
 			case TimerStatus_Running:
 			{
@@ -105,7 +105,7 @@ public void GetTimeString( int client, char[] output, int maxlen )
 				
 				char sTimeColour[8];
 				GetTimeColour( sTimeColour, time, Timer_GetClientPBTime( client, track, style ), Timer_GetWRTime( track, style ) );
-				Format( output, maxlen, "Time: <font color='%s'>%s\t</font>", sTimeColour, output );
+				Format( output, maxlen, "<font color='%s'>%s\t</font>", sTimeColour, output );
 			}
 		}
 	}
@@ -122,7 +122,7 @@ public void GetTimeString( int client, char[] output, int maxlen )
 			Format( output, maxlen, "N/A" );
 		}
 		
-		Format( output, maxlen, "Time: %s\t", output );
+		Format( output, maxlen, "%s\t", output );
 	}
 }
 

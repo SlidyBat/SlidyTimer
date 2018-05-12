@@ -551,22 +551,22 @@ void DrawTopLeftOverlay( int client )
 
 		float pbtime = Timer_GetClientPBTime( target, track, style );
 
-		char sTopLeft[64];
+		char message[128];
 
 		if( pbtime != 0.0 )
 		{
 			char sPBTime[16];
 			Timer_FormatTime( pbtime, sPBTime, sizeof(sPBTime) );
 			
-			FormatEx(sTopLeft, 64, "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientRank( target, track, style ) );
+			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientRank( target, track, style ) );
 		}
 		else
 		{
-			FormatEx(sTopLeft, 64, "WR: %s (%s)", sWRTime, sWRName);
+			FormatEx( message, sizeof(message), "WR: %s (%s)", sWRTime, sWRName );
 		}
 
 		SetHudTextParams( 0.01, 0.01, 2.5, 255, 255, 255, 255 );
-		ShowSyncHudText( client, g_hHudSynchronizer, sTopLeft );
+		ShowSyncHudText( client, g_hHudSynchronizer, message );
 	}
 }
 
