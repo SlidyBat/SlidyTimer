@@ -179,7 +179,7 @@ void NextCheckpoint( int client )
 {
 	if( g_iSelectedCheckpoint[client] == g_aCheckpoints[client].Length - 1 )
 	{
-		PrintToChat( client, "[Timer] No further checkpoints" );
+		Timer_PrintToChat( client, "{primary}No further checkpoints" );
 	}
 	else
 	{
@@ -197,7 +197,7 @@ void PreviousCheckpoint( int client )
 {
 	if( g_iSelectedCheckpoint[client] == 0 )
 	{
-		PrintToChat( client, "[Timer] No previous checkpoints" );
+		Timer_PrintToChat( client, "{primary}No previous checkpoints" );
 	}
 	else
 	{
@@ -263,7 +263,7 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 		{
 			if( !g_aCheckpoints[param1].Length )
 			{
-				PrintToChat( param1, "[Timer] No checkpoints found" );
+				Timer_PrintToChat( param1, "{primary}No checkpoints found" );
 			}
 			else
 			{
@@ -289,7 +289,7 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 			}
 			else
 			{
-				PrintToChat( param1, "[Timer] No checkpoints found" );
+				Timer_PrintToChat( param1, "{primary}No checkpoints found" );
 			}
 		}
 		else if( StrEqual( sInfo, "delete" ) )
@@ -300,7 +300,7 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 			}
 			else
 			{
-				PrintToChat( param1, "[Timer] No checkpoints found" );
+				Timer_PrintToChat( param1, "{primary}No checkpoints found" );
 			}
 		}
 		else if( StrEqual( sInfo, "settings" ) )
@@ -402,7 +402,7 @@ public Action Command_Save( int client, int args )
 	{
 		if( !g_aCheckpoints[client].Length )
 		{
-			ReplyToCommand( client, "[Timer] No checkpoints found" );
+			Timer_ReplyToCommand( client, "{primary}No checkpoints found" );
 			return Plugin_Handled;
 		}
 	
@@ -413,7 +413,7 @@ public Action Command_Save( int client, int args )
 	
 	if( index != AUTO_SELECT_CP && !( 0 < index < g_aCheckpoints[client].Length ) )
 	{
-		ReplyToCommand( client, "[Timer] Invalid checkpoint %i", index );
+		Timer_ReplyToCommand( client, "{primary}Invalid checkpoint %i", index );
 		return Plugin_Handled;
 	}
 	
@@ -426,7 +426,7 @@ public Action Command_Tele( int client, int args )
 {
 	if( !g_aCheckpoints[client].Length )
 	{
-		ReplyToCommand( client, "[Timer] No checkpoints found" );
+		Timer_ReplyToCommand( client, "{primary}No checkpoints found" );
 		return Plugin_Handled;
 	}
 
@@ -440,7 +440,7 @@ public Action Command_Tele( int client, int args )
 	
 	if( index != AUTO_SELECT_CP && !( 0 < index < g_aCheckpoints[client].Length ) )
 	{
-		ReplyToCommand( client, "[Timer] Invalid checkpoint %i", index );
+		Timer_ReplyToCommand( client, "{primary}Invalid checkpoint {secondary}%i", index );
 		return Plugin_Handled;
 	}
 	
@@ -453,7 +453,7 @@ public Action Command_Delete( int client, int args )
 {
 	if( !g_aCheckpoints[client].Length )
 	{
-		ReplyToCommand( client, "[Timer] No checkpoints found" );
+		Timer_ReplyToCommand( client, "{primary}No checkpoints found" );
 		return Plugin_Handled;
 	}
 
@@ -469,7 +469,7 @@ public Action Command_Delete( int client, int args )
 	
 	if( !( 0 < index < g_aCheckpoints[client].Length ) )
 	{
-		ReplyToCommand( client, "[Timer] Invalid checkpoint %i", index );
+		Timer_ReplyToCommand( client, "{primary}Invalid checkpoint {secondary}%i", index );
 		return Plugin_Handled;
 	}
 

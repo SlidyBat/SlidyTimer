@@ -327,7 +327,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 {
 	if( g_nJumps[target] == 1 && g_Settings[client] & SSJ_PRESPEED )
 	{
-		PrintToChat( client, "[Timer] Prespeed: %.2f", stats[SSJ_Speed] );
+		Timer_PrintToChat( client, "{primary}Prespeed{white}: {secondary}%.2f", stats[SSJ_Speed] );
 		return;
 	}
 	
@@ -340,8 +340,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	any lastStats[SSJStats];
 	g_aJumpStats[target].GetArray( idx, lastStats[0] );
 
-	char message[256];
-	Format( message, sizeof(message), "[Timer]" );
+	char message[512];
 	
 	//"Jump Number",
 	//"Prespeed",
@@ -359,32 +358,32 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 
 	if( g_Settings[client] & SSJ_JUMPNUMBER )
 	{
-		Format( message, sizeof(message), "%s Jump: %i |", message, g_nJumps[target] );
+		Format( message, sizeof(message), "%s{primary}Jump{white}: {secondary}%i {white}| ", message, g_nJumps[target] );
 	}
 	if( g_Settings[client] & SSJ_SPEED )
 	{
-		Format( message, sizeof(message), "%s Speed: %.2f |", message, stats[SSJ_Speed] );
+		Format( message, sizeof(message), "%s{primary}Speed{white}: {secondary}%.2f {white}| ", message, stats[SSJ_Speed] );
 	}
 	if( g_Settings[client] & SSJ_DELTASPEED )
 	{
 		float deltaspeed = stats[SSJ_Speed] - lastStats[SSJ_Speed];
-		Format( message, sizeof(message), "%s Δ Speed: %s%.2f |", message, (deltaspeed > 0.0) ? "+" : "", deltaspeed );
+		Format( message, sizeof(message), "%s{primary}Δ Speed{white}: %s%.2f {white}| ", message, (deltaspeed > 0.0) ? "{lime}+" : "{darkred}", deltaspeed );
 	}
 	if( g_Settings[client] & SSJ_SYNC )
 	{
 		int syncedticks = stats[SSJ_SyncedTicks] - lastStats[SSJ_SyncedTicks];
 		float sync = float(syncedticks) / tickcount;
-		Format( message, sizeof(message), "%s Sync: %.2f |", message, sync * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Sync{white}: {secondary}%.2f {white}| ", message, sync * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_STRAFETIME )
 	{
 		int strafedticks = stats[SSJ_StrafedTicks] - lastStats[SSJ_StrafedTicks];
 		float strafetime = float(strafedticks) / tickcount;
-		Format( message, sizeof(message), "%s Strafe %: %.2f |", message, strafetime * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Strafe %{white}: {secondary}%.2f {white}| ", message, strafetime * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_GAIN )
 	{
-		Format( message, sizeof(message), "%s Gain: %.2f |", message, gain * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Gain{white}: {secondary}%.2f {white}| ", message, gain * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_EFFICIENCY )
 	{
@@ -408,22 +407,22 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 		
 		float efficiency = displacementLength / distanceTravelled;
 
-		Format( message, sizeof(message), "%s Efficiency: %.2f |", message, efficiency * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Efficiency{white}: {secondary}%.2f {white}| ", message, efficiency * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_DELTAHEIGHT )
 	{
 		float deltaheight = stats[SSJ_Pos][2] - lastStats[SSJ_Pos][2];
-		Format( message, sizeof(message), "%s Δ Height: %s%.2f |", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
+		Format( message, sizeof(message), "%s{primary}Δ Height{white}: {secondary}%s%.2f {white}| ", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
 	}
 	if( g_Settings[client] & SSJ_DELTATIME )
 	{
 		float time = tickcount * GetTickInterval();
-		Format( message, sizeof(message), "%s Δ Time: %.2f |", message, time );
+		Format( message, sizeof(message), "%s{primary}Δ Time{white}: {secondary}%.2f {white}| ", message, time );
 	}
 	
 	message[strlen(message) - 2] = '\0';
 
-	PrintToChat( client, message );
+	Timer_PrintToChat( client, message );
 }
 
 void OpenSSJMenu( int client )

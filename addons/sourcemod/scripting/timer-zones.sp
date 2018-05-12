@@ -336,7 +336,7 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 		char sZoneType[64], sZoneTrack[64];
 		Timer_GetZoneTypeName( zoneType, sZoneType, sizeof( sZoneType ) );
 		Timer_GetZoneTrackName( zoneTrack, sZoneTrack, sizeof( sZoneTrack ) );
-		PrintToChat( client, "[Timer] %s %s zone does not exist", sZoneTrack, sZoneType );
+		Timer_PrintToChat( client, "{secondary}%s %s {primary}does not exist", sZoneTrack, sZoneType );
 		
 		return;
 	}
@@ -824,7 +824,7 @@ public Action Command_Zone( int client, int args ) // TODO: determine if players
 {
 	if( !g_bLoaded )
 	{
-		ReplyToCommand( client, "[Timer] Zones have not been loaded yet ..." );
+		Timer_ReplyToCommand( client, "{primary}Zones have not been loaded yet ..." );
 		return Plugin_Handled;
 	}
 
