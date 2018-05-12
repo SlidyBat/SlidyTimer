@@ -8,8 +8,8 @@
 
 enum (<<= 1)
 {
-	SSJ_JUMPNUMBER = 1,
-	SSJ_PRESPEED,
+	SSJ_PRESPEED = 1,
+	SSJ_JUMPNUMBER,
 	SSJ_SPEED,
 	SSJ_DELTASPEED,
 	SSJ_SYNC,
@@ -43,8 +43,8 @@ enum
 
 char g_cSSJSettingNames[TOTAL_SSJ_SETTINGS][] = 
 {
-	"Jump Number",
 	"Prespeed",
+	"Jump Number",
 	"Speed",
 	"Δ Speed",
 	"Sync",
@@ -236,14 +236,14 @@ void OnJump( int client )
 		
 		if( g_bSSJEnabled[i] )
 		{
-			if( ( g_nJumps[client] == 1 && g_Settings[i] & SSJ_PRESPEED ) ||
-				g_nJumps[client] % g_iJumpInterval[i] == 0 )
+			if( g_nJumps[client] == 1 && g_Settings[i] & SSJ_PRESPEED )
 			{
-				if( g_bSSJRepeat[i] || (!g_bSSJRepeat[i] && g_nJumps[client] == g_iJumpInterval[i]) )
-				{
-					Timer_DebugPrint( "OnJump: Printing stats" );
-					PrintStats( i, client, stats );
-				}
+				PrintStats( i, client, stats ); // just prints prespeed
+			}
+			else if( g_nJumps[client] % g_iJumpInterval[i] == 0 &&
+					( g_bSSJRepeat[i] || (!g_bSSJRepeat[i] && g_nJumps[client] == g_iJumpInterval[i]) ) )
+			{
+				PrintStats( i, client, stats );
 			}
 		}
 	}
