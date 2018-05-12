@@ -8,8 +8,8 @@
 
 enum (<<= 1)
 {
-	SSJ_JUMPNUMBER = 1,
-	SSJ_PRESPEED,
+	SSJ_PRESPEED = 1,
+	SSJ_JUMPNUMBER,
 	SSJ_SPEED,
 	SSJ_DELTASPEED,
 	SSJ_SYNC,
@@ -43,8 +43,8 @@ enum
 
 char g_cSSJSettingNames[TOTAL_SSJ_SETTINGS][] = 
 {
-	"Jump Number",
 	"Prespeed",
+	"Jump Number",
 	"Speed",
 	"Δ Speed",
 	"Sync",
@@ -61,7 +61,9 @@ enum SSJStats
 	Float:SSJ_Pos[3],
 	SSJ_Tick,
 	SSJ_SyncedTicks,
-	SSJ_StrafedTicks
+	SSJ_StrafedTicks,
+	Float:SSJ_Distance,
+	Float:SSJ_TotalGain
 }
 
 Handle g_hCookieSettings;
@@ -72,6 +74,8 @@ int g_iJumpInterval[MAXPLAYERS + 1] = { 6, ... };
 
 Handle g_hCookieSSJEnabled;
 bool g_bSSJEnabled[MAXPLAYERS + 1];
+float g_fDistanceTravelled[MAXPLAYERS + 1];
+int g_nGroundTicks[MAXPLAYERS + 1];
 
 Handle g_hCookieSSJRepeat;
 bool g_bSSJRepeat[MAXPLAYERS + 1];
@@ -83,8 +87,6 @@ int g_nStrafedTicks[MAXPLAYERS + 1];
 bool g_bTouchesWall[MAXPLAYERS + 1];
 int g_nTouchTicks[MAXPLAYERS + 1];
 float g_fTotalGain[MAXPLAYERS + 1];
-float g_fDistanceTravelled[MAXPLAYERS + 1];
-int g_nGroundTicks[MAXPLAYERS + 1];
 
 ArrayList g_aJumpStats[MAXPLAYERS + 1];
 
@@ -105,11 +107,6 @@ public void OnPluginStart()
 	g_hCookieSSJRepeat = RegClientCookie( "sm_ssj_repeat", "SSJ repeat every interval", CookieAccess_Protected );
 
 	RegConsoleCmd( "sm_ssj", Command_SSJ );
-}
-
-public void OnMapStart()
-{
-	HookEvent( "player_jump", HookEvent_PlayerJump );
 }
 
 public void OnClientPutInServer( int client )
@@ -147,6 +144,11 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 {
 	static float s_LastAngles[MAXPLAYERS + 1][3];
 
+	if( IsFakeClient( client ) )
+	{
+		return;
+	}
+	
 	float deltayaw = NormalizeAngle( angles[1] - s_LastAngles[client][1] );
 
 	if( GetEntityFlags( client ) & FL_ONGROUND )
@@ -155,11 +157,23 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 		{
 			ResetStats( client );
 		}
+		if( buttons & IN_JUMP && g_nGroundTicks[client] > 0 )
+		{
+			OnJump( client );
+			GetStats( client, vel, angles, deltayaw );
+			g_nGroundTicks[client] = 0;
+		}
 	}
 	else
 	{
 		g_nGroundTicks[client] = 0;
-		GetStats( client, vel, angles, deltayaw );
+		if( GetEntityMoveType(client) != MOVETYPE_NONE &&
+			GetEntityMoveType(client) != MOVETYPE_NOCLIP &&
+			GetEntityMoveType(client) != MOVETYPE_LADDER &&
+			GetEntProp(client, Prop_Data, "m_nWaterLevel") < 2 )
+		{
+			GetStats( client, vel, angles, deltayaw );
+		}
 	}
 
 	if( g_bTouchesWall[client] )
@@ -185,10 +199,8 @@ public Action Hook_OnTouch( int client, int entity )
 	}
 }
 
-public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBroadcast )
+void OnJump( int client )
 {
-	int client = GetClientOfUserId( event.GetInt( "userid" ) );
-
 	float pos[3];
 	GetClientAbsOrigin( client, pos );
 
@@ -200,29 +212,40 @@ public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBro
 	stats[SSJ_Pos][2] = pos[2];
 	stats[SSJ_SyncedTicks] = g_nSyncedTicks[client];
 	stats[SSJ_StrafedTicks] = g_nStrafedTicks[client];
+	stats[SSJ_Distance] = g_fDistanceTravelled[client];
+	stats[SSJ_TotalGain] = g_fTotalGain[client];
 
 	g_aJumpStats[client].PushArray( stats[0] );
 
 	g_nJumps[client]++;
 
-	Timer_DebugPrint( "HookEvent_PlayerJump: %N jump=%i jumpinterval=%i tick=%i", client, g_nJumps[client], g_iJumpInterval[client], GetGameTickCount() );
-
-	if( g_nJumps[client] == 1 && g_Settings[client] & SSJ_PRESPEED )
+	Timer_DebugPrint( "OnJump: %N jump=%i jumpinterval=%i tick=%i", client, g_nJumps[client], g_iJumpInterval[client], GetGameTickCount() );
+	
+	for( int i = 1; i <= MaxClients; i++ )
 	{
-		PrintToChat( client, "[Timer] Prespeed: %.2f", stats[SSJ_Speed] );
-	}
-	else if( g_nJumps[client] != 1 && g_nJumps[client] % g_iJumpInterval[client] == 0 )
-	{
-		if( g_bSSJEnabled[client] )
+		if( !IsClientInGame( i ) )
 		{
-			if( g_bSSJRepeat[client] || (!g_bSSJRepeat[client] && g_nJumps[client] == g_iJumpInterval[client]) )
+			continue;
+		}
+		
+		int target = GetClientObserverTarget( i );
+		if( target != client )
+		{
+			continue;
+		}
+		
+		if( g_bSSJEnabled[i] )
+		{
+			if( g_nJumps[client] == 1 && g_Settings[i] & SSJ_PRESPEED )
 			{
-				Timer_DebugPrint( "HookEvent_PlayerJump: Printing stats" );
-				PrintStats( client );	
+				PrintStats( i, client, stats ); // just prints prespeed
+			}
+			else if( g_nJumps[client] % g_iJumpInterval[i] == 0 &&
+					( g_bSSJRepeat[i] || (!g_bSSJRepeat[i] && g_nJumps[client] == g_iJumpInterval[i]) ) )
+			{
+				PrintStats( i, client, stats );
 			}
 		}
-		g_fDistanceTravelled[client] = 0.0;
-		g_fTotalGain[client] = 0.0;
 	}
 }
 
@@ -241,6 +264,8 @@ void ResetStats( int client )
 	g_nJumps[client] = 0;
 	g_nSyncedTicks[client] = 0;
 	g_nStrafedTicks[client] = 0;
+	g_fDistanceTravelled[client] = 0.0;
+	g_fTotalGain[client] = 0.0;
 }
 
 void GetStats( int client, float vel[3], float angles[3], float deltayaw )
@@ -257,7 +282,6 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 	g_fDistanceTravelled[client] += GetVectorLength( absvel ) * GetTickInterval() * GetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue");
 
 	float fore[3], side[3], wishvel[3], wishdir[3];
-	float wishspeed, wishspd, currentgain;
 	
 	GetAngleVectors(angles, fore, side, NULL_VECTOR);
 	
@@ -272,9 +296,8 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 	}
 
 	float maxspeed = GetEntPropFloat(client, Prop_Send, "m_flMaxspeed");
-	float gaincoeff;
-
-	wishspeed = NormalizeVector(wishvel, wishdir);
+	
+	float wishspeed = NormalizeVector(wishvel, wishdir);
 	if( wishspeed > maxspeed && maxspeed != 0.0 )
 	{
 		wishspeed = maxspeed;
@@ -282,9 +305,10 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 
 	if( wishspeed )
 	{
-		wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
+		float gaincoeff;
+		float wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
 		
-		currentspeed = GetVectorDotProduct( absvel, wishdir );
+		float currentspeed = GetVectorDotProduct( absvel, wishdir );
 		if( wishspd - currentspeed > 0.0 )
 		{
 			g_nSyncedTicks[client]++;
@@ -299,16 +323,25 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 	}
 }
 
-void PrintStats( int client )
+void PrintStats( int client, int target, any stats[SSJStats] )
 {
-	any stats[SSJStats];
-	g_aJumpStats[client].GetArray( g_aJumpStats[client].Length - 1, stats[0] );
-
+	if( g_nJumps[target] == 1 && g_Settings[client] & SSJ_PRESPEED )
+	{
+		Timer_PrintToChat( client, "{primary}Prespeed{white}: {secondary}%.2f", stats[SSJ_Speed] );
+		return;
+	}
+	
+	int idx = 0;
+	if( g_aJumpStats[target].Length - g_iJumpInterval[client] - 1 >= 0 )
+	{
+		idx = g_aJumpStats[target].Length - g_iJumpInterval[client] - 1;
+	}
+	
 	any lastStats[SSJStats];
-	g_aJumpStats[client].GetArray( g_aJumpStats[client].Length - g_iJumpInterval[client], lastStats[0] );
+	g_aJumpStats[target].GetArray( idx, lastStats[0] );
 
-	char message[256];
-	Format( message, sizeof(message), "[Timer]" );
+	char message[512];
+	
 	//"Jump Number",
 	//"Prespeed",
 	//"Speed",
@@ -321,36 +354,36 @@ void PrintStats( int client )
 	//"Δ Time"
 
 	int tickcount = (stats[SSJ_Tick] - lastStats[SSJ_Tick]) + 1;
-	float gain = g_fTotalGain[client] / tickcount;
+	float gain = (stats[SSJ_TotalGain] - lastStats[SSJ_TotalGain]) / tickcount;
 
 	if( g_Settings[client] & SSJ_JUMPNUMBER )
 	{
-		Format( message, sizeof(message), "%s Jump: %i", message, g_nJumps[client] );
+		Format( message, sizeof(message), "%s{primary}Jump{white}: {secondary}%i {white}| ", message, g_nJumps[target] );
 	}
 	if( g_Settings[client] & SSJ_SPEED )
 	{
-		Format( message, sizeof(message), "%s Speed: %.2f", message, stats[SSJ_Speed] );
+		Format( message, sizeof(message), "%s{primary}Speed{white}: {secondary}%.2f {white}| ", message, stats[SSJ_Speed] );
 	}
 	if( g_Settings[client] & SSJ_DELTASPEED )
 	{
 		float deltaspeed = stats[SSJ_Speed] - lastStats[SSJ_Speed];
-		Format( message, sizeof(message), "%s Δ Speed: %s%.2f", message, (deltaspeed > 0.0) ? "+" : "-", deltaspeed );
+		Format( message, sizeof(message), "%s{primary}Δ Speed{white}: %s%.2f {white}| ", message, (deltaspeed > 0.0) ? "{lime}+" : "{darkred}", deltaspeed );
 	}
 	if( g_Settings[client] & SSJ_SYNC )
 	{
 		int syncedticks = stats[SSJ_SyncedTicks] - lastStats[SSJ_SyncedTicks];
 		float sync = float(syncedticks) / tickcount;
-		Format( message, sizeof(message), "%s Sync: %.2f", message, sync * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Sync{white}: {secondary}%.2f {white}| ", message, sync * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_STRAFETIME )
 	{
 		int strafedticks = stats[SSJ_StrafedTicks] - lastStats[SSJ_StrafedTicks];
 		float strafetime = float(strafedticks) / tickcount;
-		Format( message, sizeof(message), "%s Strafe %: %.2f", message, strafetime * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Strafe %{white}: {secondary}%.2f {white}| ", message, strafetime * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_GAIN )
 	{
-		Format( message, sizeof(message), "%s Gain: %.2f", message, gain * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Gain{white}: {secondary}%.2f {white}| ", message, gain * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_EFFICIENCY )
 	{
@@ -364,35 +397,38 @@ void PrintStats( int client )
 
 		float displacement[3];
 		SubtractVectors( endpos, startpos, displacement );
-
+		
 		float displacementLength = GetVectorLength( displacement );
-		if( displacementLength > g_fDistanceTravelled[client] )
+		float distanceTravelled = stats[SSJ_Distance] - lastStats[SSJ_Distance];
+		if( displacementLength > distanceTravelled )
 		{
-			displacementLength = g_fDistanceTravelled[client];
+			displacementLength = distanceTravelled;
 		}
 		
-		float efficiency = displacementLength / g_fDistanceTravelled[client];
+		float efficiency = displacementLength / distanceTravelled;
 
-		Format( message, sizeof(message), "%s Efficiency: %.2f", message, efficiency * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Efficiency{white}: {secondary}%.2f {white}| ", message, efficiency * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_DELTAHEIGHT )
 	{
 		float deltaheight = stats[SSJ_Pos][2] - lastStats[SSJ_Pos][2];
-		Format( message, sizeof(message), "%s Δ Height: %s%.2f", message, (deltaheight > 0.0) ? "+" : "-", deltaheight );
+		Format( message, sizeof(message), "%s{primary}Δ Height{white}: {secondary}%s%.2f {white}| ", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
 	}
 	if( g_Settings[client] & SSJ_DELTATIME )
 	{
 		float time = tickcount * GetTickInterval();
-		Format( message, sizeof(message), "%s Δ Time: %.2f", message, time );
+		Format( message, sizeof(message), "%s{primary}Δ Time{white}: {secondary}%.2f {white}| ", message, time );
 	}
+	
+	message[strlen(message) - 2] = '\0';
 
-	PrintToChat( client, message );
+	Timer_PrintToChat( client, message );
 }
 
 void OpenSSJMenu( int client )
 {
 	Menu menu = new Menu( SSJMenu_Handler );
-	menu.SetTitle( "SSJ\n \n" );
+	menu.SetTitle( "Timer - SSJ\n \n" );
 
 	char buffer[256];
 
@@ -460,10 +496,10 @@ public int SSJMenu_Handler( Menu menu, MenuAction action, int param1, int param2
 	}
 }
 
-void OpenSSJSettingsMenu( int client )
+void OpenSSJSettingsMenu( int client, int firstItem = 0 )
 {
 	Menu menu = new Menu( SSJSettingsMenu_Handler );
-	menu.SetTitle( "SSJ Settings\n \n" );
+	menu.SetTitle( "Timer - SSJ Settings\n \n" );
 
 	char buffer[256];
 	for( int i = 0; i < TOTAL_SSJ_SETTINGS; i++ )
@@ -473,7 +509,7 @@ void OpenSSJSettingsMenu( int client )
 	}
 
 	menu.ExitBackButton = true;
-	menu.Display( client, MENU_TIME_FOREVER );
+	menu.DisplayAt( client, firstItem, MENU_TIME_FOREVER );
 }
 
 public int SSJSettingsMenu_Handler( Menu menu, MenuAction action, int param1, int param2 )
@@ -485,7 +521,7 @@ public int SSJSettingsMenu_Handler( Menu menu, MenuAction action, int param1, in
 	else if( action == MenuAction_Select )
 	{
 		g_Settings[param1] ^= (1 << param2);
-		OpenSSJSettingsMenu( param1 );
+		OpenSSJSettingsMenu( param1, (param2 / 6) * 6 );
 
 		SetClientCookieInt( param1, g_hCookieSettings, g_Settings[param1] );
 	}
@@ -513,7 +549,7 @@ stock bool GetClientCookieInt( int client, Handle cookie, int& value )
 		return false;
 	}
 
-	StringToInt( sValue, value );
+	value = StringToInt( sValue );
 	return true;
 }
 
@@ -532,6 +568,6 @@ stock bool GetClientCookieBool( int client, Handle cookie, bool& value )
 		return false;
 	}
 
-	StringToInt( sValue, view_as<int>(value) );
+	value = StringToInt( sValue ) != 0;
 	return true;
 }

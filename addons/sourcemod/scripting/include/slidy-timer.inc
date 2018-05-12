@@ -715,6 +715,50 @@ native void Timer_SetClientReplayFrames( int client, ArrayList frames );
  */
 native void Timer_GetReplayBotPlayerName( int client, char[] output, int maxlen );
 
+/**
+ * Prints to specified client's chat using the timers chat processing
+ * Allows for more customisability with colours and also adds a prefix
+ *
+ * @param client					Client index
+ * @param message					Message to print
+ *
+ * @noreturn
+ */
+native void Timer_PrintToChat( int client, char[] message, any ... );
+
+/**
+ * Prints to all clients' chat using the timers chat processing
+ * Allows for more customisability with colours and also adds a prefix
+ *
+ * @param client					Client index
+ * @param message					Message to print
+ *
+ * @noreturn
+ */
+native void Timer_PrintToChatAll( char[] message, any ... );
+
+/**
+ * Prints to all clients' chat that have the specified flags using the timers chat processing
+ * Allows for more customisability with colours and also adds a prefix
+ *
+ * @param client					Client index
+ * @param message					Message to print
+ *
+ * @noreturn
+ */
+native void Timer_PrintToAdmins( int flags, char[] message, any ... );
+
+/**
+ * Prints to specified client's chat/console depending on where they typed command
+ * Allows for more customisability with colours and also adds a prefix
+ *
+ * @param client					Client index
+ * @param message					Message to print
+ *
+ * @noreturn
+ */
+native void Timer_ReplyToCommand( int client, char[] message, any ... );
+
 stock void Timer_OpenSelectStyleMenu( int client, SelectStyleCB cb )
 {
 	g_SelectStyleCallback[client] = cb;
@@ -748,8 +792,7 @@ public SharedPlugin __pl_slidy_timer =
 #if !defined REQUIRE_PLUGIN
 public void __pl_slidy_timer_SetNTVOptional()
 {
-	MarkNativeAsOptional( "Timer_GetClientTimerData" );
-	MarkNativeAsOptional( "Timer_SetClientTimerData" );
+	// core
 	MarkNativeAsOptional( "Timer_GetClientCurrentTime" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentJumps" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentStrafes" );
@@ -765,19 +808,31 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetStylePrefix" );
 	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
 	MarkNativeAsOptional( "Timer_GetClientRank" );
-	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
-	MarkNativeAsOptional( "Timer_GetClientZoneType" );
 	MarkNativeAsOptional( "Timer_GetDatabase" );
 	MarkNativeAsOptional( "Timer_IsClientLoaded" );
 	MarkNativeAsOptional( "Timer_IsTimerRunning" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
 	MarkNativeAsOptional( "Timer_BlockTimer" );
+	MarkNativeAsOptional( "Timer_GetClientTimerData" );
+	MarkNativeAsOptional( "Timer_SetClientTimerData" );
+	
+	// zones
+	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
+	MarkNativeAsOptional( "Timer_GetClientZoneType" );
 	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 	MarkNativeAsOptional( "Timer_IsClientInsideZone" );
+	
+	// replays
 	MarkNativeAsOptional( "Timer_GetReplayBotCurrentFrame" );
 	MarkNativeAsOptional( "Timer_GetReplayBotTotalFrames" );
 	MarkNativeAsOptional( "Timer_GetReplayBotPlayerName" );
 	MarkNativeAsOptional( "Timer_GetClientReplayFrames" );
 	MarkNativeAsOptional( "Timer_SetClientReplayFrames" );
+	
+	// chat
+	MarkNativeAsOptional( "Timer_PrintToChat" );
+	MarkNativeAsOptional( "Timer_PrintToChatAll" );
+	MarkNativeAsOptional( "Timer_PrintToAdmins" );
+	MarkNativeAsOptional( "Timer_ReplyToCommand" );
 }
 #endif

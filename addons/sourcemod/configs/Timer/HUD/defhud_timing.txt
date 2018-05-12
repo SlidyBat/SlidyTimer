@@ -1,3 +1,3 @@
 	<font color='{rainbow}'>c00l<font color='#FFFFFF'>Timer</font></font><b>
-<font size='15' face='Arial'>{time}	Speed: {speed}
+<font size='15' face='Arial'>Time: {time}	Speed: {speed}
 Sync: {sync}		Jumps: {jumps}

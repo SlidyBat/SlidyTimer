@@ -207,7 +207,7 @@ public Action HookEvent_PlayerDisconnect( Event event, const char[] name, bool d
 		return Plugin_Continue;
 		
 	char buffer[256];
-	Format( buffer, sizeof( buffer ), "[\x07Disconnect\x01] \x03%N \x01has left the server", client );
+	Format( buffer, sizeof( buffer ), "{name}%N {primary}has left the server", client );
 	PrintToChatAll( buffer ); // TODO: maybe implement a timer print to chat that creates a SayText2 usermsg, so message appears in console
 
 	return Plugin_Handled;
@@ -352,7 +352,7 @@ public Action Command_Spec( int client, int args )
 
 		if( !SelectTarget( client, arg, SetClientObserverTarget ) )
 		{
-			ReplyToCommand( client, "[Timer] No matching players" );	
+			Timer_ReplyToCommand( client, "{primary}No matching players" );	
 		}
 	}
 	
@@ -368,7 +368,7 @@ public void SetClientObserverTarget( int client, int target )
 	}
 	else
 	{
-		ReplyToCommand( client, "[Timer] %N is not alive", target );
+		Timer_ReplyToCommand( client, "{name}%N {primary}is not alive", target );
 	}
 }
 

@@ -421,7 +421,7 @@ void FinishTimer( int client )
 	
 	char sZoneTrack[64];
 	Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
-	PrintToChatAll( "[%s] %N finished on %s timer in %ss (time=%f, wr=%f, pb=%f)", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime, time, wr, pb );
+	Timer_PrintToChatAll( "[{secondary}%s{white}] {name}%N {primary}finished on {secondary}%s {primary}timer in {secondary}%ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime, time, wr, pb );
 	// TODO: store attempts in seperate cache
 	//g_iPlayerRecordId[client][track][style][RD_Attempts]++;
 	
@@ -440,7 +440,7 @@ void FinishTimer( int client )
 		
 		if( wr == 0.0 || time < wr )
 		{
-			PrintToChatAll( "NEW WR!!!!!" );
+			Timer_PrintToChatAll( "{primary}NEW WR!!!!!" );
 			
 			Call_StartForward( g_hForward_OnWRBeaten );
 			Call_PushCell( client );
@@ -452,7 +452,7 @@ void FinishTimer( int client )
 		}
 		else
 		{
-			PrintToChatAll( "NEW PB!!!" );
+			Timer_PrintToChatAll( "{primary}NEW PB!!!" );
 		}
 	}
 	else
@@ -625,7 +625,7 @@ public void SetClientStyle( int client, int style )
 	
 	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	
-	PrintToChat( client, "[Timer] Style now: %s", g_StyleSettings[style][StyleName] );
+	Timer_PrintToChat( client, "{primary}Style now: {secondary}%s", g_StyleSettings[style][StyleName] );
 	
 	Call_StartForward( g_hForward_OnStyleChangedPost );
 	Call_PushCell( client );
@@ -1240,7 +1240,7 @@ public void ShowPB( int client, int style )
 	}
 	else
 	{
-		PrintToChat( client, "[Timer] No records found" );
+		Timer_PrintToChat( client, "{primary}No records found" );
 	}
 }
 
@@ -1259,7 +1259,7 @@ public void ShowBonusPB( int client, int style )
 	}
 	else
 	{
-		PrintToChat( client, "[Timer] No records found" );
+		Timer_PrintToChat( client, "{primary}No records found" );
 	}
 }
 
@@ -1291,7 +1291,7 @@ void ShowLeaderboard( int client, int track, int style )
 {
 	if( !g_aMapTopTimes[track][style].Length )
 	{
-		PrintToChat( client, "[Timer] No records found" );
+		Timer_PrintToChat( client, "{primary}No records found" );
 		return;
 	}
 	

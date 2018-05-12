@@ -1,2 +1,2 @@
-     <font size='30'>{time}
+     <font size='30'>Time: {time}
      Speed: {speed}
