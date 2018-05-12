@@ -1003,16 +1003,27 @@ public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
 
 public int Native_GetClientReplayFrames( Handle handler, int numParams )
 {
-	return view_as<int>( g_aPlayerFrameData[GetNativeCell( 1 )].Clone() );
+	int client = GetNativeCell( 1 );
+	ArrayList frames = null;
+	
+	// have to CloneHandle so that ownership is passed to the other plugin and it can delete it
+	if( g_aPlayerFrameData[client] != null )
+	{
+		ArrayList temp = g_aPlayerFrameData[client].Clone();
+		frames =  view_as<ArrayList>( CloneHandle( temp, handler ) );
+		delete temp;
+	}
+	
+	return view_as<int>( frames );
 }
 
 public int Native_SetClientReplayFrames( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
 	delete g_aPlayerFrameData[client];
-	
-	ArrayList newframes = GetNativeCell( 2 );
-	g_aPlayerFrameData[client] = newframes.Clone();
+
+	ArrayList newFrames = GetNativeCell( 2 );
+	g_aPlayerFrameData[client] = newFrames.Clone();
 
 	return 1;
 }
