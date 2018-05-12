@@ -753,7 +753,7 @@ void QueueReplay( int client, int track, int style )
 	g_aReplayQueue.Set( index, track, 1 );
 	g_aReplayQueue.Set( index, style, 2 );
 	
-	PrintToChat( client, "[Timer] Your replay has been queued" );
+	Timer_PrintToChat( client, "{primary}Your replay has been queued" );
 }
 
 void StopReplayBot( int botidx )
@@ -780,7 +780,7 @@ void EndReplayBot( int botidx )
 		g_aReplayQueue.Erase( 0 );
 		
 		StartReplay( g_iBotId[botidx], track, style );
-		PrintToChat( client, "[Timer] Your replay has started" );
+		Timer_PrintToChat( client, "{primary}Your replay has started" );
 	}
 	else
 	{
