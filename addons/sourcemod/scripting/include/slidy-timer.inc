@@ -64,8 +64,8 @@ enum styleSettings
 {
 	String:StyleName[64],
 	String:StylePrefix[16],
-	String:Aliases[512],
-	String:SpecialId[16],
+	String:Aliases[256],
+	String:SettingString[256],
 	bool:Ranked,
 	bool:AutoBhop,
 	bool:StartBhop,
@@ -547,6 +547,17 @@ native void Timer_GetStyleName( int style, char[] buffer, int maxlen );
 native void Timer_GetStylePrefix( int style, char[] buffer, int maxlen );
 
 /**
+ * Returns whether a style has the specified setting string
+ * Used for external modules that create their own styles, no need to modify the core module to accomodate.
+ *
+ * @param style						Style index
+ * @param setting					Setting string
+ *
+ * @return							True if the style has that setting, otherwise false
+ */
+native bool Timer_StyleHasSetting( int style, char[] setting );
+
+/**
  * Gets WR for specified track and style
  *
  * @param track						Zone track to check (ie. main/bonus)
@@ -826,6 +837,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetStyleSettings" );
 	MarkNativeAsOptional( "Timer_GetStyleName" );
 	MarkNativeAsOptional( "Timer_GetStylePrefix" );
+	MarkNativeAsOptional( "Timer_StyleHasSetting" );
 	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
 	MarkNativeAsOptional( "Timer_GetClientRank" );
 	MarkNativeAsOptional( "Timer_GetDatabase" );

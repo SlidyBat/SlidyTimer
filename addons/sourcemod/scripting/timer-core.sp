@@ -126,6 +126,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetStyleSettings", Native_GetStyleSettings );
 	CreateNative( "Timer_GetStyleName", Native_GetStyleName );
 	CreateNative( "Timer_GetStylePrefix", Native_GetStylePrefix );
+	CreateNative( "Timer_StyleHasSetting", Native_StyleHasSetting );
 	CreateNative( "Timer_GetClientTimerStatus", Native_GetClientTimerStatus );
 	CreateNative( "Timer_GetClientRank", Native_GetClientRank );
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
@@ -532,38 +533,39 @@ bool LoadStyles()
 		kvStyles.GetString( "stylename", g_StyleSettings[g_iTotalStyles][StyleName], 64 );
 		kvStyles.GetString( "styleprefix", g_StyleSettings[g_iTotalStyles][StylePrefix], 16 );
 		kvStyles.GetString( "aliases", g_StyleSettings[g_iTotalStyles][Aliases], 512 );
-		kvStyles.GetString( "specialid", g_StyleSettings[g_iTotalStyles][SpecialId], 16 );
+		kvStyles.GetString( "settings", g_StyleSettings[g_iTotalStyles][SettingString], 256 );
 
-		g_StyleSettings[g_iTotalStyles][Ranked] = view_as<bool>( kvStyles.GetNum( "ranked" ) );
-		g_StyleSettings[g_iTotalStyles][AutoBhop] = view_as<bool>( kvStyles.GetNum( "autobhop" ) );
-		g_StyleSettings[g_iTotalStyles][StartBhop] = view_as<bool>( kvStyles.GetNum( "startbhop" ) );
+		g_StyleSettings[g_iTotalStyles][Ranked] = 			kvStyles.GetNum( "ranked", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][AutoBhop] =			kvStyles.GetNum( "autobhop", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][StartBhop] =			kvStyles.GetNum( "startbhop", 0 ) != 0;
 
-		g_StyleSettings[g_iTotalStyles][Gravity] = kvStyles.GetFloat( "gravity" );
-		g_StyleSettings[g_iTotalStyles][Timescale] = kvStyles.GetFloat( "timescale" );
-		g_StyleSettings[g_iTotalStyles][MaxSpeed] = kvStyles.GetFloat( "maxspeed" );
-		g_StyleSettings[g_iTotalStyles][Fov] = kvStyles.GetNum( "fov" );
+		g_StyleSettings[g_iTotalStyles][Gravity] =			kvStyles.GetFloat( "gravity", 0.0 );
+		g_StyleSettings[g_iTotalStyles][Timescale] =			kvStyles.GetFloat( "timescale", 1.0 );
+		g_StyleSettings[g_iTotalStyles][MaxSpeed] =			kvStyles.GetFloat( "maxspeed", 0.0 );
+		g_StyleSettings[g_iTotalStyles][Fov] =				kvStyles.GetNum( "fov", 90 );
 
-		g_StyleSettings[g_iTotalStyles][Sync] = view_as<bool>( kvStyles.GetNum( "sync" ) );
+		g_StyleSettings[g_iTotalStyles][Sync] =				kvStyles.GetNum( "sync", 1 ) != 0;
 
-		g_StyleSettings[g_iTotalStyles][PreventLeft] = view_as<bool>( kvStyles.GetNum( "prevent_left" ) );
-		g_StyleSettings[g_iTotalStyles][PreventRight] = view_as<bool>( kvStyles.GetNum( "prevent_right" ) );
-		g_StyleSettings[g_iTotalStyles][PreventForward] = view_as<bool>( kvStyles.GetNum( "prevent_forward" ) );
-		g_StyleSettings[g_iTotalStyles][PreventBack] = view_as<bool>( kvStyles.GetNum( "prevent_back" ) );
+		g_StyleSettings[g_iTotalStyles][PreventLeft] =		kvStyles.GetNum( "prevent_left", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventRight] =		kvStyles.GetNum( "prevent_right", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventForward] =	kvStyles.GetNum( "prevent_forward", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventBack] =		kvStyles.GetNum( "prevent_back", 0 ) != 0;
 
-		g_StyleSettings[g_iTotalStyles][CountLeft] = view_as<bool>( kvStyles.GetNum( "count_left" ) );
-		g_StyleSettings[g_iTotalStyles][CountRight] = view_as<bool>( kvStyles.GetNum( "count_right" ) );
-		g_StyleSettings[g_iTotalStyles][CountForward] = view_as<bool>( kvStyles.GetNum( "count_forward" ) );
-		g_StyleSettings[g_iTotalStyles][CountBack] = view_as<bool>( kvStyles.GetNum( "count_back" ) );
+		g_StyleSettings[g_iTotalStyles][CountLeft] =			kvStyles.GetNum( "count_left", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountRight] =		kvStyles.GetNum( "count_right", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountForward] =		kvStyles.GetNum( "count_forward", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountBack] = 		kvStyles.GetNum( "count_back", 0 ) != 0;
 		
-		g_StyleSettings[g_iTotalStyles][HSW] = view_as<bool>( kvStyles.GetNum( "hsw" ) );
-
-		g_StyleSettings[g_iTotalStyles][MainReplayBot] = view_as<bool>( kvStyles.GetNum( "main_bot" ) );
-		g_StyleSettings[g_iTotalStyles][BonusReplayBot] = view_as<bool>( kvStyles.GetNum( "bonus_bot" ) );
+		g_StyleSettings[g_iTotalStyles][HSW] = 				kvStyles.GetNum( "hsw", 0 ) != 0;
 		
-		g_StyleSettings[g_iTotalStyles][PreSpeed] = kvStyles.GetFloat( "prespeed" );
+		g_StyleSettings[g_iTotalStyles][PreSpeed] = 			kvStyles.GetFloat( "prespeed", 290.0 );
 
-		g_StyleSettings[g_iTotalStyles][StyleId] = g_iTotalStyles;
-		g_StyleSettings[g_iTotalStyles][ExpMultiplier] = kvStyles.GetFloat( "expmultiplier" );
+		g_StyleSettings[g_iTotalStyles][MainReplayBot] = 	kvStyles.GetNum( "main_bot", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][BonusReplayBot] =	kvStyles.GetNum( "bonus_bot", 0 ) != 0;
+		
+		g_StyleSettings[g_iTotalStyles][ExpMultiplier] = 	kvStyles.GetFloat( "expmultiplier", 1.0 );
+
+		g_StyleSettings[g_iTotalStyles][StyleId] = 			g_iTotalStyles;
 
 		
 		char splitString[16][32];
@@ -1457,6 +1459,7 @@ public int Native_SetClientTimerData( Handle handler, int numParams )
 	if( Timer_GetClientZoneType( client ) == Zone_None )
 	{
 		g_bTimerRunning[client] = true;
+		g_bTimerPaused[client] = false;
 	}
 	
 	return 1;
@@ -1593,6 +1596,25 @@ public int Native_GetStyleName( Handle handler, int numParams )
 public int Native_GetStylePrefix( Handle handler, int numParams )
 {
 	SetNativeString( 2, g_StyleSettings[GetNativeCell( 1 )][StylePrefix], GetNativeCell( 3 ) );
+}
+
+public int Native_StyleHasSetting( Handle handler, int numParams )
+{
+	char settings[10][24];
+	int nSettings = ExplodeString( g_StyleSettings[GetNativeCell( 1 )][SettingString], "", settings, sizeof(settings), sizeof(settings[]) );
+	
+	char target[24];
+	GetNativeString( 2, target, sizeof(target) );
+	
+	for( int i = 0; i < nSettings; i++ )
+	{
+		if( StrEqual( settings[i], target, false ) )
+		{
+			return true;
+		}
+	}
+	
+	return false;
 }
 
 public int Native_GetClientStyle( Handle handler, int numParams )

@@ -26,7 +26,8 @@ enum Checkpoint
 	bool:CP_Ducking,
 	Float:CP_DuckAmount,
 	Float:CP_DuckSpeed,
-	CP_TimerData[TIMER_DATA_SIZE]
+	CP_TimerData[TIMER_DATA_SIZE],
+	ArrayList:CP_ReplayFrames
 }
 
 ArrayList				g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
@@ -82,6 +83,11 @@ public void OnPluginStart()
 
 public void OnClientPutInServer( int client )
 {
+	int length = g_aCheckpoints[client].Length;
+	for( int i = 0; i < length; i++ )
+	{
+		delete view_as<ArrayList>(g_aCheckpoints[client].Get( i, view_as<int>(CP_ReplayFrames) ));
+	}
 	g_aCheckpoints[client].Clear();
 	g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
 	g_bUsedCP[client] = false;
@@ -97,12 +103,25 @@ public Action Timer_OnFinishPre( int client, int track, int style, float time, f
 {
 	if( g_bUsedCP[client] )
 	{
+		if( Timer_StyleHasSetting( style, "segment" ) ) // only save time/replay if its a segment style
+		{
+			return Plugin_Continue;
+		}
+		
 		Timer_PrintToChat( client, "{primary}Finished in {secondary}%.2fs {primary}(Practice Mode)" );
 	
 		return Plugin_Handled;
 	}
 	
 	return Plugin_Continue;
+}
+
+public void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle )
+{
+	if( Timer_StyleHasSetting( newstyle, "segment" ) )
+	{
+		OpenCPMenu( client );
+	}
 }
 
 void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
@@ -142,6 +161,7 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
 	Timer_GetClientTimerData( target, cp[CP_TimerData] );
+	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 	
@@ -188,8 +208,8 @@ public void LoadCheckpoint( int client, int index )
 	SetEntProp( client, Prop_Send, "m_bDucking", cp[CP_Ducking] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
-	
 	Timer_SetClientTimerData( client, cp[CP_TimerData] );
+	Timer_SetClientReplayFrames( client, cp[CP_ReplayFrames] );
 	
 	if( g_bCPMenuOpen[client] )
 	{
@@ -204,6 +224,7 @@ public void DeleteCheckpoint( int client, int index )
 		g_iSelectedCheckpoint[client]--;
 	}
 
+	delete view_as<ArrayList>(g_aCheckpoints[client].Get( index, view_as<int>(CP_ReplayFrames) ));
 	g_aCheckpoints[client].Erase( index );
 }
 
