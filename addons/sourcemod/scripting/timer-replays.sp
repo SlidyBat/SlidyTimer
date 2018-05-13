@@ -453,12 +453,12 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 				return;
 			}
 			
-			if( g_iBotType[target] != ReplayBot_None && (GetEntProp( client, Prop_Data, "m_afButtonPressed" ) & IN_USE) )
+			if( g_iBotType[target] == ReplayBot_Multireplay && (GetEntProp( client, Prop_Data, "m_afButtonPressed" ) & IN_USE) )
 			{
 				OpenReplayMenu( client, ZoneTrack_Main, 0 );
 			}
 		}
-		if( Timer_IsTimerRunning( client ) )
+		else if( Timer_IsTimerRunning( client ) )
 		{
 			// its a player, save frame data
 			GetClientAbsOrigin( client, pos );
