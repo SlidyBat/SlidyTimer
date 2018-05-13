@@ -1601,7 +1601,7 @@ public int Native_GetStylePrefix( Handle handler, int numParams )
 public int Native_StyleHasSetting( Handle handler, int numParams )
 {
 	char settings[10][24];
-	int nSettings = ExplodeString( g_StyleSettings[GetNativeCell( 1 )][SettingString], "", settings, sizeof(settings), sizeof(settings[]) );
+	int nSettings = ExplodeString( g_StyleSettings[GetNativeCell( 1 )][SettingString], ";", settings, sizeof(settings), sizeof(settings[]) );
 	
 	char target[24];
 	GetNativeString( 2, target, sizeof(target) );
