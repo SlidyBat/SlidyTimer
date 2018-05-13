@@ -38,6 +38,7 @@ ArrayList		g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
 any			g_StyleSettings[MAX_STYLES][styleSettings];
+StringMap	g_StyleSettingStrings[MAX_STYLES];
 StringMap		g_smStyleCommands;
 int			g_iTotalStyles;
 
@@ -517,6 +518,11 @@ bool LoadStyles()
 	
 	delete g_smStyleCommands;
 	g_smStyleCommands = new StringMap();
+	
+	for( int i = 0; i < MAX_STYLES; i++ )
+	{
+		delete g_StyleSettingStrings[i];
+	}
 
 	// load styles from cfg file
 	char path[PLATFORM_MAX_PATH];
@@ -534,6 +540,16 @@ bool LoadStyles()
 		kvStyles.GetString( "styleprefix", g_StyleSettings[g_iTotalStyles][StylePrefix], 16 );
 		kvStyles.GetString( "aliases", g_StyleSettings[g_iTotalStyles][Aliases], 512 );
 		kvStyles.GetString( "settings", g_StyleSettings[g_iTotalStyles][SettingString], 256 );
+		
+		g_StyleSettingStrings[g_iTotalStyles] = new StringMap();
+		
+		char settings[20][24];
+		int nSettings = ExplodeString( g_StyleSettings[GetNativeCell( 1 )][SettingString], ";", settings, sizeof(settings), sizeof(settings[]) );
+		
+		for( int i = 0; i < nSettings; i++ )
+		{
+			g_StyleSettingStrings[g_iTotalStyles].SetValue( settings[i], 0 ); // value isnt used, SM doesn't have a set type though so just use 0
+		}
 
 		g_StyleSettings[g_iTotalStyles][Ranked] = 			kvStyles.GetNum( "ranked", 1 ) != 0;
 		g_StyleSettings[g_iTotalStyles][AutoBhop] =			kvStyles.GetNum( "autobhop", 1 ) != 0;
@@ -1600,21 +1616,11 @@ public int Native_GetStylePrefix( Handle handler, int numParams )
 
 public int Native_StyleHasSetting( Handle handler, int numParams )
 {
-	char settings[10][24];
-	int nSettings = ExplodeString( g_StyleSettings[GetNativeCell( 1 )][SettingString], ";", settings, sizeof(settings), sizeof(settings[]) );
+	char settingString[24];
+	GetNativeString( 2, settingString, sizeof(settingString) );
 	
-	char target[24];
-	GetNativeString( 2, target, sizeof(target) );
-	
-	for( int i = 0; i < nSettings; i++ )
-	{
-		if( StrEqual( settings[i], target, false ) )
-		{
-			return true;
-		}
-	}
-	
-	return false;
+	int dummy;
+	return g_StyleSettingStrings[GetNativeCell( 1 )].GetValue( settingString, dummy );
 }
 
 public int Native_GetClientStyle( Handle handler, int numParams )
