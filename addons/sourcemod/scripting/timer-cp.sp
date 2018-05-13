@@ -101,13 +101,9 @@ public Action Timer_OnTimerStart( int client )
 
 public Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime )
 {
-	if( g_bUsedCP[client] )
+	Timer_DebugPrint( "Timer_OnFinishPre: %N style=%i usedcp=%s allowssegment=%s", client, style, g_bUsedCP[client] ? "true" : "false", Timer_StyleHasSetting( style, "segment" ) ? "true" : "false" );
+	if( g_bUsedCP[client] && !Timer_StyleHasSetting( style, "segment" ) ) // only save time/replay if its a segment style
 	{
-		if( Timer_StyleHasSetting( style, "segment" ) ) // only save time/replay if its a segment style
-		{
-			return Plugin_Continue;
-		}
-		
 		Timer_PrintToChat( client, "{primary}Finished in {secondary}%.2fs {primary}(Practice Mode)" );
 	
 		return Plugin_Handled;
