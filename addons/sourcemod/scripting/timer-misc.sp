@@ -208,7 +208,7 @@ public Action HookEvent_PlayerDisconnect( Event event, const char[] name, bool d
 		
 	char buffer[256];
 	Format( buffer, sizeof( buffer ), "{name}%N {primary}has left the server", client );
-	PrintToChatAll( buffer ); // TODO: maybe implement a timer print to chat that creates a SayText2 usermsg, so message appears in console
+	Timer_PrintToChatAll( buffer );
 
 	return Plugin_Handled;
 }
