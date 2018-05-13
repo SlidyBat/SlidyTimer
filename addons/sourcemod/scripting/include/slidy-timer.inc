@@ -644,6 +644,26 @@ native void Timer_StopTimer( int client );
 native void Timer_BlockTimer( int client, int ticks );
 
 /**
+ * Gets all current timer data for a client including current time, jumps, strafes, sync etc.
+ *
+ * @param client					Client index.
+ * @param data						Buffer to store timer data in
+ *
+ * @noreturn
+ */
+native void Timer_GetClientTimerData( int client, int data[TIMER_DATA_SIZE] );
+
+/**
+ * Sets all current timer data for a client including current time, jumps, strafes, sync etc.
+ *
+ * @param client					Client index.
+ * @param data						Buffer containing timer data
+ *
+ * @noreturn
+ */
+native void Timer_SetClientTimerData( int client, int data[TIMER_DATA_SIZE] );
+
+/**
  * Stops client timer
  *
  * @param client					Client index.

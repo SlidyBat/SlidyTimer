@@ -25,10 +25,12 @@ enum Checkpoint
 	bool:CP_Ducked,
 	bool:CP_Ducking,
 	Float:CP_DuckAmount,
-	Float:CP_DuckSpeed
+	Float:CP_DuckSpeed,
+	CP_TimerData[TIMER_DATA_SIZE]
 }
 
 ArrayList				g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
+bool						g_bUsedCP[MAXPLAYERS + 1];
 int					g_iSelectedCheckpoint[MAXPLAYERS + 1];
 CPSelectCallback	g_CPSelectCallback[MAXPLAYERS + 1];
 
@@ -78,6 +80,31 @@ public void OnPluginStart()
 	RegConsoleCmd( "sm_delete", Command_Delete, "Delete a checkpoint" );
 }
 
+public void OnClientPutInServer( int client )
+{
+	g_aCheckpoints[client].Clear();
+	g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
+	g_bUsedCP[client] = false;
+	g_bCPMenuOpen[client] = false;
+}
+
+public Action Timer_OnTimerStart( int client )
+{
+	g_bUsedCP[client] = false;
+}
+
+public Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime )
+{
+	if( g_bUsedCP[client] )
+	{
+		Timer_PrintToChat( client, "{primary}Finished in {secondary}%.2fs {primary}(Practice Mode)" );
+	
+		return Plugin_Handled;
+	}
+	
+	return Plugin_Continue;
+}
+
 void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 {
 	int target = GetClientObserverTarget( client );
@@ -114,6 +141,7 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
+	Timer_GetClientTimerData( target, cp[CP_TimerData] );
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 	
@@ -132,6 +160,8 @@ public void LoadCheckpoint( int client, int index )
 	
 	Timer_StopTimer( client );
 	Timer_BlockTimer( client, 1 );
+	
+	g_bUsedCP[client] = true;
 	
 	any cp[Checkpoint];
 	
@@ -158,6 +188,8 @@ public void LoadCheckpoint( int client, int index )
 	SetEntProp( client, Prop_Send, "m_bDucking", cp[CP_Ducking] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
+	
+	Timer_SetClientTimerData( client, cp[CP_TimerData] );
 	
 	if( g_bCPMenuOpen[client] )
 	{
