@@ -1454,6 +1454,11 @@ public int Native_SetClientTimerData( Handle handler, int numParams )
 	g_nPlayerAirStrafeFrames[client] = data[Timer_StrafedFrames];
 	g_nPlayerStrafes[client] = data[Timer_Strafes];
 	
+	if( Timer_GetClientZoneType( client ) == Zone_None )
+	{
+		g_bTimerRunning[client] = true;
+	}
+	
 	return 1;
 }
 
