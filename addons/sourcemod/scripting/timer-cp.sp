@@ -131,7 +131,7 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	{
 		return;
 	}
-
+	
 	if( index == AUTO_SELECT_CP )
 	{
 		index = g_aCheckpoints[client].Length;

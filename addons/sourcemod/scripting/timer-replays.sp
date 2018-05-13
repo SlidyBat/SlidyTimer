@@ -75,6 +75,7 @@ ConVar		g_cvEndDelay;
 
 int			g_iBotType[MAXPLAYERS + 1];
 int			g_iBotId[MAXPLAYERS + 1];
+char			g_cBotPlayerName[MAXPLAYERS + 1];
 bool			g_bReplayBotPaused[MAXPLAYERS + 1];
 
 int			g_iCurrentFrame[MAXPLAYERS + 1];
@@ -702,7 +703,7 @@ void SaveReplay( int client, float time, int track, int style )
 	Call_Finish();
 }
 
-void SetBotName( int client )
+void SetBotName( int client, int target = 0 )
 {
 	int replaytype = g_iBotType[client];
 	int botid = g_iBotId[client];
@@ -730,17 +731,30 @@ void SetBotName( int client )
 		char sStyle[16];
 		Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
 		
-		if( g_fReplayRecordTimes[track][style] == 0.0 )
+		if( target == 0 && g_fReplayRecordTimes[track][style] == 0.0 )
 		{
 			Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
 		}
 		else
 		{
 			char sTime[32];
-			Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof( sTime ) );
-			Format( name, sizeof( name ), "[%s %s] %s (%s)", sTrack, sStyle, g_cReplayRecordNames[track][style], sTime );
+		
+			if( target != 0 )
+			{
+				GetClientName( target, g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]) );
+				float time = g_aPlayerFrameData[target].Length * GetTickInterval();
+				Timer_FormatTime( time, sTime, sizeof(sTime) );
+			}
+			else
+			{
+				strcopy( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), g_cReplayRecordNames[track][style] );
+				Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof(sTime) );
+			}
+			
+			Format( name, sizeof(name), "[%s %s] %s (%s)", sTrack, sStyle, g_cBotPlayerName[client], sTime );
 		}
 	}
+	
 	SetClientName( client, name );
 }
 
@@ -757,6 +771,27 @@ void StartReplay( int botid, int track, int style )
 	g_iCurrentFrame[idx] = 0;
 	
 	SetBotName( idx );
+}
+
+void StartOwnReplay( int botid, int client )
+{
+	if( g_aPlayerFrameData[client] == null || !g_aPlayerFrameData[client].Length )
+	{
+		Timer_PrintToChat( client, "Your replay is no longer valid!" );
+		return;
+	}
+
+	int idx = g_iMultireplayBotIndexes[botid];
+	
+	g_MultireplayCurrentlyReplayingStyle[botid] = Timer_GetClientStyle( client );
+	g_MultireplayCurrentlyReplayingTrack[botid] = Timer_GetClientZoneTrack( client );
+	
+	delete g_aPlayerFrameData[idx];
+	g_aPlayerFrameData[idx] = g_aPlayerFrameData[client].Clone();
+	
+	g_iCurrentFrame[idx] = 0;
+	
+	SetBotName( idx, client );
 }
 
 void QueueReplay( int client, int track, int style )
@@ -778,6 +813,21 @@ void QueueReplay( int client, int track, int style )
 	g_aReplayQueue.Set( index, style, 2 );
 	
 	Timer_PrintToChat( client, "{primary}Your replay has been queued" );
+}
+
+void QueueOwnReplay( int client )
+{
+	for( int i = 0; i < g_nExpectedMultireplayBots; i++ )
+	{
+		if( g_MultireplayCurrentlyReplayingStyle[i] == -1 &&
+			g_MultireplayCurrentlyReplayingTrack[i] == ZoneTrack_None )
+		{
+			StartOwnReplay( i, client );
+			return;
+		}
+	}
+	
+	Timer_PrintToChat( client, "{primary}Cannot queue self-replay, please wait for a bot to finish" );
 }
 
 void StopReplayBot( int botidx )
@@ -830,7 +880,9 @@ void OpenReplayMenu( int client, int track, int style )
 	menu.AddItem( sInfo, buffer );
 	menu.AddItem( sInfo, "Style Down\n \n" );
 	
-	menu.AddItem( "play", "Play Replay", ( g_aReplayFrames[track][style] == null || !g_aReplayFrames[track][style].Length ) ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT );
+	menu.AddItem( "play", "Play Replay\n \n", ( g_aReplayFrames[track][style] == null || !g_aReplayFrames[track][style].Length ) ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT );
+	
+	menu.AddItem( "myreplay", "PLAY OWN REPLAY", (g_aPlayerFrameData[client] == null || !g_aPlayerFrameData[client].Length) ? ITEMDRAW_DISABLED : ITEMDRAW_DEFAULT );
 	
 	menu.Display( client, 20 );
 }
@@ -882,6 +934,10 @@ public int ReplayMenu_Handler( Menu menu, MenuAction action, int param1, int par
 			case 3:
 			{
 				QueueReplay( param1, track, style );
+			}
+			case 4:
+			{
+				QueueOwnReplay( param1 );
 			}
 		}
 	}
@@ -986,18 +1042,8 @@ public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
 		return 0;
 	}
 	
-	int botid = g_iBotId[client];
-	int track = (g_iBotType[client] == ReplayBot_Style) ? g_StyleBotReplayingTrack[botid] : g_MultireplayCurrentlyReplayingTrack[botid];
-	int style = (g_iBotType[client] == ReplayBot_Style) ? g_StyleBotReplayingStyle[botid] : g_MultireplayCurrentlyReplayingStyle[botid];
-
-	if( track == -1 || style == -1 )
-	{
-		SetNativeString( 2, "N/A", GetNativeCell( 3 ) );
-	}
-	else
-	{
-		SetNativeString( 2, g_cReplayRecordNames[track][style], GetNativeCell( 3 ) );
-	}
+	SetNativeString( 2, g_cBotPlayerName[client], GetNativeCell( 3 ) );
+	
 	return 1;
 }
 
