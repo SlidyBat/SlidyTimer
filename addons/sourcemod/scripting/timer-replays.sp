@@ -75,7 +75,7 @@ ConVar		g_cvEndDelay;
 
 int			g_iBotType[MAXPLAYERS + 1];
 int			g_iBotId[MAXPLAYERS + 1];
-char			g_cBotPlayerName[MAXPLAYERS + 1];
+char			g_cBotPlayerName[MAXPLAYERS + 1][MAX_NAME_LENGTH];
 bool			g_bReplayBotPaused[MAXPLAYERS + 1];
 
 int			g_iCurrentFrame[MAXPLAYERS + 1];
@@ -755,6 +755,7 @@ void SetBotName( int client, int target = 0 )
 		}
 	}
 	
+	CS_SetClientClanTag( client, tag );
 	SetClientName( client, name );
 }
 
