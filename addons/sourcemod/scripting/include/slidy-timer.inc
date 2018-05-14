@@ -406,11 +406,11 @@ forward void Timer_OnWRBeaten( int client, int track, int style, float time, flo
  * @param zoneId					id of zone (useful for identifying zone in db)
  * @param zoneType					type of zone (ie. start, end, checkpoint ...)
  * @param zoneTrack					track of zone (ie. main/bonus)
- * @param zone_subindex				subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
  *
  * @noreturn
  */
-forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTrack, int zone_subindex );
+forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTrack, int subindex );
 
 /**
  * Called when a client exits a zone
@@ -419,11 +419,35 @@ forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTr
  * @param zoneId					id of zone (useful for identifying zone in db)
  * @param zoneType					type of zone (ie. start, end, checkpoint ...)
  * @param zoneTrack					track of zone (ie. main/bonus)
- * @param zone_subindex				subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
  *
  * @noreturn
  */
-forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTrack, int zone_subindex );
+forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTrack, int subindex );
+
+/**
+ * Called before a client attempts to teleport to a zone
+ *
+ * @param client					Client index of player that exited zone
+ * @param zoneType					type of zone (ie. start, end, checkpoint ...)
+ * @param zoneTrack					track of zone (ie. main/bonus)
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ *
+ * @return							Plugin_Handled or Plugin_Stop to block client from teleporting to the zone
+ */
+forward Action Timer_OnClientTeleportToZonePre( int client, int zoneType, int zoneTrack, int subindex );
+
+/**
+ * Called after a client attempts to teleport to a zone
+ *
+ * @param client					Client index of player that exited zone
+ * @param zoneType					type of zone (ie. start, end, checkpoint ...)
+ * @param zoneTrack					track of zone (ie. main/bonus)
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ *
+ * @noreturn
+ */
+forward void Timer_OnClientTeleportToZonePost( int client, int zoneType, int zoneTrack, int subindex );
 
 /**
  * Called when clients timer starts

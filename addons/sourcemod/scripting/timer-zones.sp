@@ -22,6 +22,8 @@ enum
 /* Forwards */
 Handle		g_hForward_OnEnterZone;
 Handle		g_hForward_OnExitZone;
+Handle		g_hForward_OnClientTeleportToZonePre;
+Handle		g_hForward_OnClientTeleportToZonePost;
 
 /* Globals */
 bool			g_bLoaded;
@@ -96,8 +98,10 @@ public void OnPluginStart()
 	
 	
 	// Forwards
-	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnClientTeleportToZonePre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnClientTeleportToZonePost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 
 	HookEvent( "round_start", Hook_RoundStartPost, EventHookMode_Post );
 	
@@ -341,6 +345,19 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 		return;
 	}
 	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnClientTeleportToZonePre );
+	Call_PushCell( client );
+	Call_PushCell( zoneType );
+	Call_PushCell( zoneTrack );
+	Call_PushCell( subindex );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
 	if( !IsPlayerAlive( client ) )
 	{
 		CS_RespawnPlayer( client );
@@ -362,6 +379,13 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 	RequestFrame( DelaySetZone, pack );
 	
 	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
+	
+	Call_StartForward( g_hForward_OnClientTeleportToZonePost );
+	Call_PushCell( client );
+	Call_PushCell( zoneType );
+	Call_PushCell( zoneTrack );
+	Call_PushCell( subindex );
+	Call_Finish();
 }
 
 void OpenCreateZoneMenu( int client )
