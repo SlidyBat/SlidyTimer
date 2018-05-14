@@ -422,16 +422,9 @@ public Action Timer_DrawHud( Handle timer )
 		
 		SetEntProp( i, Prop_Data, "m_bDrawViewmodel", ( g_iHudSettings[i] & HUD_HIDEWEAPONS ) ? 0 : 1 );
 		
-		// speclist
-		if( g_iHudSettings[i] & HUD_SPECLIST )
+		if( g_iHudSettings[i] & HUD_BUTTONS || g_iHudSettings[i] & HUD_SPECLIST )
 		{
-			DrawSpecList( i );
-		}
-		
-		// buttons
-		if( g_iHudSettings[i] & HUD_BUTTONS )
-		{
-			DrawButtonsPanel( i );
+			DrawPanel( i );
 		}
 		
 		// topleft
@@ -445,55 +438,7 @@ public Action Timer_DrawHud( Handle timer )
 	g_iCount %= 25;
 }
 
-void DrawSpecList( int client )
-{
-	int[] spectators = new int[MaxClients + 1];
-	int nSpectators = 0;
-	
-	int target = GetClientObserverTarget( client );
-
-	for( int i = 1; i <= MaxClients; i++ )
-	{
-		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
-		{
-			continue;
-		}
-
-		int specmode = GetEntProp( i, Prop_Send, "m_iObserverMode" );
-
-		if( specmode >= 3 && specmode <= 5 )
-		{
-			spectators[nSpectators++] = i;
-		}
-	}
-	
-	if( nSpectators > 0 )
-	{
-		char name[MAX_NAME_LENGTH];
-		static char buffer[256];
-		
-		FormatEx( buffer, sizeof(buffer), "Spectators (%i):\n", nSpectators );
-
-		for( int i = 0; i < nSpectators; i++ )
-		{
-			if( i == 7 )
-			{
-				FormatEx( buffer, sizeof(buffer), "%s...", buffer );
-				break;
-			}
-
-			if( GetClientName( spectators[i], name, sizeof(name) ) )
-			{
-				FormatEx( buffer, sizeof(buffer), "%s%s\n", buffer, name );
-			}
-		}
-		
-		SetHudTextParams( 0.7, 0.3, 0.1, 255, 255, 255, 255 );
-		ShowSyncHudText( client, g_hHudSynchronizer, buffer );
-	}
-}
-
-void DrawButtonsPanel( int client )
+void DrawPanel( int client )
 {
 	int target = GetClientObserverTarget( client );
 	if( !( 0 < target <= MaxClients ) )
@@ -507,10 +452,57 @@ void DrawButtonsPanel( int client )
 		
 		char buffer[128];
 		
-		int buttons = GetClientButtons( target );
-		FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s", ( buttons & IN_DUCK ) > 0 ? "DUCK":"     ", ( buttons & IN_FORWARD ) > 0? "W":"-", ( buttons & IN_MOVELEFT ) > 0? "A":"-", ( buttons & IN_BACK ) > 0? "S":"-", ( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
+		if( g_iHudSettings[client] & HUD_SPECLIST )
+		{
+			int[] spectators = new int[MaxClients + 1];
+			int nSpectators = 0;
+
+			for( int i = 1; i <= MaxClients; i++ )
+			{
+				if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != target )
+				{
+					continue;
+				}
+
+				int specmode = GetEntProp( i, Prop_Send, "m_iObserverMode" );
+
+				if( specmode >= 3 && specmode <= 5 )
+				{
+					spectators[nSpectators++] = i;
+				}
+			}
+			
+			if( nSpectators > 0 )
+			{
+				char name[MAX_NAME_LENGTH];				
+				FormatEx( buffer, sizeof(buffer), "Spectators (%i):\n", nSpectators );
+
+				for( int i = 0; i < nSpectators; i++ )
+				{
+					if( i == 7 )
+					{
+						FormatEx( buffer, sizeof(buffer), "%s...", buffer );
+						break;
+					}
+
+					if( GetClientName( spectators[i], name, sizeof(name) ) )
+					{
+						FormatEx( buffer, sizeof(buffer), "%s%s\n", buffer, name );
+					}
+				}
+				
+				panel.DrawItem( buffer, ITEMDRAW_RAWLINE );
+			}
+		}
+		if( g_iHudSettings[client] & HUD_BUTTONS )
+		{
+			panel.DrawItem( "", ITEMDRAW_RAWLINE );
 		
-		panel.DrawItem( buffer, ITEMDRAW_RAWLINE );
+			int buttons = GetClientButtons( target );
+			FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s", ( buttons & IN_DUCK ) > 0 ? "DUCK":"     ", ( buttons & IN_FORWARD ) > 0? "W":"-", ( buttons & IN_MOVELEFT ) > 0? "A":"-", ( buttons & IN_BACK ) > 0? "S":"-", ( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
+		
+			panel.DrawItem( buffer, ITEMDRAW_RAWLINE );
+		}
 		
 		panel.Send( client, PanelHandler_Nothing, 1 );
 		

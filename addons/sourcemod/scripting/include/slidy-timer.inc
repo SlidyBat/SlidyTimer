@@ -7,7 +7,7 @@
 
 #define TIMER_PLUGIN_VERSION "0.2"
 #define MENU_PREFIX "Timer"
-#define MAX_STYLES 24 // for now, until i actually implement them
+#define MAX_STYLES 24
 
 typedef SelectStyleCB = function void ( int client, int style );
 
@@ -64,8 +64,8 @@ enum styleSettings
 {
 	String:StyleName[64],
 	String:StylePrefix[16],
-	String:Aliases[512],
-	String:SpecialId[16],
+	String:Aliases[256],
+	String:SettingString[256],
 	bool:Ranked,
 	bool:AutoBhop,
 	bool:StartBhop,
@@ -90,11 +90,22 @@ enum styleSettings
 	Float:ExpMultiplier
 };
 
-enum FrameData
+enum ReplayFrameData
 {
-	Float:FD_Pos[3],
-	Float:FD_Angles[2],
-	FD_Buttons
+	Float:Frame_Pos[3],
+	Float:Frame_Angles[2],
+	Frame_Buttons
+}
+
+enum
+{
+	Timer_FrameCount,
+	Timer_Jumps,
+	Timer_AirFrames,
+	Timer_SyncedFrames,
+	Timer_StrafedFrames,
+	Timer_Strafes,
+	TIMER_DATA_SIZE
 }
 
 enum RecordData
@@ -116,6 +127,27 @@ enum TimerStatus
 	TimerStatus_Stopped = -1,
 	TimerStatus_Paused,
 	TimerStatus_Running
+}
+
+enum eCheckpoint
+{
+	Float:CP_Pos[3],
+	Float:CP_Ang[3],
+	Float:CP_Vel[3],
+	Float:CP_Basevel[3],
+	Float:CP_Gravity,
+	Float:CP_LaggedMovement,
+	CP_Targetname,
+	CP_Classname,
+	MoveType:CP_MoveType,
+	CP_Flags,
+	bool:CP_Ducked,
+	bool:CP_Ducking,
+	Float:CP_DuckAmount,
+	Float:CP_DuckSpeed,
+	CP_GroundEnt,
+	CP_TimerData[TIMER_DATA_SIZE],
+	ArrayList:CP_ReplayFrames
 }
 
 stock float GetClientSpeedSq( int client )
@@ -336,7 +368,7 @@ forward void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle );
  * @param pbtime					Clients personal best time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
  * @param wrtime					WR time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
  *
- * @return							Plugin_Handled or Plugin_Stop to stop style change
+ * @return							Plugin_Handled or Plugin_Stop to stop client from finishing
  */
 forward Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime );
 
@@ -401,6 +433,68 @@ forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTra
  * @return							Plugin_Handled or Plugin_Stop to stop client from starting
  */
 forward Action Timer_OnTimerStart( int client );
+
+/**
+ * Called when a replay is about to be saved due to being best available replay (not necessarily WR)
+ *
+ * @param client					Client index of player
+ * @param frames					Reference to the frames that will be saved, can be edited or changed
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop replay from being saved
+ */
+forward Action Timer_OnReplaySavedPre( int client, ArrayList& frames );
+
+/**
+ * Called after a replay is saved due to being best available replay (not necessarily WR)
+ *
+ * @param client					Client index of player
+ * @param frames					Frames that will be saved
+ *
+ * @noreturn
+ */
+forward Action Timer_OnReplaySavedPost( int client, ArrayList& frames );
+
+/**
+ * Called before a CP is saved by a client
+ *
+ * @param client					Client index of player
+ * @param target					Client index of player that client is saving CP from (can be client)
+ * @param client					Index of CP that will be saved to
+ *
+ * @return							Plugin_Handled or Plugin_Stop to block the client from saving the CP
+ */
+forward Action Timer_OnCPSavedPre( int client, int target, int index );
+
+/**
+ * Called after a CP is saved by a client
+ *
+ * @param client					Client index of player
+ * @param target					Client index of player that client is saving CP from (can be client)
+ * @param client					Index of CP that will be saved to
+ *
+ * @noreturn
+ */
+forward void Timer_OnCPSavedPost( int client, int target, int index );
+
+/**
+ * Called before a CP is loaded by a client
+ *
+ * @param client					Client index of player
+ * @param client					Index of CP that will be saved to
+ *
+ * @return							Plugin_Handled or Plugin_Stop to block the client from saving the CP
+ */
+forward Action Timer_OnCPLoadedPre( int client, int index );
+
+/**
+ * Called after a CP is loaded by a client
+ *
+ * @param client					Client index of player
+ * @param client					Index of CP that will be saved to
+ *
+ * @noreturn
+ */
+forward void Timer_OnCPLoadedPost( int client, int index );
 
 /**
  * Gets clients current time
@@ -516,6 +610,17 @@ native void Timer_GetStyleName( int style, char[] buffer, int maxlen );
 native void Timer_GetStylePrefix( int style, char[] buffer, int maxlen );
 
 /**
+ * Returns whether a style has the specified setting string
+ * Used for external modules that create their own styles, no need to modify the core module to accomodate.
+ *
+ * @param style						Style index
+ * @param setting					Setting string
+ *
+ * @return							True if the style has that setting, otherwise false
+ */
+native bool Timer_StyleHasSetting( int style, char[] setting );
+
+/**
  * Gets WR for specified track and style
  *
  * @param track						Zone track to check (ie. main/bonus)
@@ -613,6 +718,26 @@ native void Timer_StopTimer( int client );
 native void Timer_BlockTimer( int client, int ticks );
 
 /**
+ * Gets all current timer data for a client including current time, jumps, strafes, sync etc.
+ *
+ * @param client					Client index.
+ * @param data						Buffer to store timer data in
+ *
+ * @noreturn
+ */
+native void Timer_GetClientTimerData( int client, int data[TIMER_DATA_SIZE] );
+
+/**
+ * Sets all current timer data for a client including current time, jumps, strafes, sync etc.
+ *
+ * @param client					Client index.
+ * @param data						Buffer containing timer data
+ *
+ * @noreturn
+ */
+native void Timer_SetClientTimerData( int client, int data[TIMER_DATA_SIZE] );
+
+/**
  * Stops client timer
  *
  * @param client					Client index.
@@ -653,6 +778,25 @@ native int Timer_GetReplayBotCurrentFrame( int client );
  * @return							Total frames of replay bot or -1 for invalid replay bot
  */
 native int Timer_GetReplayBotTotalFrames( int client );
+
+/**
+ * Returns current saved replay frames for client
+ *
+ * @param client					Client index
+ *
+ * @return							ArrayList containing all the frames for specified client or null if no frames exist
+ */
+native ArrayList Timer_GetClientReplayFrames( int client );
+
+/**
+ * Sets current saved replay frames for client
+ *
+ * @param client					Client index
+ * @param frames					ArrayList containing all the frames, the current frames will be deleted and provided ones will be cloned
+ *
+ * @noreturn
+ */
+native void Timer_SetClientReplayFrames( int client, ArrayList frames );
 
 /**
  * Returns what frame the specified bot is on
@@ -709,6 +853,35 @@ native void Timer_PrintToAdmins( int flags, char[] message, any ... );
  */
 native void Timer_ReplyToCommand( int client, char[] message, any ... );
 
+/**
+ * Gets the total number of CPs that a client has saved
+ *
+ * @param client					Client index
+ *
+ * @return							Total number of checkpoints
+ */
+native int Timer_GetTotalCheckpoints( int client );
+
+/**
+ * Gets CP data for a client at specified index
+ *
+ * @param client					Client index
+ * @param index					Index of CP to get
+ * @param cp						Buffer to store cp data in
+ *
+ * @noreturn
+ */
+native void Timer_GetClientCheckpoint( int client, int index, any cp[eCheckpoint] );
+
+/**
+ * Clears all saved CPs for specified client
+ *
+ * @param client					Client index
+ *
+ * @noreturn
+ */
+native void Timer_ClearClientCheckpoints( int client );
+
 stock void Timer_OpenSelectStyleMenu( int client, SelectStyleCB cb )
 {
 	g_SelectStyleCallback[client] = cb;
@@ -756,6 +929,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetStyleSettings" );
 	MarkNativeAsOptional( "Timer_GetStyleName" );
 	MarkNativeAsOptional( "Timer_GetStylePrefix" );
+	MarkNativeAsOptional( "Timer_StyleHasSetting" );
 	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
 	MarkNativeAsOptional( "Timer_GetClientRank" );
 	MarkNativeAsOptional( "Timer_GetDatabase" );
@@ -763,6 +937,8 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_IsTimerRunning" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
 	MarkNativeAsOptional( "Timer_BlockTimer" );
+	MarkNativeAsOptional( "Timer_GetClientTimerData" );
+	MarkNativeAsOptional( "Timer_SetClientTimerData" );
 	
 	// zones
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
@@ -774,11 +950,16 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetReplayBotCurrentFrame" );
 	MarkNativeAsOptional( "Timer_GetReplayBotTotalFrames" );
 	MarkNativeAsOptional( "Timer_GetReplayBotPlayerName" );
+	MarkNativeAsOptional( "Timer_GetClientReplayFrames" );
+	MarkNativeAsOptional( "Timer_SetClientReplayFrames" );
 	
 	// chat
 	MarkNativeAsOptional( "Timer_PrintToChat" );
 	MarkNativeAsOptional( "Timer_PrintToChatAll" );
 	MarkNativeAsOptional( "Timer_PrintToAdmins" );
 	MarkNativeAsOptional( "Timer_ReplyToCommand" );
+	
+	// cp
+	MarkNativeAsOptional( "Timer_GetClientCP" );
 }
 #endif

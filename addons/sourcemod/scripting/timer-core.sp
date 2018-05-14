@@ -38,6 +38,7 @@ ArrayList		g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
 any			g_StyleSettings[MAX_STYLES][styleSettings];
+StringMap	g_StyleSettingStrings[MAX_STYLES];
 StringMap		g_smStyleCommands;
 int			g_iTotalStyles;
 
@@ -111,6 +112,8 @@ public void OnPluginStart()
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetClientTimerData", Native_GetClientTimerData );
+	CreateNative( "Timer_SetClientTimerData", Native_SetClientTimerData );
 	CreateNative( "Timer_GetClientCurrentTime", Native_GetClientCurrentTime );
 	CreateNative( "Timer_GetClientCurrentJumps", Native_GetClientCurrentJumps );
 	CreateNative( "Timer_GetClientCurrentStrafes", Native_GetClientCurrentStrafes );
@@ -124,6 +127,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetStyleSettings", Native_GetStyleSettings );
 	CreateNative( "Timer_GetStyleName", Native_GetStyleName );
 	CreateNative( "Timer_GetStylePrefix", Native_GetStylePrefix );
+	CreateNative( "Timer_StyleHasSetting", Native_StyleHasSetting );
 	CreateNative( "Timer_GetClientTimerStatus", Native_GetClientTimerStatus );
 	CreateNative( "Timer_GetClientRank", Native_GetClientRank );
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
@@ -223,6 +227,60 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 			bButtonError = true;
 		}
 		
+		if( Timer_GetClientZoneType( client ) == Zone_Start )
+		{
+			if( buttons & IN_JUMP && !settings[StartBhop] )
+			{
+				buttons &= ~IN_JUMP;
+			}
+			
+			if( !g_bNoclip[client] && settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
+			{
+				float speed = GetClientSpeed( client );
+				float scale = settings[PreSpeed] / speed;
+				
+				float vVel[3];
+				GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", vVel );
+				ScaleVector( vVel, scale );
+				
+				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
+			}
+		}
+		
+		if( buttons & IN_JUMP )
+		{
+			if( settings[AutoBhop] &&
+				!( GetEntityMoveType( client ) & MOVETYPE_LADDER ) &&
+				!( GetEntityFlags( client ) & FL_ONGROUND ) &&
+				( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
+			{
+				buttons &= ~IN_JUMP;
+			}
+		}
+		
+		// blocking keys (only in air)
+		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
+		{
+			if( settings[PreventLeft] && ( buttons & IN_MOVELEFT ) ||
+				settings[PreventRight] && ( buttons & IN_MOVERIGHT ) ||
+				settings[PreventForward] && ( buttons & IN_FORWARD ) ||
+				settings[PreventBack] && ( buttons & IN_BACK ) )
+			{
+				bButtonError = true;
+			}
+			else if( settings[HSW] && 
+					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_MOVELEFT ) || ( buttons & IN_MOVERIGHT ) ) ) )
+			{
+				bButtonError = true;
+			}
+		}
+		
+		if( bButtonError )
+		{
+			vel[0] = 0.0;
+			vel[1] = 0.0;
+		}
+
 		if( g_bTimerRunning[client] && !g_bTimerPaused[client] )
 		{
 			g_nPlayerFrames[client]++;
@@ -277,60 +335,6 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 					g_nPlayerStrafes[client]++;
 				}
 			}
-		}
-		
-		if( Timer_GetClientZoneType( client ) == Zone_Start )
-		{
-			if( buttons & IN_JUMP && !settings[StartBhop] )
-			{
-				buttons &= ~IN_JUMP;
-			}
-			
-			if( !g_bNoclip[client] && settings[PreSpeed] != 0.0 && GetClientSpeedSq( client ) > settings[PreSpeed]*settings[PreSpeed] )
-			{
-				float speed = GetClientSpeed( client );
-				float scale = settings[PreSpeed] / speed;
-				
-				float vVel[3];
-				GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", vVel );
-				ScaleVector( vVel, scale );
-				
-				TeleportEntity( client, NULL_VECTOR, NULL_VECTOR, vVel );
-			}
-		}
-		
-		if( buttons & IN_JUMP )
-		{
-			if( settings[AutoBhop] &&
-				!( GetEntityMoveType( client ) & MOVETYPE_LADDER ) &&
-				!( GetEntityFlags( client ) & FL_ONGROUND ) &&
-				( GetEntProp( client, Prop_Data, "m_nWaterLevel" ) < 2 ) )
-			{
-				buttons &= ~IN_JUMP;
-			}
-		}
-		
-		// blocking keys (only in air)
-		if( !( GetEntityFlags( client ) & FL_ONGROUND ) && GetEntityMoveType( client ) == MOVETYPE_WALK )
-		{
-			if( settings[PreventLeft] && ( buttons & IN_MOVELEFT ) ||
-				settings[PreventRight] && ( buttons & IN_MOVERIGHT ) ||
-				settings[PreventForward] && ( buttons & IN_FORWARD ) ||
-				settings[PreventBack] && ( buttons & IN_BACK ) )
-			{
-				bButtonError = true;
-			}
-			else if( settings[HSW] && 
-					!( ( buttons & IN_FORWARD ) && ( ( buttons & IN_MOVELEFT ) || ( buttons & IN_MOVERIGHT ) ) ) )
-			{
-				bButtonError = true;
-			}
-		}
-		
-		if( bButtonError )
-		{
-			vel[0] = 0.0;
-			vel[1] = 0.0;
 		}
 		
 		lastYaw[client] = angles[1];
@@ -514,6 +518,11 @@ bool LoadStyles()
 	
 	delete g_smStyleCommands;
 	g_smStyleCommands = new StringMap();
+	
+	for( int i = 0; i < MAX_STYLES; i++ )
+	{
+		delete g_StyleSettingStrings[i];
+	}
 
 	// load styles from cfg file
 	char path[PLATFORM_MAX_PATH];
@@ -530,38 +539,49 @@ bool LoadStyles()
 		kvStyles.GetString( "stylename", g_StyleSettings[g_iTotalStyles][StyleName], 64 );
 		kvStyles.GetString( "styleprefix", g_StyleSettings[g_iTotalStyles][StylePrefix], 16 );
 		kvStyles.GetString( "aliases", g_StyleSettings[g_iTotalStyles][Aliases], 512 );
-		kvStyles.GetString( "specialid", g_StyleSettings[g_iTotalStyles][SpecialId], 16 );
-
-		g_StyleSettings[g_iTotalStyles][Ranked] = view_as<bool>( kvStyles.GetNum( "ranked" ) );
-		g_StyleSettings[g_iTotalStyles][AutoBhop] = view_as<bool>( kvStyles.GetNum( "autobhop" ) );
-		g_StyleSettings[g_iTotalStyles][StartBhop] = view_as<bool>( kvStyles.GetNum( "startbhop" ) );
-
-		g_StyleSettings[g_iTotalStyles][Gravity] = kvStyles.GetFloat( "gravity" );
-		g_StyleSettings[g_iTotalStyles][Timescale] = kvStyles.GetFloat( "timescale" );
-		g_StyleSettings[g_iTotalStyles][MaxSpeed] = kvStyles.GetFloat( "maxspeed" );
-		g_StyleSettings[g_iTotalStyles][Fov] = kvStyles.GetNum( "fov" );
-
-		g_StyleSettings[g_iTotalStyles][Sync] = view_as<bool>( kvStyles.GetNum( "sync" ) );
-
-		g_StyleSettings[g_iTotalStyles][PreventLeft] = view_as<bool>( kvStyles.GetNum( "prevent_left" ) );
-		g_StyleSettings[g_iTotalStyles][PreventRight] = view_as<bool>( kvStyles.GetNum( "prevent_right" ) );
-		g_StyleSettings[g_iTotalStyles][PreventForward] = view_as<bool>( kvStyles.GetNum( "prevent_forward" ) );
-		g_StyleSettings[g_iTotalStyles][PreventBack] = view_as<bool>( kvStyles.GetNum( "prevent_back" ) );
-
-		g_StyleSettings[g_iTotalStyles][CountLeft] = view_as<bool>( kvStyles.GetNum( "count_left" ) );
-		g_StyleSettings[g_iTotalStyles][CountRight] = view_as<bool>( kvStyles.GetNum( "count_right" ) );
-		g_StyleSettings[g_iTotalStyles][CountForward] = view_as<bool>( kvStyles.GetNum( "count_forward" ) );
-		g_StyleSettings[g_iTotalStyles][CountBack] = view_as<bool>( kvStyles.GetNum( "count_back" ) );
+		kvStyles.GetString( "settings", g_StyleSettings[g_iTotalStyles][SettingString], 256 );
 		
-		g_StyleSettings[g_iTotalStyles][HSW] = view_as<bool>( kvStyles.GetNum( "hsw" ) );
-
-		g_StyleSettings[g_iTotalStyles][MainReplayBot] = view_as<bool>( kvStyles.GetNum( "main_bot" ) );
-		g_StyleSettings[g_iTotalStyles][BonusReplayBot] = view_as<bool>( kvStyles.GetNum( "bonus_bot" ) );
+		g_StyleSettingStrings[g_iTotalStyles] = new StringMap();
 		
-		g_StyleSettings[g_iTotalStyles][PreSpeed] = kvStyles.GetFloat( "prespeed" );
+		char settings[20][24];
+		int nSettings = ExplodeString( g_StyleSettings[g_iTotalStyles][SettingString], ";", settings, sizeof(settings), sizeof(settings[]) );
+		
+		for( int i = 0; i < nSettings; i++ )
+		{
+			g_StyleSettingStrings[g_iTotalStyles].SetValue( settings[i], 0 ); // value isnt used, SM doesn't have a set type though so just use 0
+		}
 
-		g_StyleSettings[g_iTotalStyles][StyleId] = g_iTotalStyles;
-		g_StyleSettings[g_iTotalStyles][ExpMultiplier] = kvStyles.GetFloat( "expmultiplier" );
+		g_StyleSettings[g_iTotalStyles][Ranked] = 			kvStyles.GetNum( "ranked", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][AutoBhop] =			kvStyles.GetNum( "autobhop", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][StartBhop] =			kvStyles.GetNum( "startbhop", 0 ) != 0;
+
+		g_StyleSettings[g_iTotalStyles][Gravity] =			kvStyles.GetFloat( "gravity", 0.0 );
+		g_StyleSettings[g_iTotalStyles][Timescale] =			kvStyles.GetFloat( "timescale", 1.0 );
+		g_StyleSettings[g_iTotalStyles][MaxSpeed] =			kvStyles.GetFloat( "maxspeed", 0.0 );
+		g_StyleSettings[g_iTotalStyles][Fov] =				kvStyles.GetNum( "fov", 90 );
+
+		g_StyleSettings[g_iTotalStyles][Sync] =				kvStyles.GetNum( "sync", 1 ) != 0;
+
+		g_StyleSettings[g_iTotalStyles][PreventLeft] =		kvStyles.GetNum( "prevent_left", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventRight] =		kvStyles.GetNum( "prevent_right", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventForward] =	kvStyles.GetNum( "prevent_forward", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventBack] =		kvStyles.GetNum( "prevent_back", 0 ) != 0;
+
+		g_StyleSettings[g_iTotalStyles][CountLeft] =			kvStyles.GetNum( "count_left", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountRight] =		kvStyles.GetNum( "count_right", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountForward] =		kvStyles.GetNum( "count_forward", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountBack] = 		kvStyles.GetNum( "count_back", 0 ) != 0;
+		
+		g_StyleSettings[g_iTotalStyles][HSW] = 				kvStyles.GetNum( "hsw", 0 ) != 0;
+		
+		g_StyleSettings[g_iTotalStyles][PreSpeed] = 			kvStyles.GetFloat( "prespeed", 290.0 );
+
+		g_StyleSettings[g_iTotalStyles][MainReplayBot] = 	kvStyles.GetNum( "main_bot", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][BonusReplayBot] =	kvStyles.GetNum( "bonus_bot", 0 ) != 0;
+		
+		g_StyleSettings[g_iTotalStyles][ExpMultiplier] = 	kvStyles.GetFloat( "expmultiplier", 1.0 );
+
+		g_StyleSettings[g_iTotalStyles][StyleId] = 			g_iTotalStyles;
 
 		
 		char splitString[16][32];
@@ -1421,6 +1441,46 @@ public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int par
 
 /* Natives */
 
+public int Native_GetClientTimerData( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+
+	any data[TIMER_DATA_SIZE];
+	data[Timer_FrameCount] = g_nPlayerFrames[client];
+	data[Timer_Jumps] = g_nPlayerJumps[client];
+	data[Timer_AirFrames] = g_nPlayerAirFrames[client];
+	data[Timer_SyncedFrames] = g_nPlayerSyncedFrames[client];
+	data[Timer_StrafedFrames] = g_nPlayerAirStrafeFrames[client];
+	data[Timer_Strafes] = g_nPlayerStrafes[client];
+	
+	SetNativeArray( 2, data, TIMER_DATA_SIZE );
+	
+	return 1;
+}
+
+public int Native_SetClientTimerData( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	any data[TIMER_DATA_SIZE];
+	GetNativeArray( 2, data, TIMER_DATA_SIZE );
+	
+	g_nPlayerFrames[client] = data[Timer_FrameCount];
+	g_nPlayerJumps[client] = data[Timer_Jumps];
+	g_nPlayerAirFrames[client] = data[Timer_AirFrames];
+	g_nPlayerSyncedFrames[client] = data[Timer_SyncedFrames];
+	g_nPlayerAirStrafeFrames[client] = data[Timer_StrafedFrames];
+	g_nPlayerStrafes[client] = data[Timer_Strafes];
+	
+	if( Timer_GetClientZoneType( client ) == Zone_None )
+	{
+		g_bTimerRunning[client] = true;
+		g_bTimerPaused[client] = false;
+	}
+	
+	return 1;
+}
+
 public int Native_GetDatabase( Handle handler, int numParams )
 {
 	return view_as<int>( CloneHandle( g_hDatabase, handler ) );
@@ -1552,6 +1612,15 @@ public int Native_GetStyleName( Handle handler, int numParams )
 public int Native_GetStylePrefix( Handle handler, int numParams )
 {
 	SetNativeString( 2, g_StyleSettings[GetNativeCell( 1 )][StylePrefix], GetNativeCell( 3 ) );
+}
+
+public int Native_StyleHasSetting( Handle handler, int numParams )
+{
+	char settingString[24];
+	GetNativeString( 2, settingString, sizeof(settingString) );
+	
+	int dummy;
+	return g_StyleSettingStrings[GetNativeCell( 1 )].GetValue( settingString, dummy );
 }
 
 public int Native_GetClientStyle( Handle handler, int numParams )

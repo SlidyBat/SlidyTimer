@@ -110,7 +110,7 @@ public void OnPluginStart()
 
 public void OnLibraryAdded( const char[] name )
 {
-	if(StrEqual(name, "timer-core"))
+	if( StrEqual( name, "timer-core" ) )
 	{
 		g_hDatabase = Timer_GetDatabase();
 		SetSQLInfo();

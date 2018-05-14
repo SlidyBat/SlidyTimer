@@ -11,29 +11,23 @@
 
 typedef CPSelectCallback = function void ( int client, int cpindex );
 
-enum Checkpoint
-{
-	Float:CP_Pos[3],
-	Float:CP_Ang[3],
-	Float:CP_Vel[3],
-	Float:CP_Basevel[3],
-	Float:CP_Gravity,
-	Float:CP_LaggedMovement,
-	String:CP_Targetname[32],
-	MoveType:CP_MoveType,
-	CP_Flags,
-	bool:CP_Ducked,
-	bool:CP_Ducking,
-	Float:CP_DuckAmount,
-	Float:CP_DuckSpeed
-}
+ArrayList				g_aTargetnames;
+StringMap				g_smTargetnames;
+ArrayList				g_aClassnames;
+StringMap				g_smClassnames;
 
 ArrayList				g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
+bool						g_bUsedCP[MAXPLAYERS + 1];
 int					g_iSelectedCheckpoint[MAXPLAYERS + 1];
 CPSelectCallback	g_CPSelectCallback[MAXPLAYERS + 1];
 
 int					g_iCPSettings[MAXPLAYERS + 1] = { DEFAULT_CP_SETTINGS, ... };
 bool					g_bCPMenuOpen[MAXPLAYERS + 1];
+
+Handle				g_hForward_OnCPSavedPre;
+Handle				g_hForward_OnCPSavedPost;
+Handle				g_hForward_OnCPLoadedPre;
+Handle				g_hForward_OnCPLoadedPost;
 
 enum (<<= 1)
 {
@@ -60,6 +54,10 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetTotalCheckpoints", Native_GetTotalCheckpoints );
+	CreateNative( "Timer_GetClientCheckpoint", Native_GetClientCheckpoint );
+	CreateNative( "Timer_ClearClientCheckpoints", Native_ClearClientCheckpoints );
+
 	RegPluginLibrary( "timer-cp" );
 	
 	return APLRes_Success;
@@ -67,15 +65,72 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_hForward_OnCPSavedPre = CreateForward( ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPSavedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPre = CreateForward( ET_Event, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell );
+
+	g_aTargetnames = new ArrayList( ByteCountToCells( 32 ) );
+	g_smTargetnames = new StringMap();
+	g_aClassnames = new ArrayList( ByteCountToCells( 32 ) );
+	g_smClassnames = new StringMap();
+	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		g_aCheckpoints[i] = new ArrayList( view_as<int>(Checkpoint) );
+		g_aCheckpoints[i] = new ArrayList( view_as<int>(eCheckpoint) );
 	}
 	
 	RegConsoleCmd( "sm_cp", Command_OpenCheckpointMenu, "Opens checkpoint menu" );
 	RegConsoleCmd( "sm_save", Command_Save, "Save checkpoint" );
 	RegConsoleCmd( "sm_tele", Command_Tele, "Teleport to checkpoint" );
 	RegConsoleCmd( "sm_delete", Command_Delete, "Delete a checkpoint" );
+}
+
+public void OnMapStart()
+{
+	g_aTargetnames.Clear();
+	g_smTargetnames.Clear();
+	g_aClassnames.Clear();
+	g_smClassnames.Clear();
+}
+
+public void OnClientPutInServer( int client )
+{
+	int length = g_aCheckpoints[client].Length;
+	for( int i = 0; i < length; i++ )
+	{
+		delete view_as<ArrayList>(g_aCheckpoints[client].Get( i, view_as<int>(CP_ReplayFrames) ));
+	}
+	g_aCheckpoints[client].Clear();
+	g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
+	g_bUsedCP[client] = false;
+	g_bCPMenuOpen[client] = false;
+}
+
+public Action Timer_OnTimerStart( int client )
+{
+	g_bUsedCP[client] = false;
+}
+
+public Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime )
+{
+	Timer_DebugPrint( "Timer_OnFinishPre: %N style=%i usedcp=%s allowssegment=%s", client, style, g_bUsedCP[client] ? "true" : "false", Timer_StyleHasSetting( style, "segment" ) ? "true" : "false" );
+	if( g_bUsedCP[client] && !Timer_StyleHasSetting( style, "segment" ) ) // only save time/replay if its a segment style
+	{
+		Timer_PrintToChat( client, "{primary}Finished in {secondary}%.2fs {primary}(Practice Mode)", time );
+	
+		return Plugin_Handled;
+	}
+	
+	return Plugin_Continue;
+}
+
+public void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle )
+{
+	if( Timer_StyleHasSetting( newstyle, "segment" ) )
+	{
+		OpenCPMenu( client );
+	}
 }
 
 void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
@@ -85,16 +140,32 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	{
 		return;
 	}
-
+	
 	if( index == AUTO_SELECT_CP )
 	{
 		index = g_aCheckpoints[client].Length;
+	}
+	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnCPSavedPre );
+	Call_PushCell( client );
+	Call_PushCell( target );
+	Call_PushCell( index );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
+	if( index == g_aCheckpoints[client].Length )
+	{
 		g_aCheckpoints[client].Push( 0 );
 	}
 	
 	g_iSelectedCheckpoint[client] = index;
 	
-	any cp[Checkpoint];
+	any cp[eCheckpoint];
 	float temp[3];
 	
 	GetClientAbsOrigin( target, temp );
@@ -107,13 +178,33 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	CopyVector( temp, cp[CP_Basevel] );
 	cp[CP_Gravity] = GetEntityGravity( target );
 	cp[CP_LaggedMovement] = GetEntPropFloat( target, Prop_Data, "m_flLaggedMovementValue" );
-	GetEntityTargetname( target, cp[CP_Targetname], 32 );
 	cp[CP_MoveType] = GetEntityMoveType( target );
-	cp[CP_Flags] = GetEntityFlags( target );
+	cp[CP_Flags] = GetEntityFlags( target ) | FL_CLIENT | FL_AIMTARGET;
 	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
+	cp[CP_GroundEnt] = GetEntPropEnt(target, Prop_Data, "m_hGroundEntity");
+	Timer_GetClientTimerData( target, cp[CP_TimerData] );
+	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
+	
+	char buffer[32];
+	
+	GetEntityTargetname( target, buffer, sizeof(buffer) );
+	if( !g_smTargetnames.GetValue( buffer, cp[CP_Targetname] ) )
+	{
+		cp[CP_Targetname] = g_aTargetnames.Length;
+		g_aTargetnames.PushString( buffer );
+		g_smTargetnames.SetValue( buffer, cp[CP_Targetname] );
+	}
+	
+	GetEntityClassname( client, buffer, sizeof(buffer) );
+	if( !g_smClassnames.GetValue( buffer, cp[CP_Classname] ) )
+	{
+		cp[CP_Classname] = g_aClassnames.Length;
+		g_aClassnames.PushString( buffer );
+		g_smClassnames.SetValue( buffer, cp[CP_Classname] );
+	}
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 	
@@ -121,6 +212,12 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	{
 		OpenCPMenu( client );
 	}
+	
+	Call_StartForward( g_hForward_OnCPSavedPost );
+	Call_PushCell( client );
+	Call_PushCell( target );
+	Call_PushCell( index );
+	Call_Finish();
 }
 
 public void LoadCheckpoint( int client, int index )
@@ -130,10 +227,23 @@ public void LoadCheckpoint( int client, int index )
 		index = g_iSelectedCheckpoint[client];
 	}
 	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnCPLoadedPre );
+	Call_PushCell( client );
+	Call_PushCell( index );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
 	Timer_StopTimer( client );
 	Timer_BlockTimer( client, 1 );
 	
-	any cp[Checkpoint];
+	g_bUsedCP[client] = true;
+	
+	any cp[eCheckpoint];
 	
 	g_aCheckpoints[client].GetArray( index, cp[0] );
 	
@@ -151,18 +261,33 @@ public void LoadCheckpoint( int client, int index )
 	SetEntityBaseVelocity( client, basevel );
 	SetEntityGravity( client, cp[CP_Gravity] );
 	SetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue", cp[CP_LaggedMovement] );
-	SetEntityTargetname( client, cp[CP_Targetname] );
 	SetEntityMoveType( client, cp[CP_MoveType] );
 	SetEntityFlags( client, cp[CP_Flags] );
 	SetEntProp( client, Prop_Send, "m_bDucked", cp[CP_Ducked] );
 	SetEntProp( client, Prop_Send, "m_bDucking", cp[CP_Ducking] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
+	SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", cp[CP_GroundEnt]);
+	Timer_SetClientTimerData( client, cp[CP_TimerData] );
+	Timer_SetClientReplayFrames( client, cp[CP_ReplayFrames] );
+	
+	char buffer[32];
+	
+	g_aTargetnames.GetString( cp[CP_Targetname], buffer, sizeof(buffer) );
+	SetEntityTargetname( client, buffer );
+	
+	g_aClassnames.GetString( cp[CP_Classname], buffer, sizeof(buffer) );
+	SetEntPropString( client, Prop_Data, "m_iClassname", buffer );
 	
 	if( g_bCPMenuOpen[client] )
 	{
 		OpenCPMenu( client );
 	}
+	
+	Call_StartForward( g_hForward_OnCPLoadedPost );
+	Call_PushCell( client );
+	Call_PushCell( index );
+	Call_Finish();
 }
 
 public void DeleteCheckpoint( int client, int index )
@@ -172,6 +297,7 @@ public void DeleteCheckpoint( int client, int index )
 		g_iSelectedCheckpoint[client]--;
 	}
 
+	delete view_as<ArrayList>(g_aCheckpoints[client].Get( index, view_as<int>(CP_ReplayFrames) ));
 	g_aCheckpoints[client].Erase( index );
 }
 
@@ -478,6 +604,33 @@ public Action Command_Delete( int client, int args )
 	return Plugin_Handled;
 }
 
+// natives
+
+public int Native_GetTotalCheckpoints( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	return g_aCheckpoints[client].Length;
+}
+
+public int Native_GetClientCheckpoint( Handle handler, int numParams )
+{
+	any cp[eCheckpoint];
+	g_aCheckpoints[GetNativeCell( 1 )].GetArray( GetNativeCell( 2 ), cp[0] );
+	
+	SetNativeArray( 3, cp, sizeof(cp) );
+	
+	return 1;
+}
+
+public int Native_ClearClientCheckpoints( Handle handler, int numParams )
+{
+	g_aCheckpoints[GetNativeCell( 1 )].Clear();
+	
+	return 1;
+}
+
+// stocks
+
 stock void GetEntityAbsVelocity( int entity, float out[3] )
 {
 	GetEntPropVector( entity, Prop_Data, "m_vecAbsVelocity", out );
@@ -491,11 +644,6 @@ stock void GetEntityBaseVelocity( int entity, float out[3] )
 stock void SetEntityBaseVelocity( int entity, float basevel[3] )
 {
 	SetEntPropVector( entity, Prop_Data, "m_vecBaseVelocity", basevel );
-	
-	if( basevel[0] != 0.0 || basevel[0] != 0.0 || basevel[0] != 0.0 )
-	{
-		SetEntityFlags( entity, GetEntityFlags( entity ) | FL_BASEVELOCITY );
-	}
 }
 
 stock void GetEntityTargetname( int entity, char[] buffer, int maxlen )
