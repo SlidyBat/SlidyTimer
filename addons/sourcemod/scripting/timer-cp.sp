@@ -12,7 +12,9 @@
 typedef CPSelectCallback = function void ( int client, int cpindex );
 
 ArrayList				g_aTargetnames;
+StringMap				g_smTargetnames;
 ArrayList				g_aClassnames;
+StringMap				g_smClassnames;
 
 ArrayList				g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
 bool						g_bUsedCP[MAXPLAYERS + 1];
@@ -69,7 +71,9 @@ public void OnPluginStart()
 	g_hForward_OnCPLoadedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell );
 
 	g_aTargetnames = new ArrayList( ByteCountToCells( 32 ) );
+	g_smTargetnames = new StringMap();
 	g_aClassnames = new ArrayList( ByteCountToCells( 32 ) );
+	g_smClassnames = new StringMap();
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
@@ -85,7 +89,9 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	g_aTargetnames.Clear();
+	g_smTargetnames.Clear();
 	g_aClassnames.Clear();
+	g_smClassnames.Clear();
 }
 
 public void OnClientPutInServer( int client )
@@ -183,25 +189,22 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
 	
 	char buffer[32];
-	int idx;
 	
 	GetEntityTargetname( target, buffer, sizeof(buffer) );
-	idx = g_aTargetnames.FindString( buffer );
-	if( idx == -1 )
+	if( !g_smTargetnames.GetValue( buffer, cp[CP_Targetname] ) )
 	{
-		idx = g_aTargetnames.Length;
+		cp[CP_Targetname] = g_aTargetnames.Length;
 		g_aTargetnames.PushString( buffer );
+		g_smTargetnames.SetValue( buffer, cp[CP_Targetname] );
 	}
-	cp[CP_Targetname] = idx;
 	
 	GetEntityClassname( client, buffer, sizeof(buffer) );
-	idx = g_aClassnames.FindString( buffer );
-	if( idx == -1 )
+	if( !g_smClassnames.GetValue( buffer, cp[CP_Classname] ) )
 	{
-		idx = g_aClassnames.Length;
+		cp[CP_Classname] = g_aClassnames.Length;
 		g_aClassnames.PushString( buffer );
+		g_smClassnames.SetValue( buffer, cp[CP_Classname] );
 	}
-	cp[CP_Classname] = idx;
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 	
