@@ -166,14 +166,14 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	CopyVector( temp, cp[CP_Pos] );
 	GetClientEyeAngles( target, temp );
 	CopyVector( temp, cp[CP_Ang] );
-	GetEntityVelocity( target, temp );
+	GetEntityAbsVelocity( target, temp );
 	CopyVector( temp, cp[CP_Vel] );
 	GetEntityBaseVelocity( target, temp );
 	CopyVector( temp, cp[CP_Basevel] );
 	cp[CP_Gravity] = GetEntityGravity( target );
 	cp[CP_LaggedMovement] = GetEntPropFloat( target, Prop_Data, "m_flLaggedMovementValue" );
 	cp[CP_MoveType] = GetEntityMoveType( target );
-	cp[CP_Flags] = GetEntityFlags( target );
+	cp[CP_Flags] = GetEntityFlags( target ) | FL_CLIENT | FL_AIMTARGET;
 	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
@@ -628,9 +628,9 @@ public int Native_ClearClientCheckpoints( Handle handler, int numParams )
 
 // stocks
 
-stock void GetEntityVelocity( int entity, float out[3] )
+stock void GetEntityAbsVelocity( int entity, float out[3] )
 {
-	GetEntPropVector( entity, Prop_Data, "m_vecVelocity", out );
+	GetEntPropVector( entity, Prop_Data, "m_vecAbsVelocity", out );
 }
 
 stock void GetEntityBaseVelocity( int entity, float out[3] )
@@ -641,11 +641,6 @@ stock void GetEntityBaseVelocity( int entity, float out[3] )
 stock void SetEntityBaseVelocity( int entity, float basevel[3] )
 {
 	SetEntPropVector( entity, Prop_Data, "m_vecBaseVelocity", basevel );
-	
-	if( basevel[0] != 0.0 || basevel[0] != 0.0 || basevel[0] != 0.0 )
-	{
-		SetEntityFlags( entity, GetEntityFlags( entity ) | FL_BASEVELOCITY );
-	}
 }
 
 stock void GetEntityTargetname( int entity, char[] buffer, int maxlen )
