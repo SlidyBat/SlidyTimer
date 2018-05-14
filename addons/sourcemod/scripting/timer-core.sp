@@ -544,7 +544,7 @@ bool LoadStyles()
 		g_StyleSettingStrings[g_iTotalStyles] = new StringMap();
 		
 		char settings[20][24];
-		int nSettings = ExplodeString( g_StyleSettings[GetNativeCell( 1 )][SettingString], ";", settings, sizeof(settings), sizeof(settings[]) );
+		int nSettings = ExplodeString( g_StyleSettings[g_iTotalStyles][SettingString], ";", settings, sizeof(settings), sizeof(settings[]) );
 		
 		for( int i = 0; i < nSettings; i++ )
 		{
