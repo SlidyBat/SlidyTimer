@@ -709,16 +709,19 @@ void SetBotName( int client, int target = 0 )
 	int botid = g_iBotId[client];
 	
 	char name[MAX_NAME_LENGTH];
+	char tag[16];
 	
 	if( replaytype == ReplayBot_Multireplay && g_MultireplayCurrentlyReplayingStyle[botid] == -1 )
 	{
+		Format( name, sizeof(name), "Use !replay" );
+		
 		if( botid == 0 )
 		{
-			Format( name, sizeof( name ), "MultiReplay (!replay)" );
+			Format( tag, sizeof(tag), "MultiReplay" );
 		}
 		else
 		{
-			Format( name, sizeof( name ), "MultiReplay %i (!replay)", botid + 1 );
+			Format( tag, sizeof(tag), "MultiReplay %i", botid + 1 );
 		}
 	}
 	else
@@ -731,9 +734,11 @@ void SetBotName( int client, int target = 0 )
 		char sStyle[16];
 		Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
 		
+		Format( tag, sizeof(tag), "[%s %s]", sTrack, sStyle );
+		
 		if( target == 0 && g_fReplayRecordTimes[track][style] == 0.0 )
 		{
-			Format( name, sizeof( name ), "[%s %s] N/A", sTrack, sStyle );
+			Format( name, sizeof(name), "N/A" );
 		}
 		else
 		{
@@ -751,7 +756,7 @@ void SetBotName( int client, int target = 0 )
 				Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof(sTime) );
 			}
 			
-			Format( name, sizeof(name), "[%s %s] %s (%s)", sTrack, sStyle, g_cBotPlayerName[client], sTime );
+			Format( name, sizeof(name), "%s (%s)", g_cBotPlayerName[client], sTime );
 		}
 	}
 	
