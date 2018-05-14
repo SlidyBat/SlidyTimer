@@ -11,24 +11,8 @@
 
 typedef CPSelectCallback = function void ( int client, int cpindex );
 
-enum Checkpoint
-{
-	Float:CP_Pos[3],
-	Float:CP_Ang[3],
-	Float:CP_Vel[3],
-	Float:CP_Basevel[3],
-	Float:CP_Gravity,
-	Float:CP_LaggedMovement,
-	String:CP_Targetname[32],
-	MoveType:CP_MoveType,
-	CP_Flags,
-	bool:CP_Ducked,
-	bool:CP_Ducking,
-	Float:CP_DuckAmount,
-	Float:CP_DuckSpeed,
-	CP_TimerData[TIMER_DATA_SIZE],
-	ArrayList:CP_ReplayFrames
-}
+ArrayList				g_aTargetnames;
+ArrayList				g_aClassnames;
 
 ArrayList				g_aCheckpoints[MAXPLAYERS + 1] = { null, ... };
 bool						g_bUsedCP[MAXPLAYERS + 1];
@@ -37,6 +21,11 @@ CPSelectCallback	g_CPSelectCallback[MAXPLAYERS + 1];
 
 int					g_iCPSettings[MAXPLAYERS + 1] = { DEFAULT_CP_SETTINGS, ... };
 bool					g_bCPMenuOpen[MAXPLAYERS + 1];
+
+Handle				g_hForward_OnCPSavedPre;
+Handle				g_hForward_OnCPSavedPost;
+Handle				g_hForward_OnCPLoadedPre;
+Handle				g_hForward_OnCPLoadedPost;
 
 enum (<<= 1)
 {
@@ -63,6 +52,10 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetTotalCheckpoints", Native_GetTotalCheckpoints );
+	CreateNative( "Timer_GetClientCheckpoint", Native_GetClientCheckpoint );
+	CreateNative( "Timer_ClearClientCheckpoints", Native_ClearClientCheckpoints );
+
 	RegPluginLibrary( "timer-cp" );
 	
 	return APLRes_Success;
@@ -70,15 +63,29 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_hForward_OnCPSavedPre = CreateForward( ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPSavedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPre = CreateForward( ET_Event, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell );
+
+	g_aTargetnames = new ArrayList( ByteCountToCells( 32 ) );
+	g_aClassnames = new ArrayList( ByteCountToCells( 32 ) );
+	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		g_aCheckpoints[i] = new ArrayList( view_as<int>(Checkpoint) );
+		g_aCheckpoints[i] = new ArrayList( view_as<int>(eCheckpoint) );
 	}
 	
 	RegConsoleCmd( "sm_cp", Command_OpenCheckpointMenu, "Opens checkpoint menu" );
 	RegConsoleCmd( "sm_save", Command_Save, "Save checkpoint" );
 	RegConsoleCmd( "sm_tele", Command_Tele, "Teleport to checkpoint" );
 	RegConsoleCmd( "sm_delete", Command_Delete, "Delete a checkpoint" );
+}
+
+public void OnMapStart()
+{
+	g_aTargetnames.Clear();
+	g_aClassnames.Clear();
 }
 
 public void OnClientPutInServer( int client )
@@ -131,33 +138,70 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	if( index == AUTO_SELECT_CP )
 	{
 		index = g_aCheckpoints[client].Length;
+	}
+	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnCPSavedPre );
+	Call_PushCell( client );
+	Call_PushCell( target );
+	Call_PushCell( index );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
+	if( index == g_aCheckpoints[client].Length )
+	{
 		g_aCheckpoints[client].Push( 0 );
 	}
 	
 	g_iSelectedCheckpoint[client] = index;
 	
-	any cp[Checkpoint];
+	any cp[eCheckpoint];
 	float temp[3];
 	
 	GetClientAbsOrigin( target, temp );
 	CopyVector( temp, cp[CP_Pos] );
 	GetClientEyeAngles( target, temp );
 	CopyVector( temp, cp[CP_Ang] );
-	GetEntityAbsVelocity( target, temp );
+	GetEntityVelocity( target, temp );
 	CopyVector( temp, cp[CP_Vel] );
 	GetEntityBaseVelocity( target, temp );
 	CopyVector( temp, cp[CP_Basevel] );
 	cp[CP_Gravity] = GetEntityGravity( target );
 	cp[CP_LaggedMovement] = GetEntPropFloat( target, Prop_Data, "m_flLaggedMovementValue" );
-	GetEntityTargetname( target, cp[CP_Targetname], 32 );
 	cp[CP_MoveType] = GetEntityMoveType( target );
 	cp[CP_Flags] = GetEntityFlags( target );
 	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
+	cp[CP_GroundEnt] = GetEntPropEnt(target, Prop_Data, "m_hGroundEntity");
 	Timer_GetClientTimerData( target, cp[CP_TimerData] );
 	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
+	
+	char buffer[32];
+	int idx;
+	
+	GetEntityTargetname( target, buffer, sizeof(buffer) );
+	idx = g_aTargetnames.FindString( buffer );
+	if( idx == -1 )
+	{
+		idx = g_aTargetnames.Length;
+		g_aTargetnames.PushString( buffer );
+	}
+	cp[CP_Targetname] = idx;
+	
+	GetEntityClassname( client, buffer, sizeof(buffer) );
+	idx = g_aClassnames.FindString( buffer );
+	if( idx == -1 )
+	{
+		idx = g_aClassnames.Length;
+		g_aClassnames.PushString( buffer );
+	}
+	cp[CP_Classname] = idx;
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 	
@@ -165,6 +209,12 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	{
 		OpenCPMenu( client );
 	}
+	
+	Call_StartForward( g_hForward_OnCPSavedPost );
+	Call_PushCell( client );
+	Call_PushCell( target );
+	Call_PushCell( index );
+	Call_Finish();
 }
 
 public void LoadCheckpoint( int client, int index )
@@ -174,12 +224,23 @@ public void LoadCheckpoint( int client, int index )
 		index = g_iSelectedCheckpoint[client];
 	}
 	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnCPLoadedPre );
+	Call_PushCell( client );
+	Call_PushCell( index );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
 	Timer_StopTimer( client );
 	Timer_BlockTimer( client, 1 );
 	
 	g_bUsedCP[client] = true;
 	
-	any cp[Checkpoint];
+	any cp[eCheckpoint];
 	
 	g_aCheckpoints[client].GetArray( index, cp[0] );
 	
@@ -197,20 +258,33 @@ public void LoadCheckpoint( int client, int index )
 	SetEntityBaseVelocity( client, basevel );
 	SetEntityGravity( client, cp[CP_Gravity] );
 	SetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue", cp[CP_LaggedMovement] );
-	SetEntityTargetname( client, cp[CP_Targetname] );
 	SetEntityMoveType( client, cp[CP_MoveType] );
 	SetEntityFlags( client, cp[CP_Flags] );
 	SetEntProp( client, Prop_Send, "m_bDucked", cp[CP_Ducked] );
 	SetEntProp( client, Prop_Send, "m_bDucking", cp[CP_Ducking] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
+	SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", cp[CP_GroundEnt]);
 	Timer_SetClientTimerData( client, cp[CP_TimerData] );
 	Timer_SetClientReplayFrames( client, cp[CP_ReplayFrames] );
+	
+	char buffer[32];
+	
+	g_aTargetnames.GetString( cp[CP_Targetname], buffer, sizeof(buffer) );
+	SetEntityTargetname( client, buffer );
+	
+	g_aClassnames.GetString( cp[CP_Classname], buffer, sizeof(buffer) );
+	SetEntPropString( client, Prop_Data, "m_iClassname", buffer );
 	
 	if( g_bCPMenuOpen[client] )
 	{
 		OpenCPMenu( client );
 	}
+	
+	Call_StartForward( g_hForward_OnCPLoadedPost );
+	Call_PushCell( client );
+	Call_PushCell( index );
+	Call_Finish();
 }
 
 public void DeleteCheckpoint( int client, int index )
@@ -527,9 +601,36 @@ public Action Command_Delete( int client, int args )
 	return Plugin_Handled;
 }
 
-stock void GetEntityAbsVelocity( int entity, float out[3] )
+// natives
+
+public int Native_GetTotalCheckpoints( Handle handler, int numParams )
 {
-	GetEntPropVector( entity, Prop_Data, "m_vecAbsVelocity", out );
+	int client = GetNativeCell( 1 );
+	return g_aCheckpoints[client].Length;
+}
+
+public int Native_GetClientCheckpoint( Handle handler, int numParams )
+{
+	any cp[eCheckpoint];
+	g_aCheckpoints[GetNativeCell( 1 )].GetArray( GetNativeCell( 2 ), cp[0] );
+	
+	SetNativeArray( 3, cp, sizeof(cp) );
+	
+	return 1;
+}
+
+public int Native_ClearClientCheckpoints( Handle handler, int numParams )
+{
+	g_aCheckpoints[GetNativeCell( 1 )].Clear();
+	
+	return 1;
+}
+
+// stocks
+
+stock void GetEntityVelocity( int entity, float out[3] )
+{
+	GetEntPropVector( entity, Prop_Data, "m_vecVelocity", out );
 }
 
 stock void GetEntityBaseVelocity( int entity, float out[3] )

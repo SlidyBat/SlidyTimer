@@ -129,6 +129,27 @@ enum TimerStatus
 	TimerStatus_Running
 }
 
+enum eCheckpoint
+{
+	Float:CP_Pos[3],
+	Float:CP_Ang[3],
+	Float:CP_Vel[3],
+	Float:CP_Basevel[3],
+	Float:CP_Gravity,
+	Float:CP_LaggedMovement,
+	CP_Targetname,
+	CP_Classname,
+	MoveType:CP_MoveType,
+	CP_Flags,
+	bool:CP_Ducked,
+	bool:CP_Ducking,
+	Float:CP_DuckAmount,
+	Float:CP_DuckSpeed,
+	CP_GroundEnt,
+	CP_TimerData[TIMER_DATA_SIZE],
+	ArrayList:CP_ReplayFrames
+}
+
 stock float GetClientSpeedSq( int client )
 {	
 	float x = GetEntPropFloat( client, Prop_Send, "m_vecVelocity[0]" );
@@ -432,6 +453,48 @@ forward Action Timer_OnReplaySavedPre( int client, ArrayList& frames );
  * @noreturn
  */
 forward Action Timer_OnReplaySavedPost( int client, ArrayList& frames );
+
+/**
+ * Called before a CP is saved by a client
+ *
+ * @param client					Client index of player
+ * @param target					Client index of player that client is saving CP from (can be client)
+ * @param client					Index of CP that will be saved to
+ *
+ * @return							Plugin_Handled or Plugin_Stop to block the client from saving the CP
+ */
+forward Action Timer_OnCPSavedPre( int client, int target, int index );
+
+/**
+ * Called after a CP is saved by a client
+ *
+ * @param client					Client index of player
+ * @param target					Client index of player that client is saving CP from (can be client)
+ * @param client					Index of CP that will be saved to
+ *
+ * @noreturn
+ */
+forward void Timer_OnCPSavedPost( int client, int target, int index );
+
+/**
+ * Called before a CP is loaded by a client
+ *
+ * @param client					Client index of player
+ * @param client					Index of CP that will be saved to
+ *
+ * @return							Plugin_Handled or Plugin_Stop to block the client from saving the CP
+ */
+forward Action Timer_OnCPLoadedPre( int client, int index );
+
+/**
+ * Called after a CP is loaded by a client
+ *
+ * @param client					Client index of player
+ * @param client					Index of CP that will be saved to
+ *
+ * @noreturn
+ */
+forward void Timer_OnCPLoadedPost( int client, int index );
 
 /**
  * Gets clients current time
@@ -790,6 +853,35 @@ native void Timer_PrintToAdmins( int flags, char[] message, any ... );
  */
 native void Timer_ReplyToCommand( int client, char[] message, any ... );
 
+/**
+ * Gets the total number of CPs that a client has saved
+ *
+ * @param client					Client index
+ *
+ * @return							Total number of checkpoints
+ */
+native int Timer_GetTotalCheckpoints( int client );
+
+/**
+ * Gets CP data for a client at specified index
+ *
+ * @param client					Client index
+ * @param index					Index of CP to get
+ * @param cp						Buffer to store cp data in
+ *
+ * @noreturn
+ */
+native void Timer_GetClientCheckpoint( int client, int index, any cp[eCheckpoint] );
+
+/**
+ * Clears all saved CPs for specified client
+ *
+ * @param client					Client index
+ *
+ * @noreturn
+ */
+native void Timer_ClearClientCheckpoints( int client );
+
 stock void Timer_OpenSelectStyleMenu( int client, SelectStyleCB cb )
 {
 	g_SelectStyleCallback[client] = cb;
@@ -866,5 +958,8 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_PrintToChatAll" );
 	MarkNativeAsOptional( "Timer_PrintToAdmins" );
 	MarkNativeAsOptional( "Timer_ReplyToCommand" );
+	
+	// cp
+	MarkNativeAsOptional( "Timer_GetClientCP" );
 }
 #endif
