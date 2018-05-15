@@ -59,6 +59,7 @@ public void OnPluginStart()
 	g_cvCreateSpawnPoints = CreateConVar( "sm_create_spawnpoints", "10", "Number of spawn points to create", _, true, 0.0, true, 2048.0 );
 
 	RegConsoleCmd( "sm_spec", Command_Spec );
+	RegConsoleCmd( "sm_tpto", Command_TeleportTo );
 	
 	HookEvent( "game_end", HookEvent_GameEnd, EventHookMode_Pre );
 	
@@ -365,6 +366,40 @@ public void SetClientObserverTarget( int client, int target )
 	{
 		SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", target );
 		SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
+	}
+	else
+	{
+		Timer_ReplyToCommand( client, "{name}%N {primary}is not alive", target );
+	}
+}
+
+public Action Command_TeleportTo( int client, int args )
+{
+	Timer_StopTimer( client );
+
+	if( args )
+	{
+		char arg[MAX_NAME_LENGTH];
+		GetCmdArgString( arg, sizeof( arg ) );
+
+		if( !SelectTarget( client, arg, TeleportTo ) )
+		{
+			Timer_ReplyToCommand( client, "{primary}No matching players" );	
+		}
+	}
+	
+	return Plugin_Handled;
+}
+
+public void TeleportTo( int client, int target )
+{
+	if( IsClientInGame( target ) && IsPlayerAlive( target ) )
+	{
+		float pos[3];
+		GetClientAbsOrigin( target, pos );
+		
+		Timer_BlockTimer( client, 1 );
+		TeleportEntity( client, pos, NULL_VECTOR, NULL_VECTOR );
 	}
 	else
 	{
