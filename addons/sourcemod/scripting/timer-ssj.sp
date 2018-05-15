@@ -83,6 +83,7 @@ Handle g_hCookieSSJRepeat;
 bool g_bSSJRepeat[MAXPLAYERS + 1];
 
 int g_nJumps[MAXPLAYERS + 1];
+int g_nTickCount[MAXPLAYERS + 1];
 int g_nSyncedTicks[MAXPLAYERS + 1];
 int g_nStrafedTicks[MAXPLAYERS + 1];
 
@@ -208,7 +209,7 @@ void OnJump( int client )
 
 	any stats[SSJStats];
 	stats[SSJ_Speed] = GetClientSpeed( client );
-	stats[SSJ_Tick] = GetGameTickCount();
+	stats[SSJ_Tick] = g_nTickCount[client];
 	stats[SSJ_Pos][0] = pos[0];
 	stats[SSJ_Pos][1] = pos[1];
 	stats[SSJ_Pos][2] = pos[2];
@@ -264,6 +265,7 @@ void ResetStats( int client )
 	g_aJumpStats[client] = new ArrayList( view_as<int>(SSJStats) );
 
 	g_nJumps[client] = 0;
+	g_nTickCount[client] = 0;
 	g_nSyncedTicks[client] = 0;
 	g_nStrafedTicks[client] = 0;
 	g_fDistanceTravelled[client] = 0.0;
@@ -272,6 +274,8 @@ void ResetStats( int client )
 
 void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 {
+	g_nTickCount[client]++;
+
 	if( deltayaw != 0.0 )
 	{
 		g_nStrafedTicks[client]++;
@@ -355,7 +359,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	//"Δ Height",
 	//"Δ Time"
 
-	int tickcount = (stats[SSJ_Tick] - lastStats[SSJ_Tick]) + 1;
+	int tickcount = stats[SSJ_Tick] - lastStats[SSJ_Tick];
 	float gain = (stats[SSJ_TotalGain] - lastStats[SSJ_TotalGain]) / tickcount;
 
 	if( g_Settings[client] & SSJ_JUMPNUMBER )
