@@ -38,6 +38,8 @@ enum Collision_Group_t
 ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
 
+bool g_bHidePlayers[MAXPLAYERS + 1];
+
 public Plugin myinfo = 
 {
 	name = "Slidy's Timer - Misc",
@@ -60,6 +62,7 @@ public void OnPluginStart()
 
 	RegConsoleCmd( "sm_spec", Command_Spec );
 	RegConsoleCmd( "sm_tpto", Command_TeleportTo );
+	RegConsoleCmd( "sm_hide", Command_Hide );
 	
 	HookEvent( "game_end", HookEvent_GameEnd, EventHookMode_Pre );
 	
@@ -125,6 +128,7 @@ public void OnClientPostAdminCheck( int client )
 {
 	SDKHook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
 	SDKHook( client, SDKHook_WeaponDropPost, Hook_OnWeaponDropPostCallback );
+	SDKHook( client, SDKHook_SetTransmit, Hook_OnTransmit );
 }
 
 public void OnClientDisconnect( int client )
@@ -161,6 +165,27 @@ public Action HookEvent_GameEnd( Event event, char[] name, bool dontBroadcast )
 public Action Hook_OnTakeDamageCallback( int victim, int& attacker, int& inflictor, float& damage, int& damagetype )
 {
 	return Plugin_Handled;
+}
+
+public Action Hook_OnTransmit( int entity, int client )
+{
+	if( entity != client && g_bHidePlayers[client] )
+	{
+		if( IsClientObserver( client ) )
+		{
+			int target = GetClientObserverTarget( client );
+			if( target != -1 && target != entity )
+			{
+				return Plugin_Handled;
+			}
+		}
+		else
+		{
+			return Plugin_Handled;
+		}
+	}
+	
+	return Plugin_Continue;
 }
 
 public void Hook_OnWeaponDropPostCallback( int client, int weapon )
@@ -356,6 +381,14 @@ public Action Command_Spec( int client, int args )
 			Timer_ReplyToCommand( client, "{primary}No matching players" );	
 		}
 	}
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Hide( int client, int args )
+{
+	g_bHidePlayers[client] = !g_bHidePlayers[client];
+	Timer_ReplyToCommand( client, "{primary}Players now: {secondary}%s", g_bHidePlayers[client] ? "Hidden" : "Visible" );
 	
 	return Plugin_Handled;
 }
