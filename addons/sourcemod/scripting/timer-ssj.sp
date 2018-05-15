@@ -17,10 +17,11 @@ enum (<<= 1)
 	SSJ_GAIN,
 	SSJ_EFFICIENCY,
 	SSJ_DELTAHEIGHT,
+	SSJ_TIME,
 	SSJ_DELTATIME
 }
 
-#define TOTAL_SSJ_SETTINGS 10
+#define TOTAL_SSJ_SETTINGS 11
 #define DEFAULT_SSJ_SETTINGS SSJ_PRESPEED | SSJ_JUMPNUMBER | SSJ_SPEED | SSJ_SYNC | SSJ_DELTASPEED | SSJ_DELTATIME
 
 #define MAX_SSJ_JUMP_INTERVAL 25
@@ -52,6 +53,7 @@ char g_cSSJSettingNames[TOTAL_SSJ_SETTINGS][] =
 	"Gain",
 	"Efficiency",
 	"Δ Height",
+	"Time",
 	"Δ Time"
 };
 
@@ -413,6 +415,10 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	{
 		float deltaheight = stats[SSJ_Pos][2] - lastStats[SSJ_Pos][2];
 		Format( message, sizeof(message), "%s{primary}Δ Height{white}: {secondary}%s%.2f {white}| ", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
+	}
+	if( g_Settings[client] & SSJ_TIME )
+	{
+		Format( message, sizeof(message), "%s{primary}Time{white}: {secondary}%.2f {white}| ", message, Timer_IsTimerRunning( target ) ? Timer_GetClientCurrentTime( target ) : 0.0 );
 	}
 	if( g_Settings[client] & SSJ_DELTATIME )
 	{
