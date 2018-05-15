@@ -64,6 +64,7 @@ enum SSJStats
 	SSJ_Tick,
 	SSJ_SyncedTicks,
 	SSJ_StrafedTicks,
+	Float:SSJ_Displacement,
 	Float:SSJ_Distance,
 	Float:SSJ_TotalGain
 }
@@ -86,6 +87,7 @@ int g_nJumps[MAXPLAYERS + 1];
 int g_nTickCount[MAXPLAYERS + 1];
 int g_nSyncedTicks[MAXPLAYERS + 1];
 int g_nStrafedTicks[MAXPLAYERS + 1];
+float g_fDisplacement[MAXPLAYERS + 1][3];
 
 bool g_bTouchesWall[MAXPLAYERS + 1];
 int g_nTouchTicks[MAXPLAYERS + 1];
@@ -215,6 +217,7 @@ void OnJump( int client )
 	stats[SSJ_Pos][2] = pos[2];
 	stats[SSJ_SyncedTicks] = g_nSyncedTicks[client];
 	stats[SSJ_StrafedTicks] = g_nStrafedTicks[client];
+	stats[SSJ_Displacement] = GetVectorLength( g_fDisplacement[client] );
 	stats[SSJ_Distance] = g_fDistanceTravelled[client];
 	stats[SSJ_TotalGain] = g_fTotalGain[client];
 
@@ -285,8 +288,11 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 	GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", absvel );
 	absvel[2] = 0.0;
 
-	g_fDistanceTravelled[client] += GetVectorLength( absvel ) * GetTickInterval() * GetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue");
-
+	float timescale = GetTickInterval() * GetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue");
+	g_fDistanceTravelled[client] += GetVectorLength( absvel ) * timescale;
+	g_fDisplacement[client][0] += absvel[0] * timescale;
+	g_fDisplacement[client][1] += absvel[1] * timescale;
+	
 	float fore[3], side[3], wishvel[3], wishdir[3];
 	
 	GetAngleVectors(angles, fore, side, NULL_VECTOR);
@@ -393,18 +399,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	}
 	if( g_Settings[client] & SSJ_EFFICIENCY )
 	{
-		float startpos[3];
-		startpos[0] = lastStats[SSJ_Pos][0];
-		startpos[1] = lastStats[SSJ_Pos][1];
-
-		float endpos[3];
-		endpos[0] = stats[SSJ_Pos][0];
-		endpos[1] = stats[SSJ_Pos][1];
-
-		float displacement[3];
-		SubtractVectors( endpos, startpos, displacement );
-		
-		float displacementLength = GetVectorLength( displacement );
+		float displacementLength = stats[SSJ_Displacement] - lastStats[SSJ_Displacement];
 		float distanceTravelled = stats[SSJ_Distance] - lastStats[SSJ_Distance];
 		if( displacementLength > distanceTravelled )
 		{
