@@ -417,7 +417,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	}
 	if( g_Settings[client] & SSJ_TIME )
 	{
-		Format( message, sizeof(message), "%s{primary}Time{white}: {secondary}%.2f {white}| ", message, Timer_IsTimerRunning( target ) ? Timer_GetClientCurrentTime( target ) : 0.0 );
+		Format( message, sizeof(message), "%s{primary}Time{white}: {secondary}%.2f {white}| ", message, Timer_GetClientCurrentTime( target ) );
 	}
 	if( g_Settings[client] & SSJ_DELTATIME )
 	{
