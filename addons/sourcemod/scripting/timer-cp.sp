@@ -65,10 +65,10 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
-	g_hForward_OnCPSavedPre = CreateForward( ET_Event, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnCPSavedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnCPLoadedPre = CreateForward( ET_Event, Param_Cell, Param_Cell );
-	g_hForward_OnCPLoadedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell );
+	g_hForward_OnCPSavedPre = CreateGlobalForward( "Timer_OnCPSavedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPSavedPost = CreateGlobalForward( "Timer_OnCPSavedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPre = CreateGlobalForward( "Timer_OnCPLoadedPre", ET_Event, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPost = CreateGlobalForward( "Timer_OnCPLoadedPost", ET_Ignore, Param_Cell, Param_Cell );
 
 	g_aTargetnames = new ArrayList( ByteCountToCells( 32 ) );
 	g_smTargetnames = new StringMap();
