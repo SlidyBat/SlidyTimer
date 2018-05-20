@@ -75,9 +75,6 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 
 public void OnPluginStart()
 {
-	g_hForward_OnClientTeleportToZonePre = CreateGlobalForward( "Timer_OnClientTeleportToZonePre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnClientTeleportToZonePost = CreateGlobalForward( "Timer_OnClientTeleportToZonePost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
-
 	g_aZones = new ArrayList( ZONE_DATA ); // arraylist that holds all current map zone data
 	g_aZoneSpawnCache = new ArrayList( 3 );
 	
@@ -103,8 +100,8 @@ public void OnPluginStart()
 	// Forwards
 	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnClientTeleportToZonePre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnClientTeleportToZonePost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnClientTeleportToZonePre = CreateGlobalForward( "Timer_OnClientTeleportToZonePre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnClientTeleportToZonePost = CreateGlobalForward( "Timer_OnClientTeleportToZonePost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 
 	HookEvent( "round_start", Hook_RoundStartPost, EventHookMode_Post );
 	

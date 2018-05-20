@@ -54,8 +54,11 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_OpenCheckpointsMenu", Native_OpenCheckpointsMenu );
 	CreateNative( "Timer_GetTotalCheckpoints", Native_GetTotalCheckpoints );
 	CreateNative( "Timer_GetClientCheckpoint", Native_GetClientCheckpoint );
+	CreateNative( "Timer_SetClientCheckpoint", Native_SetClientCheckpoint );
+	CreateNative( "Timer_TeleportClientToCheckpoint", Native_TeleportClientToCheckpoint );
 	CreateNative( "Timer_ClearClientCheckpoints", Native_ClearClientCheckpoints );
 
 	RegPluginLibrary( "timer-cp" );
@@ -112,9 +115,9 @@ public Action Timer_OnTimerStart( int client )
 	g_bUsedCP[client] = false;
 }
 
-public Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime )
+public Action Timer_OnTimerFinishPre( int client, int track, int style, float time )
 {
-	Timer_DebugPrint( "Timer_OnFinishPre: %N style=%i usedcp=%s allowssegment=%s", client, style, g_bUsedCP[client] ? "true" : "false", Timer_StyleHasSetting( style, "segment" ) ? "true" : "false" );
+	Timer_DebugPrint( "Timer_OnTimerFinishPre: %N style=%i usedcp=%s allowssegment=%s", client, style, g_bUsedCP[client] ? "true" : "false", Timer_StyleHasSetting( style, "segment" ) ? "true" : "false" );
 	if( g_bUsedCP[client] && !Timer_StyleHasSetting( style, "segment" ) ) // only save time/replay if its a segment style
 	{
 		Timer_PrintToChat( client, "{primary}Finished in {secondary}%.2fs {primary}(Practice Mode)", time );
@@ -606,6 +609,14 @@ public Action Command_Delete( int client, int args )
 
 // natives
 
+public int Native_OpenCheckpointsMenu( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	OpenCPMenu( client );
+	
+	return 1;
+}
+
 public int Native_GetTotalCheckpoints( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
@@ -618,6 +629,32 @@ public int Native_GetClientCheckpoint( Handle handler, int numParams )
 	g_aCheckpoints[GetNativeCell( 1 )].GetArray( GetNativeCell( 2 ), cp[0] );
 	
 	SetNativeArray( 3, cp, sizeof(cp) );
+	
+	return 1;
+}
+
+public int Native_SetClientCheckpoint( Handle handler, int numParams )
+{
+	any cp[eCheckpoint];
+	GetNativeArray( 3, cp, sizeof(cp) );
+	
+	int client = GetNativeCell( 1 );
+	
+	int idx = GetNativeCell( 2 );
+	if( idx == AUTO_SELECT_CP )
+	{
+		idx = g_aCheckpoints[client].Length;
+		g_aCheckpoints[client].Push( 0 );
+	}
+	
+	g_aCheckpoints[client].SetArray( idx, cp );
+	
+	return 1;
+}
+
+public int Native_TeleportClientToCheckpoint( Handle handler, int numParams )
+{
+	LoadCheckpoint( GetNativeCell( 1 ), GetNativeCell( 2 ) );
 	
 	return 1;
 }

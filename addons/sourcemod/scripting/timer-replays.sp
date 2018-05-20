@@ -14,19 +14,11 @@
 #define MAX_MULTIREPLAY_BOTS 5
 #define MAX_STYLE_BOTS 5
 
-enum
-{
-	ReplayBot_None,
-	ReplayBot_Multireplay,
-	ReplayBot_Style,
-	TOTAL_REPALY_BOT_TYPES
-}
-
 enum ReplayHeader
 {
 	HD_MagicNumber,
 	HD_ReplayVersion,
-	HD_SteamAccountId,
+	HD_RecordId,
 	Float:HD_Time,
 	HD_Size,
 	HD_TickRate,
@@ -49,6 +41,7 @@ char			g_cCurrentMap[PLATFORM_MAX_PATH];
 
 Handle		g_hForward_OnReplaySavedPre;
 Handle		g_hForward_OnReplaySavedPost;
+Handle		g_hForward_OnBotNameSet;
 
 ArrayList		g_aReplayQueue;
 
@@ -93,9 +86,13 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetReplayBotTrack", Native_GetReplayBotTrack );
+	CreateNative( "Timer_GetReplayBotStyle", Native_GetReplayBotStyle );
+	CreateNative( "Timer_GetReplayBotType", Native_GetReplayBotType );
 	CreateNative( "Timer_GetReplayBotCurrentFrame", Native_GetReplayBotCurrentFrame );
 	CreateNative( "Timer_GetReplayBotTotalFrames", Native_GetReplayBotTotalFrames );
 	CreateNative( "Timer_GetReplayBotPlayerName", Native_GetReplayBotPlayerName );
+	CreateNative( "Timer_SetReplayBotPlayerName", Native_SetReplayBotPlayerName );
 	CreateNative( "Timer_GetClientReplayFrames", Native_GetClientReplayFrames );
 	CreateNative( "Timer_SetClientReplayFrames", Native_SetClientReplayFrames );
 
@@ -108,7 +105,8 @@ public void OnPluginStart()
 {
 	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_CellByRef );
 	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Event, Param_Cell, Param_Cell );
-
+	g_hForward_OnBotNameSet = CreateGlobalForward( "Timer_OnBotNameSet", ET_Event, Param_Cell, Param_Cell, Param_String, Param_FloatByRef );
+	
 	bot_quota = FindConVar( "bot_quota" );
 	bot_quota.AddChangeHook( OnBotQuotaChanged );
 	
@@ -321,11 +319,19 @@ public Action Timer_OnTimerStart( int client )
 	g_iCurrentFrame[client] = 0;
 }
 
-public void Timer_OnFinishPost( int client, int track, int style, float time, float pbtime, float wrtime )
+public void Timer_OnRecordInsertedPost( int client, int track, int style, float time, int recordid )
 {
 	if( g_fReplayRecordTimes[track][style] == 0.0 || time < g_fReplayRecordTimes[track][style] )
 	{
-		SaveReplay( client, time, track, style );
+		SaveReplay( client, time, track, style, recordid );
+	}
+}
+
+public void Timer_OnRecordUpdatedPost( int client, int track, int style, float time, int recordid )
+{
+	if( g_fReplayRecordTimes[track][style] == 0.0 || time < g_fReplayRecordTimes[track][style] )
+	{
+		SaveReplay( client, time, track, style, recordid );
 	}
 }
 
@@ -581,7 +587,17 @@ void LoadReplay( int track, int style )
 		Timer_DebugPrint( "LoadReplay: track=%i style=%i time=%f", track, style, g_fReplayRecordTimes[track][style] );
 		
 		char query[128];
-		Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE steamaccountid = '%i'", header[HD_SteamAccountId] );
+		
+		if( header[HD_ReplayVersion] < 2 )
+		{
+			// stored steamaccountid instead of recordid
+			Format( query, sizeof(query), "SELECT lastname FROM `t_players` WHERE steamaccountid = '%i'", header[HD_RecordId] );
+		}
+		else
+		{
+			Format( query, sizeof(query), "SELECT p.lastname FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid WHERE recordid = '%i'", header[HD_RecordId] );
+		}
+		
 		DataPack pack = new DataPack();
 		pack.WriteCell( track );
 		pack.WriteCell( style );
@@ -604,7 +620,7 @@ void LoadReplay( int track, int style )
 	}
 }
 
-void SaveReplay( int client, float time, int track, int style )
+void SaveReplay( int client, float time, int track, int style, int recordid )
 {
 	if( !GetClientName( client, g_cReplayRecordNames[track][style], sizeof( g_cReplayRecordNames[][] ) ) )
 	{
@@ -630,10 +646,10 @@ void SaveReplay( int client, float time, int track, int style )
 	
 	any header[ReplayHeader];
 	header[HD_MagicNumber] = MAGIC_NUMBER;
-	header[HD_ReplayVersion] = 1;
+	header[HD_ReplayVersion] = 2;
 	header[HD_Size] = g_aReplayFrames[track][style].Length;
 	header[HD_Time] = time;
-	header[HD_SteamAccountId] = GetSteamAccountID( client );
+	header[HD_RecordId] = recordid;
 	header[HD_TickRate] = RoundFloat( 1.0 / g_fFrameTime );
 	header[HD_Timestamp] = GetTime();
 	
@@ -752,8 +768,24 @@ void SetBotName( int client, int target = 0 )
 			}
 			else
 			{
+				float time = g_fReplayRecordTimes[track][style];
 				strcopy( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), g_cReplayRecordNames[track][style] );
-				Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof(sTime) );
+				
+				any result = Plugin_Continue;
+				Call_StartForward( g_hForward_OnBotNameSet );
+				Call_PushCell( track );
+				Call_PushCell( style );
+				Call_PushStringEx( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK );
+				Call_PushFloatRef( time );
+				Call_Finish( result );
+				
+				if( result == Plugin_Continue )
+				{
+					time = g_fReplayRecordTimes[track][style];
+					strcopy( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), g_cReplayRecordNames[track][style] );
+				}
+				
+				Timer_FormatTime( time, sTime, sizeof(sTime) );
 			}
 			
 			Format( name, sizeof(name), "%s (%s)", g_cBotPlayerName[client], sTime );
@@ -1018,6 +1050,58 @@ public Action Command_Replay( int client, int args )
 	return Plugin_Handled;
 }
 
+public int Native_GetReplayBotTrack( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	switch( g_iBotType[client] )
+	{
+		case ReplayBot_None:
+		{
+			return ZoneTrack_None;
+		}
+		case ReplayBot_Multireplay:
+		{
+			return g_MultireplayCurrentlyReplayingTrack[g_iBotId[client]];
+		}
+		case ReplayBot_Style:
+		{
+			return g_StyleBotReplayingTrack[g_iBotId[client]];
+		}
+	}
+	
+	return ZoneTrack_None;
+}
+
+public int Native_GetReplayBotStyle( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	switch( g_iBotType[client] )
+	{
+		case ReplayBot_None:
+		{
+			return -1;
+		}
+		case ReplayBot_Multireplay:
+		{
+			return g_MultireplayCurrentlyReplayingStyle[g_iBotId[client]];
+		}
+		case ReplayBot_Style:
+		{
+			return g_StyleBotReplayingStyle[g_iBotId[client]];
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetReplayBotType( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	return g_iBotType[client];
+}
+
 public int Native_GetReplayBotCurrentFrame( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
@@ -1049,6 +1133,19 @@ public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
 	}
 	
 	SetNativeString( 2, g_cBotPlayerName[client], GetNativeCell( 3 ) );
+	
+	return 1;
+}
+
+public int Native_SetReplayBotPlayerName( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	if( g_iBotType[client] == ReplayBot_None || g_aPlayerFrameData[client] == null )
+	{
+		return 0;
+	}
+	
+	GetNativeString( 2, g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]) );
 	
 	return 1;
 }
