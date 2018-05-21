@@ -145,7 +145,7 @@ public void OnClientPutInServer( int client )
 	ResetStats( client );
 }
 
-public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
+public void Timer_OnPlayerRunCmdPost( int client, int buttons, int impulse, const float vel[3], const float angles[3] )
 {
 	static float s_LastAngles[MAXPLAYERS + 1][3];
 
@@ -275,7 +275,7 @@ void ResetStats( int client )
 	g_fTotalGain[client] = 0.0;
 }
 
-void GetStats( int client, float vel[3], float angles[3], float deltayaw )
+void GetStats( int client, const float vel[3], const float angles[3], float deltayaw )
 {
 	g_nTickCount[client]++;
 

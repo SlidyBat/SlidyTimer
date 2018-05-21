@@ -385,14 +385,6 @@ public Action Command_Spec( int client, int args )
 	return Plugin_Handled;
 }
 
-public Action Command_Hide( int client, int args )
-{
-	g_bHidePlayers[client] = !g_bHidePlayers[client];
-	Timer_ReplyToCommand( client, "{primary}Players now: {secondary}%s", g_bHidePlayers[client] ? "Hidden" : "Visible" );
-	
-	return Plugin_Handled;
-}
-
 public void SetClientObserverTarget( int client, int target )
 {
 	if( IsClientInGame( target ) && IsPlayerAlive( target ) )
@@ -404,6 +396,14 @@ public void SetClientObserverTarget( int client, int target )
 	{
 		Timer_ReplyToCommand( client, "{name}%N {primary}is not alive", target );
 	}
+}
+
+public Action Command_Hide( int client, int args )
+{
+	g_bHidePlayers[client] = !g_bHidePlayers[client];
+	Timer_ReplyToCommand( client, "{primary}Players now: {secondary}%s", g_bHidePlayers[client] ? "Hidden" : "Visible" );
+	
+	return Plugin_Handled;
 }
 
 public Action Command_TeleportTo( int client, int args )

@@ -550,7 +550,7 @@ void DrawTopLeftOverlay( int client )
 			char sPBTime[16];
 			Timer_FormatTime( pbtime, sPBTime, sizeof(sPBTime) );
 			
-			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientRank( target, track, style ) );
+			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientMapRank( target, track, style ) );
 		}
 		else
 		{
