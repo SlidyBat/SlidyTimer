@@ -582,7 +582,7 @@ forward void Timer_OnRecordUpdatedPost( int client, int track, int style, float 
  *
  * @return							Plugin_Changed to use the changed recordcount value, Plugin_Continue otherwise
  */
-forward Action Timer_OnRecordsCountRequested( int client, int track, int style, int& recordcount );
+forward Action Timer_OnRecordsCountRequested( int track, int style, int& recordcount );
 
 /**
  * Called when a times leaderboard is going to be shown to a client
