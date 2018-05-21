@@ -343,8 +343,6 @@ void FinishTimer( int client )
 	float time = g_nPlayerFrames[client] * g_fFrameTime;
 	Timer_FormatTime( time, sTime, sizeof( sTime ) );
 	
-	StopTimer( client );
-	
 	int track = Timer_GetClientZoneTrack( client );
 	int style = g_PlayerCurrentStyle[client];
 	
@@ -371,6 +369,8 @@ void FinishTimer( int client )
 	Call_PushCell( style );
 	Call_PushCell( time );
 	Call_Finish();
+	
+	StopTimer( client );
 }
 
 bool LoadStyles()
