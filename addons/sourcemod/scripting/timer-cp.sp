@@ -647,6 +647,7 @@ public int Native_SetClientCheckpoint( Handle handler, int numParams )
 		g_aCheckpoints[client].Push( 0 );
 	}
 	
+	g_iSelectedCheckpoint[client] = idx;
 	g_aCheckpoints[client].SetArray( idx, cp );
 	
 	return 1;
@@ -662,6 +663,7 @@ public int Native_TeleportClientToCheckpoint( Handle handler, int numParams )
 public int Native_ClearClientCheckpoints( Handle handler, int numParams )
 {
 	g_aCheckpoints[GetNativeCell( 1 )].Clear();
+	g_iSelectedCheckpoint[client] = 0;
 	
 	return 1;
 }
