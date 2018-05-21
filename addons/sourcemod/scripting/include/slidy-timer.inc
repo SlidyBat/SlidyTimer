@@ -505,7 +505,7 @@ forward Action Timer_OnClientPBRequested( int client, int track, int style, floa
  *
  * @return							Plugin_Changed to use the changed time value, Plugin_Continue otherwise
  */
-forward Action Timer_OnWRTimeRequested( int client, int track, int style, float& time );
+forward Action Timer_OnWRTimeRequested( int track, int style, float& time );
 
 /**
  * Called when a plugin requests to get a WR name
@@ -518,7 +518,7 @@ forward Action Timer_OnWRTimeRequested( int client, int track, int style, float&
  *
  * @return							Plugin_Changed to use the changed name value, Plugin_Continue otherwise
  */
-forward Action Timer_OnWRNameRequested( int client, int track, int style, char name[MAX_NAME_LENGTH] );
+forward Action Timer_OnWRNameRequested( int track, int style, char name[MAX_NAME_LENGTH] );
 
 /**
  * Called right before a record is about to be inserted into the database
