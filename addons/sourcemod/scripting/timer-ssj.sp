@@ -307,9 +307,9 @@ void GetStats( int client, const float vel[3], const float angles[3], float delt
 		wishvel[i] = fore[i] * vel[0] + side[i] * vel[1];
 	}
 
-	float maxspeed = GetEntPropFloat(client, Prop_Send, "m_flMaxspeed");
+	float maxspeed = GetEntPropFloat( client, Prop_Send, "m_flMaxspeed" );
 	
-	float wishspeed = NormalizeVector(wishvel, wishdir);
+	float wishspeed = NormalizeVector( wishvel, wishdir );
 	if( wishspeed > maxspeed && maxspeed != 0.0 )
 	{
 		wishspeed = maxspeed;
@@ -321,10 +321,10 @@ void GetStats( int client, const float vel[3], const float angles[3], float delt
 		float wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
 		
 		float currentspeed = GetVectorDotProduct( absvel, wishdir );
-		if( wishspd - currentspeed > 0.0 )
+		if( currentspeed < 30.0 )
 		{
 			g_nSyncedTicks[client]++;
-			gaincoeff = (wishspd - currentspeed) / wishspd;
+			gaincoeff = (wishspd - FloatAbs( currentspeed )) / wishspd;
 		}
 		if( g_bTouchesWall[client] && g_nTouchTicks[client] && gaincoeff > 0.5 )
 		{
