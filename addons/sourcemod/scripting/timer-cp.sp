@@ -655,14 +655,17 @@ public int Native_SetClientCheckpoint( Handle handler, int numParams )
 
 public int Native_TeleportClientToCheckpoint( Handle handler, int numParams )
 {
-	LoadCheckpoint( GetNativeCell( 1 ), GetNativeCell( 2 ) );
+	int client = GetNativeCell( 1 );
+	g_iSelectedCheckpoint[client] = GetNativeCell( 2 );
+	LoadCheckpoint( client, AUTO_SELECT_CP );
 	
 	return 1;
 }
 
 public int Native_ClearClientCheckpoints( Handle handler, int numParams )
 {
-	g_aCheckpoints[GetNativeCell( 1 )].Clear();
+	int client = GetNativeCell( 1 );
+	g_aCheckpoints[client].Clear();
 	g_iSelectedCheckpoint[client] = 0;
 	
 	return 1;

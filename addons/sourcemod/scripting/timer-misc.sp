@@ -206,7 +206,7 @@ public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBr
 		
 		if( !IsFakeClient( client ) )
 		{
-			RequestFrame( HideRadar, client );
+			RequestFrame( HideRadar, GetClientUserId( client ) );
 
 			SendConVarValue( client, FindConVar( "mp_playercashawards" ), "0" );
 			SendConVarValue( client, FindConVar( "mp_teamcashawards" ), "0" );
@@ -361,8 +361,14 @@ public Action Timer_ClearEntity( Handle timer, int entref )
 	}
 }
 
-public void HideRadar( int client )
+public void HideRadar( int userid )
 {
+	int client = GetClientOfUserId( userid );
+	if( !( 0 < client <= MaxClients ) )
+	{
+		return;
+	}
+	
 	SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
 }
 

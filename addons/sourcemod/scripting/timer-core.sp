@@ -500,7 +500,7 @@ public void SetClientStyle( int client, int style )
 	SetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue", view_as<float>( g_StyleSettings[style][Timescale] ) );
 	
 	sv_autobunnyhopping.ReplicateToClient( client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
-	Timer_DebugPrint( "SetClientStyle: Set %N sv_autobunnyhopping=%s", g_StyleSettings[style][AutoBhop] ? "1" : "0" );
+	Timer_DebugPrint( "SetClientStyle: Set %N sv_autobunnyhopping=%s", client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
 	
 	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	
