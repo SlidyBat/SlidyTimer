@@ -341,8 +341,13 @@ public Action HookEvent_Chat( int client, char[] command, int args )
 			buffer[i] = CharToLower( buffer[i + 1] );
 		}
 
-		FakeClientCommand( client, "sm_%s", buffer );
-		return Plugin_Handled;
+		Format( buffer, sizeof(buffer), "sm_%s", buffer );
+		
+		if( CommandExists( buffer ) )
+		{
+			FakeClientCommand( client, buffer );
+			return Plugin_Handled;
+		}
 	}
 
 	return Plugin_Continue;
