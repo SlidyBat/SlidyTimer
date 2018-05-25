@@ -102,9 +102,12 @@ public void OnClientPutInServer( int client )
 	int length = g_aCheckpoints[client].Length;
 	for( int i = 0; i < length; i++ )
 	{
-		delete view_as<ArrayList>(g_aCheckpoints[client].Get( i, view_as<int>(CP_ReplayFrames) ));
+		any cp[eCheckpoint];
+		g_aCheckpoints[client].GetArray( i, cp[0] );
+		delete cp[CP_ReplayFrames];
 	}
 	g_aCheckpoints[client].Clear();
+	
 	g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
 	g_bUsedCP[client] = false;
 	g_bCPMenuOpen[client] = false;
@@ -300,7 +303,10 @@ public void DeleteCheckpoint( int client, int index )
 		g_iSelectedCheckpoint[client]--;
 	}
 
-	delete view_as<ArrayList>(g_aCheckpoints[client].Get( index, view_as<int>(CP_ReplayFrames) ));
+	any cp[eCheckpoint];
+	g_aCheckpoints[client].GetArray( index, cp[0] );
+	delete cp[CP_ReplayFrames];
+	
 	g_aCheckpoints[client].Erase( index );
 }
 
