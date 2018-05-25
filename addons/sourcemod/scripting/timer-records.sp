@@ -168,7 +168,7 @@ public void Timer_OnTimerFinishPost( int client, int track, int style, float tim
 		}
 		else
 		{
-			Timer_PrintToChatAll( "{primary}NEW PB!!!" );
+			Timer_PrintToChat( client, "{primary}NEW PB!!!" );
 		}
 	}
 	else
