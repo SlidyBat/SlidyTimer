@@ -542,9 +542,9 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 	int client = pack.ReadCell();
 	int track = pack.ReadCell();
 	int style = pack.ReadCell();
-	float time = pack.ReadCell();
+	float time = pack.ReadFloat();
 	delete pack;
-
+	
 	Call_StartForward( g_hForward_OnRecordUpdatedPost );
 	Call_PushCell( client );
 	Call_PushCell( track );
