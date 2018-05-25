@@ -359,9 +359,12 @@ void FinishTimer( int client )
 		return;
 	}
 	
-	char sZoneTrack[64];
-	Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
-	Timer_PrintToChatAll( "[{secondary}%s{white}] {name}%N {primary}finished on {secondary}%s {primary}timer in {secondary}%ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
+	if( result != Plugin_Changed )
+	{
+		char sZoneTrack[64];
+		Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
+		Timer_PrintToChatAll( "[{secondary}%s{white}] {name}%N {primary}finished on {secondary}%s {primary}timer in {secondary}%ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
+	}
 	
 	Call_StartForward( g_hForward_OnTimerFinishPost );
 	Call_PushCell( client );
