@@ -804,7 +804,7 @@ public Action Entity_StartTouch( int caller, int activator )
 
 public Action Entity_EndTouch( int caller, int activator )
 {
-	if( ( 0 < activator <= MaxClients ) && !IsFakeClient( activator ) )
+	if( ( 0 < activator <= MaxClients ) && !IsFakeClient( activator ) && IsPlayerAlive( activator ) )
 	{
 		char entName[512];
 		GetEntPropString( caller, Prop_Data, "m_iName", entName, sizeof( entName ) );
