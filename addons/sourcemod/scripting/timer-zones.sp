@@ -63,7 +63,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
 	// zone natives
 	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
+	CreateNative( "Timer_SetClientZoneType", Native_SetClientZoneType );
 	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
+	CreateNative( "Timer_SetClientZoneTrack", Native_SetClientZoneTrack );
 	CreateNative( "Timer_TeleportClientToZone", Native_TeleportClientToZone );
 	CreateNative( "Timer_IsClientInsideZone", Native_IsClientInsideZone );
 
@@ -1011,9 +1013,21 @@ public int Native_GetClientZoneType( Handle handler, int numParams )
 	return g_PlayerCurrentZoneType[GetNativeCell( 1 )];
 }
 
+public int Native_SetClientZoneType( Handle handler, int numParams )
+{
+	g_PlayerCurrentZoneType[GetNativeCell( 1 )] = GetNativeCell( 2 );
+	return 1;
+}
+
 public int Native_GetClientZoneTrack( Handle handler, int numParams )
 {
 	return g_PlayerCurrentZoneTrack[GetNativeCell( 1 )];
+}
+
+public int Native_SetClientZoneTrack( Handle handler, int numParams )
+{
+	g_PlayerCurrentZoneTrack[GetNativeCell( 1 )] = GetNativeCell( 2 );
+	return 1;
 }
 
 public int Native_TeleportClientToZone( Handle handler, int numParams )

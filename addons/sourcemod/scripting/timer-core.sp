@@ -694,6 +694,8 @@ public int Native_GetClientTimerData( Handle handler, int numParams )
 	data[Timer_SyncedFrames] = g_nPlayerSyncedFrames[client];
 	data[Timer_StrafedFrames] = g_nPlayerAirStrafeFrames[client];
 	data[Timer_Strafes] = g_nPlayerStrafes[client];
+	data[Timer_ZoneTrack] = Timer_GetClientZoneTrack( client );
+	data[Timer_ZoneType] = Timer_GetClientZoneType( client );
 	
 	SetNativeArray( 2, data, TIMER_DATA_SIZE );
 	
@@ -713,6 +715,8 @@ public int Native_SetClientTimerData( Handle handler, int numParams )
 	g_nPlayerSyncedFrames[client] = data[Timer_SyncedFrames];
 	g_nPlayerAirStrafeFrames[client] = data[Timer_StrafedFrames];
 	g_nPlayerStrafes[client] = data[Timer_Strafes];
+	Timer_SetClientZoneTrack( client, data[Timer_ZoneTrack] );
+	Timer_SetClientZoneType( client, data[Timer_ZoneType] );
 	
 	if( Timer_GetClientZoneType( client ) == Zone_None )
 	{

@@ -113,6 +113,8 @@ enum
 	Timer_SyncedFrames,
 	Timer_StrafedFrames,
 	Timer_Strafes,
+	Timer_ZoneTrack,
+	Timer_ZoneType,
 	TIMER_DATA_SIZE
 }
 
@@ -877,6 +879,16 @@ native float Timer_GetClientPBTime( int client, int track, int style );
 native int Timer_GetClientZoneType( int client );
 
 /**
+ * Sets zone type client is currently in
+ *
+ * @param client					Client index.
+ * @param type						Zone type to set
+ *
+ * @noreturn
+ */
+native void Timer_SetClientZoneType( int client, int type );
+
+/**
  * Gets track client is currently in (ie. main/bonus)
  *
  * @param client					Client index.
@@ -884,6 +896,16 @@ native int Timer_GetClientZoneType( int client );
  * @return							Current track of client (main/bonus)
  */
 native int Timer_GetClientZoneTrack( int client );
+
+/**
+ * Sets zone track client is currently in (ie. main/bonus)
+ *
+ * @param client					Client index.
+ * @param track						Zone track to set
+ *
+ * @noreturn
+ */
+native void Timer_SetClientZoneTrack( int client, int track );
 
 /**
  * Provides database handle from timer
