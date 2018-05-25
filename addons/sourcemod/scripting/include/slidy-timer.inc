@@ -985,6 +985,16 @@ native void Timer_TeleportClientToZone( int client, int zoneType, int zoneTrack,
 native bool Timer_IsClientInsideZone( int client, int zoneType, int zoneTrack, int subindex = 0 );
 
 /**
+ * Returns recordid stored for specified track/style
+ *
+ * @param track						Track (see ZoneTrack_*)
+ * @param style						Style index
+ *
+ * @return							Recordid stored for track/style or -1 if it does not exist
+ */
+native int Timer_GetReplayRecordId( int track, int style );
+
+/**
  * Returns what track a replay bot is playing
  *
  * @param client					Client index of replay bot
