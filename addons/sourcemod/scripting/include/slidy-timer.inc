@@ -329,6 +329,15 @@ stock void Timer_DebugPrint( const char[] message, any ... )
 forward void Timer_OnDatabaseLoaded();
 
 /**
+ * Called when map has been loaded from database by core timer plugin
+ *
+ * @param mapid						Map id in database
+ *
+ * @noreturn
+ */
+forward void Timer_OnMapLoaded( int mapid );
+
+/**
  * Called when client has been loaded by core timer plugin and been provided a playerid
  *
  * @param client					Client index of player
@@ -916,6 +925,13 @@ native void Timer_SetClientZoneTrack( int client, int track );
 native Database Timer_GetDatabase();
 
 /**
+ * Gets the current map database id
+ *
+ * @return Map id
+ */
+native int Timer_GetMapId();
+
+/**
  * Native to make sure client has been loaded by timer and has been provided a database id
  * NOTE: This does not guarantee that the clients times and settings have been loaded
  *
@@ -1240,6 +1256,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 {
 	// core
 	MarkNativeAsOptional( "Timer_GetDatabase" );
+	MarkNativeAsOptional( "Timer_GetMapId" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentTime" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentJumps" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentStrafes" );

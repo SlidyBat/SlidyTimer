@@ -18,8 +18,10 @@ Database		g_hDatabase;
 
 float			g_fFrameTime;
 char			g_cMapName[PLATFORM_MAX_PATH];
+int			g_iMapId = -1;
 
 Handle		g_hForward_OnDatabaseLoaded;
+Handle		g_hForward_OnMapLoaded;
 Handle		g_hForward_OnPlayerRunCmdPost;
 Handle		g_hForward_OnStylesLoaded;
 Handle		g_hForward_OnStyleChangedPre;
@@ -58,6 +60,7 @@ public void OnPluginStart()
 {
 	/* Forwards */
 	g_hForward_OnDatabaseLoaded = CreateGlobalForward( "Timer_OnDatabaseLoaded", ET_Ignore );
+	g_hForward_OnMapLoaded = CreateGlobalForward( "Timer_OnMapLoaded", ET_Ignore, Param_Cell );
 	g_hForward_OnPlayerRunCmdPost = CreateGlobalForward( "Timer_OnPlayerRunCmdPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Array, Param_Array );
 	g_hForward_OnStylesLoaded = CreateGlobalForward( "Timer_OnStylesLoaded", ET_Ignore, Param_Cell );
 	g_hForward_OnStyleChangedPre = CreateGlobalForward( "Timer_OnStyleChangedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
@@ -83,6 +86,7 @@ public void OnPluginStart()
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
+	CreateNative( "Timer_GetMapId", Native_GetMapId );
 	CreateNative( "Timer_GetClientCurrentTime", Native_GetClientCurrentTime );
 	CreateNative( "Timer_GetClientCurrentJumps", Native_GetClientCurrentJumps );
 	CreateNative( "Timer_GetClientCurrentStrafes", Native_GetClientCurrentStrafes );
@@ -120,6 +124,7 @@ public void OnMapStart()
 
 	GetCurrentMap( g_cMapName, sizeof( g_cMapName ) );
 	
+	SQL_LoadMap();
 }
 
 public void OnClientAuthorized( int client, const char[] auth )
@@ -339,9 +344,7 @@ void FinishTimer( int client )
 		return;
 	}
 	
-	char sTime[64];
 	float time = g_nPlayerFrames[client] * g_fFrameTime;
-	Timer_FormatTime( time, sTime, sizeof( sTime ) );
 	
 	int track = Timer_GetClientZoneTrack( client );
 	int style = g_PlayerCurrentStyle[client];
@@ -360,7 +363,10 @@ void FinishTimer( int client )
 	}
 	
 	if( result != Plugin_Changed )
-	{
+	{		
+		char sTime[64];
+		Timer_FormatTime( time, sTime, sizeof( sTime ) );
+	
 		char sZoneTrack[64];
 		Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
 		Timer_PrintToChatAll( "[{secondary}%s{white}] {name}%N {primary}finished on {secondary}%s {primary}timer in {secondary}%ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
@@ -633,6 +639,93 @@ void SQL_DBConnect()
 
 	Call_StartForward( g_hForward_OnDatabaseLoaded );
 	Call_Finish();
+	
+	SQL_CreateTables();
+}
+
+void SQL_CreateTables()
+{
+	char query[512];
+	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_maps` ( mapid INT NOT NULL AUTO_INCREMENT, \
+																		mapname CHAR( 128 ) NOT NULL, \
+																		maptier INT NOT NULL, \
+																		lastplayed INT NOT NULL, \
+																		playcount INT NOT NULL, \
+																		PRIMARY KEY (`mapid`) );" );
+																		
+	g_hDatabase.Query( CreateTables_Callback, query, _, DBPrio_High );
+}
+
+public void CreateTables_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (CreateTables_Callback) - %s", error );
+		return;
+	}
+}
+
+void SQL_LoadMap()
+{
+	g_iMapId = -1;
+
+	char query[512];
+	Format( query, sizeof(query), "SELECT mapid FROM `t_maps` WHERE mapname = '%s'", g_cMapName );
+	g_hDatabase.Query( LoadMap_Callback, query );
+}
+
+public void LoadMap_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (LoadMap_Callback) - %s", error );
+		return;
+	}
+	
+	if( results.RowCount > 0 && results.FetchRow() )
+	{
+		g_iMapId = results.FetchInt( 0 );
+		
+		Call_StartForward( g_hForward_OnMapLoaded );
+		Call_PushCell( g_iMapId );
+		Call_Finish();
+		
+		char query[512];
+		Format( query, sizeof(query), "UPDATE `t_map` SET lastplayed = '%i', playcount = playcount + 1 WHERE mapid = '%i'", GetTime(), g_iMapId );
+		
+		g_hDatabase.Query( UpdateMap_Callback, query );
+	}
+	else
+	{
+		char query[512];
+		Format( query, sizeof(query), "INSERT INTO `t_map` (mapname, maptier, lastplayed, playcount) VALUE ('%s', '0', '%i', 1)", g_cMapName, GetTime() );
+		
+		g_hDatabase.Query( InsertMap_Callback, query );
+	}
+}
+
+public void UpdateMap_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (UpdateMap_Callback) - %s", error );
+		return;
+	}
+}
+
+public void InsertMap_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (InsertMap_Callback) - %s", error );
+		return;
+	}
+	
+	g_iMapId = results.InsertId;
+	
+	Call_StartForward( g_hForward_OnMapLoaded );
+	Call_PushCell( g_iMapId );
+	Call_Finish();
 }
 
 /* Commands */
@@ -680,7 +773,12 @@ public Action Command_ChangeStyle( int client, int args )
 
 public int Native_GetDatabase( Handle handler, int numParams )
 {
-	return view_as<int>( CloneHandle( g_hDatabase, handler ) );
+	return view_as<int>(CloneHandle( g_hDatabase, handler ));
+}
+
+public int Native_GetMapId( Handle handler, int numParams )
+{
+	return g_iMapId;
 }
 
 public int Native_GetClientTimerData( Handle handler, int numParams )

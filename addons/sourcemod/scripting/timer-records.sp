@@ -210,10 +210,10 @@ stock int GetRankForTime( float time, int track, int style )
 	return nRecords + 1;
 }
 
-stock int GetClientMapRank( int client, int track, int style )
+int GetClientMapRank( int client, int track, int style )
 {
 	// subtract 1 because when times are equal, it counts as next rank
-	return GetRankForTime( g_fPlayerPersonalBest[client][track][style], track, style ) - 1; // pb time
+	return GetRankForTime( g_fPlayerPersonalBest[client][track][style], track, style ) - 1;
 }
 
 /* Database stuff */
@@ -247,7 +247,7 @@ void SQL_CreateTables()
 	txn.AddQuery( query );
 	
 	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_records` ( recordid INT NOT NULL AUTO_INCREMENT, \
-																			mapname CHAR( 128 ) NOT NULL, \
+																			mapid INT NOT NULL, \
 																			playerid INT NOT NULL, \
 																			timestamp INT( 16 ) NOT NULL, \
 																			attempts INT( 8 ) NOT NULL, \
@@ -262,10 +262,10 @@ void SQL_CreateTables()
 																			PRIMARY KEY (`recordid`) );" );
 	txn.AddQuery( query );
 	
-	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
+	g_hDatabase.Execute( txn, CreateTableSuccess_Callback, CreateTableFailure_Callback, _, DBPrio_High );
 }
 
-public void SQL_OnCreateTableSuccess( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
+public void CreateTableSuccess_Callback( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
 {
 	for( int i = 1; i <= MaxClients; i++ )
 	{
@@ -276,9 +276,9 @@ public void SQL_OnCreateTableSuccess( Database db, any data, int numQueries, DBR
 	}
 }
 
-public void SQL_OnCreateTableFailure( Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData )
+public void CreateTableFailure_Callback( Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData )
 {
-	SetFailState( "[SQL ERROR] (SQL_CreateTables) - %s", error );
+	SetFailState( "[SQL ERROR] (CreateTableFailure_Callback) - %s", error );
 }
 
 void SQL_LoadPlayerID( int client )
@@ -384,7 +384,7 @@ public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const c
 void SQL_LoadRecords( int client, int track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "SELECT recordid, time FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapname = '%s';", g_iPlayerId[client], track, style, g_cMapName );
+	Format( query, sizeof( query ), "SELECT recordid, time FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapid = '%i';", g_iPlayerId[client], track, style, Timer_GetMapId() );
 	
 	Timer_DebugPrint( "SQL_LoadRecords: %s", query );
 	
@@ -401,6 +401,7 @@ public void LoadRecords_Callback( Database db, DBResultSet results, const char[]
 	if( results == null )
 	{
 		LogError( "[SQL ERROR] (LoadRecords_Callback) - %s", error );
+		delete pack;
 		return;
 	}
 	
@@ -445,9 +446,9 @@ void SQL_InsertRecord( int client, int track, int style, float time )
 	}
 
 	char query[512];
-	Format( query, sizeof( query ), "INSERT INTO `t_records` (mapname, playerid, track, style, timestamp, attempts, time, jumps, strafes, sync, strafetime, ssj) \
-													VALUES ('%s', '%i', '%i', '%i', '%i', '%i', '%.5f', '%i', '%i', '%.2f', '%.2f', '%i');",
-													g_cMapName,
+	Format( query, sizeof( query ), "INSERT INTO `t_records` (mapid, playerid, track, style, timestamp, attempts, time, jumps, strafes, sync, strafetime, ssj) \
+													VALUES ('%i', '%i', '%i', '%i', '%i', '%i', '%.5f', '%i', '%i', '%.2f', '%.2f', '%i');",
+													Timer_GetMapId(),
 													g_iPlayerId[client],
 													track,
 													style,
@@ -476,6 +477,7 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 	if( results == null )
 	{
 		LogError( "[SQL ERROR] (InsertRecord_Callback) - %s", error );
+		delete pack;
 		return;
 	}
 	
@@ -538,6 +540,13 @@ void SQL_UpdateRecord( int client, int track, int style, float time )
 
 public void UpdateRecord_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
 {
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (UpdateRecord_Callback) - %s", error );
+		delete pack;
+		return;
+	}
+
 	pack.Reset();
 	int client = pack.ReadCell();
 	int track = pack.ReadCell();
@@ -552,18 +561,12 @@ public void UpdateRecord_Callback( Database db, DBResultSet results, const char[
 	Call_PushFloat( time );
 	Call_PushCell( g_iPlayerRecordId[client][track][style] );
 	Call_Finish();
-
-	if( results == null )
-	{
-		LogError( "[SQL ERROR] (UpdateRecord_Callback) - %s", error );
-		return;
-	}
 }
 
-void SQL_DeleteRecord( int playerid, int track, int style )
+void SQL_DeleteRecord( int recordid, int track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "DELETE FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i';", playerid, track, style );
+	Format( query, sizeof( query ), "DELETE FROM `t_records` WHERE recordid = '%i';", recordid );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );
@@ -577,6 +580,7 @@ public void DeleteRecord_Callback( Database db, DBResultSet results, const char[
 	if( results == null )
 	{
 		LogError( "[SQL ERROR] (DeleteRecord_Callback) - %s", error );
+		delete pack;
 		return;
 	}
 	
@@ -593,8 +597,8 @@ void SQL_ReloadCache( int track, int style, bool reloadall = false )
 	char query[512];
 	Format( query, sizeof( query ), "SELECT r.recordid, r.time, p.lastname \
 									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
-									WHERE mapname = '%s' AND track = '%i' AND style = '%i'\
-									ORDER BY r.time ASC;", g_cMapName, track, style );
+									WHERE mapid = '%i' AND track = '%i' AND style = '%i'\
+									ORDER BY r.time ASC;", Timer_GetMapId(), track, style );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );
@@ -622,6 +626,7 @@ public void CacheRecords_Callback( Database db, DBResultSet results, const char[
 	if( results == null )
 	{
 		LogError( "[SQL ERROR] (CacheRecords_Callback) - %s", error );
+		delete pack;
 		return;
 	}
 	
@@ -654,19 +659,31 @@ void SQL_ShowStats( int client, int recordid )
 									WHERE recordid='%i'\
 									ORDER BY r.time ASC;", recordid );
 	
-	g_hDatabase.Query( GetRecordStats_Callback, query, GetClientUserId( client ), DBPrio_Normal );
+	DataPack pack = new DataPack();
+	pack.WriteCell( GetClientUserId( client ) );
+	pack.WriteCell( recordid );
+	
+	g_hDatabase.Query( GetRecordStats_Callback, query, pack );
 }
 
-public void GetRecordStats_Callback( Database db, DBResultSet results, const char[] error, int uid )
+void SQL_ShowPlayerStats( int client, int playerid )
+{
+	Timer_PrintToChat( client, "{primary}Player stats coming soon! (%i)", playerid );
+}
+
+public void GetRecordStats_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
 {
 	if( results == null )
 	{
 		LogError( "[SQL ERROR] (GetRecordStats_Callback) - %s", error );
+		delete pack;
 		return;
 	}
 	
-	int client = GetClientOfUserId( uid );
-	if( !client )
+	pack.Reset();
+	int client = GetClientOfUserId( pack.ReadCell() );
+	int recordid = pack.ReadCell();
+	if( !(0 < client <= MaxClients) )
 	{
 		return;
 	}
@@ -689,7 +706,7 @@ public void GetRecordStats_Callback( Database db, DBResultSet results, const cha
 		int track = results.FetchInt( 10 );
 		int style = results.FetchInt( 11 );
 		
-		ShowStats( client, track, style, recordData );
+		ShowStats( client, track, style, recordid, recordData );
 	}
 	else
 	{
@@ -697,7 +714,7 @@ public void GetRecordStats_Callback( Database db, DBResultSet results, const cha
 	}
 }
 
-public void UpdateAttempts_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+public void UpdateAttempts_Callback( Database db, DBResultSet results, const char[] error, any data )
 {
 	if( results == null )
 	{
@@ -846,10 +863,10 @@ public int WRMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 	}
 }
 
-void ShowStats( int client, int track, int style, const any recordData[RecordData] )
+void ShowStats( int client, int track, int style, int recordid, const any recordData[RecordData] )
 {
 	Menu menu = new Menu( RecordInfo_Handler );
-		
+	
 	char date[128];
 	FormatTime( date, sizeof( date ), "%d/%m/%Y - %H:%M:%S", recordData[RD_Timestamp] );
 	char sTime[64];
@@ -867,8 +884,8 @@ void ShowStats( int client, int track, int style, const any recordData[RecordDat
 		Format( sSync, sizeof( sSync ), "(%.2f)", recordData[RD_Sync] );
 	}
 	
-	char sInfo[16];
-	Format( sInfo, sizeof( sInfo ), "%i,%i,%i", recordData[RD_PlayerID], track, style );
+	char sInfo[64];
+	Format( sInfo, sizeof( sInfo ), "%i,%i,%i,%i", recordData[RD_PlayerID], track, style, recordid );
 	
 	char buffer[512];
 	Format( buffer, sizeof( buffer ), "%s - %s %s\n \n", g_cMapName, sTrack, settings[StyleName] );
@@ -899,20 +916,23 @@ public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int par
 		char sInfo[16];
 		menu.GetItem( 0, sInfo, sizeof( sInfo ) );
 		
-		char sSplitString[3][16];
+		char sSplitString[4][16];
 		ExplodeString( sInfo, ",", sSplitString, sizeof( sSplitString ), sizeof( sSplitString[] ) );
 		
 		int playerid = StringToInt( sSplitString[0] );
 		int track = StringToInt( sSplitString[1] );
 		int style = StringToInt( sSplitString[2] );
+		int recordid = StringToInt( sSplitString[3] );
 		
 		switch( param2 )
 		{
 			case 0: // TODO: implement showing player stats here
-			{}
+			{
+				SQL_ShowPlayerStats( param1, playerid );
+			}
 			case 1: // delete time
 			{
-				SQL_DeleteRecord( playerid, track, style );
+				SQL_DeleteRecord( recordid, track, style );
 			}
 		}
 	}
