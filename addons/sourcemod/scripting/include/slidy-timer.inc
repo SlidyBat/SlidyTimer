@@ -113,6 +113,7 @@ enum
 	Timer_SyncedFrames,
 	Timer_StrafedFrames,
 	Timer_Strafes,
+	Timer_SSJ,
 	Timer_ZoneTrack,
 	Timer_ZoneType,
 	TIMER_DATA_SIZE
