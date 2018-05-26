@@ -671,6 +671,14 @@ public int Native_TeleportClientToCheckpoint( Handle handler, int numParams )
 public int Native_ClearClientCheckpoints( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
+	
+	int length = g_aCheckpoints[client].Length;
+	for( int i = 0; i < length; i++ )
+	{
+		any cp[eCheckpoint];
+		g_aCheckpoints[client].GetArray( i, cp[0] );
+		delete cp[CP_ReplayFrames];
+	}
 	g_aCheckpoints[client].Clear();
 	g_iSelectedCheckpoint[client] = 0;
 	
