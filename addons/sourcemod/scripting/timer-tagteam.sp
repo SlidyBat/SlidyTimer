@@ -786,8 +786,11 @@ void SQL_CreateTables()
 
 public void CreateTableSuccess_Callback( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
 {
-	SQL_LoadAllMapRecords();
-
+	if( Timer_GetMapId() > -1 )
+	{
+		SQL_LoadAllMapRecords();
+	}
+	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
 		if( Timer_IsClientLoaded( i ) )
