@@ -91,7 +91,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	return APLRes_Success;
 }
 
-public void OnMapStart()
+public void Timer_OnMapLoaded()
 {
 	GetCurrentMap( g_cMapName, sizeof( g_cMapName ) );
 	
@@ -882,7 +882,7 @@ public int Native_GetWRTime( Handle handler, int numParams )
 	float wr = 0.0;
 	if( g_aMapTopTimes[track][style].Length )
 	{		
-		return g_aMapTopTimes[track][style].Get( 0 );
+		wr = g_aMapTopTimes[track][style].Get( 0 );
 	}
 	
 	any result = Plugin_Continue;
@@ -890,7 +890,7 @@ public int Native_GetWRTime( Handle handler, int numParams )
 	Call_PushCell( track );
 	Call_PushCell( style );
 	float temp = wr;
-	Call_PushFloatRef( wr );
+	Call_PushFloatRef( temp );
 	Call_Finish( result );
 	
 	if( result == Plugin_Changed || result == Plugin_Handled || result == Plugin_Stop )
