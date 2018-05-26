@@ -909,6 +909,7 @@ public void LoadPlayerTime_Callback( Database db, DBResultSet results, const cha
 	{
 		g_iRecordId[client][track][style] = results.FetchInt( 0 );
 		g_fPersonalBest[client][track][style] = results.FetchFloat( 1 );
+		Timer_DebugPrint( "LoadPlayerTime_Callback: %N recordid=%i pb=%f", client, g_iRecordId[client][track][style], g_fPersonalBest[client][track][style] );
 	}
 }
 
@@ -1169,7 +1170,7 @@ public Action Timer_OnClientRankRequested( int client, int track, int style, int
 	return Plugin_Continue;
 }
 
-public Action Timer_OnClientPBRequested( int client, int track, int style, float& time )
+public Action Timer_OnClientPBTimeRequested( int client, int track, int style, float& time )
 {
 	if( Timer_StyleHasSetting( style, "tagteam" ) )
 	{

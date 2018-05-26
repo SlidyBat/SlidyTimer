@@ -505,7 +505,7 @@ forward Action Timer_OnClientRankRequested( int client, int track, int style, in
  *
  * @return							Plugin_Changed to use the changed time value, Plugin_Continue otherwise
  */
-forward Action Timer_OnClientPBRequested( int client, int track, int style, float& time );
+forward Action Timer_OnClientPBTimeRequested( int client, int track, int style, float& time );
 
 /**
  * Called when a plugin requests to get a WR time
