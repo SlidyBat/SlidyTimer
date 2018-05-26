@@ -33,6 +33,9 @@ Handle 		g_hForward_OnWRNameRequested;
 Handle 		g_hForward_OnRecordsCountRequested;
 Handle		g_hForward_OnLeaderboardRequested;
 
+Handle g_CustomRecordPlugin[MAX_STYLES];
+RecordsHandler g_CustomRecordHandler[MAX_STYLES];
+
 ArrayList		g_aMapTopRecordIds[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
@@ -87,6 +90,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetWRTime", Native_GetWRTime );
 	CreateNative( "Timer_GetWRName", Native_GetWRName );
 	CreateNative( "Timer_GetRecordsCount", Native_GetRecordsCount );
+	CreateNative( "Timer_SetCustomRecordsHandler", Native_SetCustomRecordsHandler );
 
 	RegPluginLibrary( "timer-records" );
 	
@@ -138,7 +142,23 @@ public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 
 public void Timer_OnTimerFinishPost( int client, int track, int style, float time )
 {
-	float pb = g_fPlayerPersonalBest[client][track][style];
+	if( g_CustomRecordHandler[style] != INVALID_FUNCTION )
+	{
+		Call_StartFunction( g_CustomRecordPlugin[style], g_CustomRecordHandler[style] );
+		Call_PushCell( client );
+		Call_PushCell( track );
+		Call_PushCell( style );
+		Call_PushFloat( time );
+		Call_PushCell( g_hForward_OnRecordInsertedPre );
+		Call_PushCell( g_hForward_OnRecordInsertedPost );
+		Call_PushCell( g_hForward_OnRecordUpdatedPre );
+		Call_PushCell( g_hForward_OnRecordUpdatedPost );
+		Call_Finish();
+		
+		return;
+	}
+
+	float pb = Timer_GetClientPBTime( client, track, style );
 	float wr = Timer_GetWRTime( track, style );
 	
 	if( pb == 0.0 || time < pb ) // new record, save it
@@ -184,7 +204,7 @@ public void Timer_OnTimerFinishPost( int client, int track, int style, float tim
 	SQL_ReloadCache( track, style );
 }
 
-stock int GetRankForTime( float time, int track, int style )
+int GetRankForTime( float time, int track, int style )
 {
 	if( time == 0.0 )
 	{
@@ -1079,4 +1099,13 @@ public int Native_GetRecordsCount( Handle handler, int numParams )
 	}
 	
 	return g_aMapTopTimes[track][style].Length;
+}
+
+public int Native_SetCustomRecordsHandler( Handle handler, int numParams )
+{
+	int style = GetNativeCell( 1 );
+	g_CustomRecordPlugin[style] = handler;
+	g_CustomRecordHandler[style] = view_as<RecordsHandler>(GetNativeFunction( 2 ));
+	
+	return 1;
 }
