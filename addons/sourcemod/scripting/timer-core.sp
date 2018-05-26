@@ -830,14 +830,14 @@ public void LoadMap_Callback( Database db, DBResultSet results, const char[] err
 		Call_Finish();
 		
 		char query[512];
-		Format( query, sizeof(query), "UPDATE `t_map` SET lastplayed = '%i', playcount = playcount + 1 WHERE mapid = '%i'", GetTime(), g_iMapId );
+		Format( query, sizeof(query), "UPDATE `t_maps` SET lastplayed = '%i', playcount = playcount + 1 WHERE mapid = '%i'", GetTime(), g_iMapId );
 		
 		g_hDatabase.Query( UpdateMap_Callback, query );
 	}
 	else
 	{
 		char query[512];
-		Format( query, sizeof(query), "INSERT INTO `t_map` (mapname, maptier, lastplayed, playcount) VALUE ('%s', '0', '%i', 1)", g_cMapName, GetTime() );
+		Format( query, sizeof(query), "INSERT INTO `t_maps` (mapname, maptier, lastplayed, playcount) VALUE ('%s', '0', '%i', 1)", g_cMapName, GetTime() );
 		
 		g_hDatabase.Query( InsertMap_Callback, query );
 	}
