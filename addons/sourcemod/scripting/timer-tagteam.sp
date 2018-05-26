@@ -569,13 +569,38 @@ bool ExitTeam( int client )
 	return true;
 }
 
+public Action Timer_OnCPLoadedPre( int client, int idx )
+{
+	if( g_iTeamIndex[client] != -1 && g_iCurrentPlayer[g_iTeamIndex[client]] != client )
+	{
+		Timer_PrintToChat( client, "{primary}Cannot load when it is not your turn" );
+		return Plugin_Handled;
+	}
+
+	return Plugin_Continue;
+}
+
+public Action Timer_OnCPSavedPre( int client, int target, int idx )
+{
+	if( g_iTeamIndex[client] != -1 && client != target )
+	{
+		Timer_PrintToChat( client, "{primary}Cannot save when it is not your turn" );
+		return Plugin_Handled;
+	}
+	
+	return Plugin_Continue;
+}
+
 public void Timer_OnCPSavedPost( int client, int target, int idx )
 {
 	if( g_iTeamIndex[client] != -1 )
 	{
 		int teamidx = g_iTeamIndex[client];
-	
-		delete g_LastCheckpoint[teamidx][CP_ReplayFrames];
+		
+		if( !g_bDidUndo[teamidx] )
+		{
+			delete g_LastCheckpoint[teamidx][CP_ReplayFrames];
+		}
 		Timer_GetClientCheckpoint( client, 0, g_LastCheckpoint[teamidx] );
 		
 		// 'frames' will be deleted by PassToNext
@@ -830,7 +855,8 @@ public void CreateTableFailure_Callback( Database db, any data, int numQueries, 
 
 void SQL_LoadAllPlayerTimes( int client )
 {
-	for( int i = 0; i < MAX_STYLES; i++ )
+	int styles = Timer_GetStyleCount();
+	for( int i = 0; i < styles; i++ )
 	{
 		if( Timer_StyleHasSetting( i, "tagteam" ) )
 		{
@@ -1078,7 +1104,8 @@ public void UpdatePlayerTime_Callback( Database db, DBResultSet results, const c
 
 void SQL_LoadAllMapRecords()
 {
-	for( int i = 0; i < MAX_STYLES; i++ )
+	int styles = Timer_GetStyleCount();
+	for( int i = 0; i < styles; i++ )
 	{
 		if( Timer_StyleHasSetting( i, "tagteam" ) )
 		{
