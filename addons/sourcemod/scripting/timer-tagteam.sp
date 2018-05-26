@@ -573,8 +573,13 @@ public void Timer_OnCPSavedPost( int client, int target, int idx )
 {
 	if( g_iTeamIndex[client] != -1 )
 	{
-		Timer_GetClientCheckpoint( client, 0, g_LastCheckpoint[g_iTeamIndex[client]] );
+		delete g_LastCheckpoint[g_iTeamIndex[client]][CP_ReplayFrames];
 	
+		Timer_GetClientCheckpoint( client, 0, g_LastCheckpoint[g_iTeamIndex[client]] );
+		
+		ArrayList frames = g_LastCheckpoint[g_iTeamIndex[client]][CP_ReplayFrames];
+		g_LastCheckpoint[g_iTeamIndex[client]][CP_ReplayFrames] = frames.Clone();
+		
 		g_nRelayCount[g_iTeamIndex[client]]++;
 		int next = g_iNextTeamMember[client];
 	
@@ -712,7 +717,7 @@ public Action Command_Undo( int client, int args )
 		return Plugin_Handled;
 	}
 	
-	PassToNext( client, last, g_LastCheckpoint[teamidx] );
+	PassToNext( client, last, g_LastCheckpoint[teamidx], true, false );
 	g_bDidUndo[teamidx] = true;
 	g_nUndoCount[teamidx]++;
 	
@@ -1288,39 +1293,46 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack )
 	Timer_TeleportClientToZone( client, zoneType, zoneTrack );
 }
 
-void PassToNext( int client, int next, any checkpoint[eCheckpoint], bool usecp = true )
+void PassToNext( int client, int next, any checkpoint[eCheckpoint], bool usecp = true, bool clone = true )
 {
-		Timer_ClearClientCheckpoints( client );
-		Timer_ClearClientCheckpoints( next );
-		
-		if( usecp )
+	if( clone )
+	{
+		// the handle will be deleted when the checkpoints are cleared so we need to make a copy;
+		ArrayList frames = checkpoint[CP_ReplayFrames];
+		checkpoint[CP_ReplayFrames] = frames.Clone();
+	}
+	
+	Timer_ClearClientCheckpoints( client );
+	Timer_ClearClientCheckpoints( next );
+	
+	if( usecp )
+	{
+		Timer_SetClientCheckpoint( next, -1, checkpoint );
+	}
+	ChangeClientTeam( next, CS_TEAM_SPECTATOR );
+	ChangeClientTeam( next, CS_TEAM_T );
+	CS_RespawnPlayer( next );
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) && !IsFakeClient( i ) && IsClientObserver( i ) && GetEntPropEnt( client, Prop_Send, "m_hObserverTarget" ) == client )
 		{
-			Timer_SetClientCheckpoint( next, -1, checkpoint );
+			SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", next );
+			SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
 		}
-		ChangeClientTeam( next, CS_TEAM_SPECTATOR );
-		ChangeClientTeam( next, CS_TEAM_T );
-		CS_RespawnPlayer( next );
-		
-		for( int i = 1; i <= MaxClients; i++ )
-		{
-			if( IsClientInGame( i ) && !IsFakeClient( i ) && IsClientObserver( i ) && GetEntPropEnt( client, Prop_Send, "m_hObserverTarget" ) == client )
-			{
-				SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", next );
-				SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
-			}
-		}
-		
-		ChangeClientTeam( client, CS_TEAM_SPECTATOR );
-		SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", next );
-		SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
-		
-		g_iCurrentPlayer[g_iTeamIndex[client]] = next;
-		
-		if( usecp )
-		{
-			Timer_TeleportClientToCheckpoint( next, 0 );
-		}
-		Timer_OpenCheckpointsMenu( next );
+	}
+	
+	ChangeClientTeam( client, CS_TEAM_SPECTATOR );
+	SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", next );
+	SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
+	
+	g_iCurrentPlayer[g_iTeamIndex[client]] = next;
+	
+	if( usecp )
+	{
+		Timer_TeleportClientToCheckpoint( next, 0 );
+	}
+	Timer_OpenCheckpointsMenu( next );
 }
 
 void PrintToTeam( int teamidx, char[] message, any ... )
