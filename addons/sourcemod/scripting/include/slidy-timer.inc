@@ -1227,6 +1227,7 @@ native void Timer_TeleportClientToCheckpoint( int client, int index );
 
 /**
  * Clears all saved CPs for specified client
+ * NOTE: It is the callers responsibility to delete replay frames handle from the client's CPs
  *
  * @param client					Client index
  *

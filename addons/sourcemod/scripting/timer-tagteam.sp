@@ -573,14 +573,16 @@ public void Timer_OnCPSavedPost( int client, int target, int idx )
 {
 	if( g_iTeamIndex[client] != -1 )
 	{
-		delete g_LastCheckpoint[g_iTeamIndex[client]][CP_ReplayFrames];
+		int teamidx = g_iTeamIndex[client];
 	
-		Timer_GetClientCheckpoint( client, 0, g_LastCheckpoint[g_iTeamIndex[client]] );
+		delete g_LastCheckpoint[teamidx][CP_ReplayFrames];
+		Timer_GetClientCheckpoint( client, 0, g_LastCheckpoint[teamidx] );
 		
-		ArrayList frames = g_LastCheckpoint[g_iTeamIndex[client]][CP_ReplayFrames];
-		g_LastCheckpoint[g_iTeamIndex[client]][CP_ReplayFrames] = frames.Clone();
+		// 'frames' will be deleted by PassToNext
+		ArrayList frames = g_LastCheckpoint[teamidx][CP_ReplayFrames];
+		g_LastCheckpoint[teamidx][CP_ReplayFrames] = frames.Clone();
 		
-		g_nRelayCount[g_iTeamIndex[client]]++;
+		g_nRelayCount[teamidx]++;
 		int next = g_iNextTeamMember[client];
 	
 		any checkpoint[eCheckpoint];
@@ -588,7 +590,7 @@ public void Timer_OnCPSavedPost( int client, int target, int idx )
 		
 		PassToNext( client, next, checkpoint );
 		
-		g_bDidUndo[g_iTeamIndex[client]] = false;
+		g_bDidUndo[teamidx] = false;
 	}
 }
 
@@ -717,7 +719,7 @@ public Action Command_Undo( int client, int args )
 		return Plugin_Handled;
 	}
 	
-	PassToNext( client, last, g_LastCheckpoint[teamidx], true, false );
+	PassToNext( client, last, g_LastCheckpoint[teamidx] );
 	g_bDidUndo[teamidx] = true;
 	g_nUndoCount[teamidx]++;
 	
@@ -1293,15 +1295,34 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack )
 	Timer_TeleportClientToZone( client, zoneType, zoneTrack );
 }
 
-void PassToNext( int client, int next, any checkpoint[eCheckpoint], bool usecp = true, bool clone = true )
+void PassToNext( int client, int next, any checkpoint[eCheckpoint], bool usecp = true )
 {
-	if( clone )
+	int length;
+	
+	length = Timer_GetTotalCheckpoints( client );
+	for( int i = 0; i < length; i++ )
 	{
-		// the handle will be deleted when the checkpoints are cleared so we need to make a copy;
-		ArrayList frames = checkpoint[CP_ReplayFrames];
-		checkpoint[CP_ReplayFrames] = frames.Clone();
+		any cp[eCheckpoint];
+		Timer_GetClientCheckpoint( client, i, cp );
+		
+		if( cp[CP_ReplayFrames] != checkpoint[CP_ReplayFrames] )
+		{
+			delete cp[CP_ReplayFrames];
+		}
 	}
 	
+	length = Timer_GetTotalCheckpoints( next );
+	for( int i = 0; i < length; i++ )
+	{
+		any cp[eCheckpoint];
+		Timer_GetClientCheckpoint( next, i, cp );
+		
+		if( cp[CP_ReplayFrames] != checkpoint[CP_ReplayFrames] )
+		{
+			delete cp[CP_ReplayFrames];
+		}
+	}
+
 	Timer_ClearClientCheckpoints( client );
 	Timer_ClearClientCheckpoints( next );
 	
