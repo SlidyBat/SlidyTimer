@@ -20,7 +20,6 @@ char g_cMapName[PLATFORM_MAX_PATH];
 
 Database		g_hDatabase;
 
-Handle		g_hForward_OnClientLoaded;
 Handle		g_hForward_OnWRBeaten;
 Handle		g_hForward_OnRecordInsertedPre;
 Handle		g_hForward_OnRecordInsertedPost;
@@ -40,15 +39,12 @@ ArrayList		g_aMapTopRecordIds[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
 
-/* Player Data */
-int			g_iPlayerId[MAXPLAYERS + 1] = { -1, ... };
 int			g_iPlayerRecordId[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES];
 float			g_fPlayerPersonalBest[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES];
 
 public void OnPluginStart()
 {
 	/* Forwards */
-	g_hForward_OnClientLoaded = CreateGlobalForward( "Timer_OnClientLoaded", ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnWRBeaten = CreateGlobalForward( "Timer_OnWRBeaten", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnRecordInsertedPre = CreateGlobalForward( "Timer_OnRecordInsertedPre", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_Float );
 	g_hForward_OnRecordInsertedPost = CreateGlobalForward( "Timer_OnRecordInsertedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell );
@@ -83,8 +79,6 @@ public void OnPluginStart()
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
-	CreateNative( "Timer_IsClientLoaded", Native_IsClientLoaded );
-	CreateNative( "Timer_GetClientPlayerId", Native_GetClientPlayerId );
 	CreateNative( "Timer_GetClientMapRank", Native_GetClientMapRank );
 	CreateNative( "Timer_GetClientPBTime", Native_GetClientPBTime );
 	CreateNative( "Timer_GetWRTime", Native_GetWRTime );
@@ -111,20 +105,6 @@ public void OnMapStart()
 			SQL_ReloadCache( i, j, true );
 		}
 	}
-}
-
-public void OnClientAuthorized( int client, const char[] auth )
-{
-	if( !IsFakeClient( client ) )
-	{
-		Timer_DebugPrint( "OnClientAuthorized: %N", client );
-		SQL_LoadPlayerID( client );
-	}
-}
-
-public void OnClientDisconnect( int client )
-{
-	g_iPlayerId[client] = -1;
 }
 
 public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
@@ -253,25 +233,14 @@ void SQL_CreateTables()
 	{
 		return;
 	}
-
-	Transaction txn = new Transaction();
 	
 	char query[512];
-	
-	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_players` ( playerid INT NOT NULL AUTO_INCREMENT, \
-																			steamaccountid INT NOT NULL, \
-																			lastname CHAR(64) NOT NULL, \
-																			firstconnect INT(16) NOT NULL, \
-																			lastconnect INT(16) NOT NULL, \
-																			PRIMARY KEY (`playerid`) );" );
-	txn.AddQuery( query );
-	
 	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_records` ( recordid INT NOT NULL AUTO_INCREMENT, \
 																			mapid INT NOT NULL, \
 																			playerid INT NOT NULL, \
-																			timestamp INT( 16 ) NOT NULL, \
-																			attempts INT( 8 ) NOT NULL, \
-																			time FLOAT NOT NULL, \
+																			timestamp INT(16) NOT NULL, \
+																			attempts INT(8) NOT NULL, \
+																			time FLOAT(23, 8) NOT NULL, \
 																			track INT NOT NULL, \
 																			style INT NOT NULL, \
 																			jumps INT NOT NULL, \
@@ -280,131 +249,25 @@ void SQL_CreateTables()
 																			strafetime FLOAT NOT NULL, \
 																			ssj INT NOT NULL, \
 																			PRIMARY KEY (`recordid`) );" );
-	txn.AddQuery( query );
 	
-	g_hDatabase.Execute( txn, CreateTableSuccess_Callback, CreateTableFailure_Callback, _, DBPrio_High );
+	g_hDatabase.Query( CreateTable_Callback, query, _, DBPrio_High );
 }
 
-public void CreateTableSuccess_Callback( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
-{
-	for( int i = 1; i <= MaxClients; i++ )
-	{
-		if( IsClientInGame( i ) && IsClientAuthorized( i ) && !IsFakeClient( i ) )
-		{
-			SQL_LoadPlayerID( i );
-		}
-	}
-}
-
-public void CreateTableFailure_Callback( Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData )
-{
-	SetFailState( "[SQL ERROR] (CreateTableFailure_Callback) - %s", error );
-}
-
-void SQL_LoadPlayerID( int client )
-{
-	char query[128];
-	Format( query, sizeof( query ), "SELECT playerid FROM `t_players` WHERE steamaccountid = '%i';", GetSteamAccountID( client ) );
-	
-	g_hDatabase.Query( LoadPlayerID_Callback, query, GetClientUserId( client ), DBPrio_High );
-}
-
-public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[] error, int uid )
+public void CreateTable_Callback( Database db, DBResultSet results, const char[] error, int uid )
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (LoadPlayerID_Callback) - %s", error );
+		LogError( "[SQL ERROR] (CreateTable_Callback) - %s", error );
 		return;
 	}
 	
-	int client = GetClientOfUserId( uid );
-	if( !client ) // client no longer valid since id loaded :(
-	{
-		Timer_DebugPrint( "LoadPlayerID_Callback: Invalid userid %i (%i)", uid, client );
-		return;
-	}
 	
-	if( results.RowCount ) // playerid already exists, this is returning user
-	{
-		if( results.FetchRow() )
-		{		
-			char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
-			GetClientName( client, name, sizeof( name ) );
-			g_hDatabase.Escape( name, name, sizeof( name ) );
-			
-			g_iPlayerId[client] = results.FetchInt( 0 );
-			
-			// update info
-			char query[256];
-			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i' WHERE playerid = '%i';", name, GetTime(), g_iPlayerId[client] );
-			
-			Timer_DebugPrint( "LoadPlayerID_Callback: Existing user %L (playerid=%i)", client, g_iPlayerId[client] );
-			
-			g_hDatabase.Query( UpdatePlayerInfo_Callback, query, uid, DBPrio_Normal );
-		}
-	}
-	else  // new user
-	{
-		Timer_DebugPrint( "LoadPlayerID_Callback: New user %L", client );
-	
-		int timestamp = GetTime();
-		
-		char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
-		GetClientName( client, name, sizeof( name ) );
-		g_hDatabase.Escape( name, name, sizeof( name ) );
-
-		char query[256];
-		Format( query, sizeof( query ), "INSERT INTO `t_players` (`steamaccountid`, `lastname`, `firstconnect`, `lastconnect`) VALUES ('%i', '%s', '%i', '%i');", GetSteamAccountID( client ), name, timestamp, timestamp );
-		
-		Timer_DebugPrint( "LoadPlayerID_Callback: %s", query );
-		
-		g_hDatabase.Query( InsertPlayerInfo_Callback, query, uid, DBPrio_High );
-	}
-}
-
-public void UpdatePlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
-{
-	if( results == null )
-	{
-		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
-		return;
-	}
-	
-	int client = GetClientOfUserId( uid );
-	if( !client )
-	{
-		return;
-	}
-	
-	Call_StartForward( g_hForward_OnClientLoaded );
-	Call_PushCell( client );
-	Call_PushCell( g_iPlayerId[client] );
-	Call_PushCell( false );
-	Call_Finish();
-}
-
-public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
-{
-	if( results == null )
-	{
-		LogError( "[SQL ERROR] (InsertPlayerInfo_Callback) - %s", error );
-		return;
-	}
-	
-	int client = GetClientOfUserId( uid );
-	g_iPlayerId[client] = results.InsertId;
-	
-	Call_StartForward( g_hForward_OnClientLoaded );
-	Call_PushCell( client );
-	Call_PushCell( g_iPlayerId[client] );
-	Call_PushCell( true );
-	Call_Finish();
 }
 
 void SQL_LoadRecords( int client, int track, int style )
 {
 	char query[256];
-	Format( query, sizeof( query ), "SELECT recordid, time FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapid = '%i';", g_iPlayerId[client], track, style, Timer_GetMapId() );
+	Format( query, sizeof( query ), "SELECT recordid, time FROM `t_records` WHERE playerid = '%i' AND track = '%i' AND style = '%i' AND mapid = '%i';", Timer_GetClientPlayerId( client ), track, style, Timer_GetMapId() );
 	
 	Timer_DebugPrint( "SQL_LoadRecords: %s", query );
 	
@@ -469,7 +332,7 @@ void SQL_InsertRecord( int client, int track, int style, float time )
 	Format( query, sizeof( query ), "INSERT INTO `t_records` (mapid, playerid, track, style, timestamp, attempts, time, jumps, strafes, sync, strafetime, ssj) \
 													VALUES ('%i', '%i', '%i', '%i', '%i', '%i', '%.5f', '%i', '%i', '%.2f', '%.2f', '%i');",
 													Timer_GetMapId(),
-													g_iPlayerId[client],
+													Timer_GetClientPlayerId( client ),
 													track,
 													style,
 													GetTime(),
@@ -633,7 +496,7 @@ void SQL_ReloadCache( int track, int style, bool reloadall = false )
 	{
 		for( int i = 1; i <= MaxClients; i++ )
 		{
-			if( IsClientConnected( i ) && !IsFakeClient( i ) && g_iPlayerId[i] > -1 )
+			if( IsClientConnected( i ) && !IsFakeClient( i ) && Timer_IsClientLoaded( i ) )
 			{
 				SQL_LoadRecords( i, track, style );
 			}
@@ -963,16 +826,6 @@ public int RecordInfo_Handler( Menu menu, MenuAction action, int param1, int par
 }
 
 /* Natives */
-
-public int Native_IsClientLoaded( Handle handler, int numParams )
-{
-	return g_iPlayerId[GetNativeCell( 1 )] > -1;
-}
-
-public int Native_GetClientPlayerId( Handle handler, int numParams )
-{
-	return g_iPlayerId[GetNativeCell( 1 )];
-}
 
 public int Native_GetClientMapRank( Handle handler, int numParams )
 {

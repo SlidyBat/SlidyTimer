@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <slidy-timer>
 #include <sdktools>
+#include <geoip>
 
 public Plugin myinfo = 
 {
@@ -22,6 +23,7 @@ int			g_iMapId = -1;
 
 Handle		g_hForward_OnDatabaseLoaded;
 Handle		g_hForward_OnMapLoaded;
+Handle		g_hForward_OnClientLoaded;
 Handle		g_hForward_OnPlayerRunCmdPost;
 Handle		g_hForward_OnStylesLoaded;
 Handle		g_hForward_OnStyleChangedPre;
@@ -41,6 +43,8 @@ bool			g_bTimerRunning[MAXPLAYERS + 1]; // whether client timer is running or no
 bool			g_bTimerPaused[MAXPLAYERS + 1];
 
 /* PLAYER RECORD DATA */
+int			g_iPlayerId[MAXPLAYERS + 1] = { -1, ... };
+
 int			g_nPlayerFrames[MAXPLAYERS + 1];
 int			g_nPlayerJumps[MAXPLAYERS + 1];
 int			g_nPlayerStrafes[MAXPLAYERS + 1];
@@ -61,6 +65,7 @@ public void OnPluginStart()
 	/* Forwards */
 	g_hForward_OnDatabaseLoaded = CreateGlobalForward( "Timer_OnDatabaseLoaded", ET_Ignore );
 	g_hForward_OnMapLoaded = CreateGlobalForward( "Timer_OnMapLoaded", ET_Ignore, Param_Cell );
+	g_hForward_OnClientLoaded = CreateGlobalForward( "Timer_OnClientLoaded", ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnPlayerRunCmdPost = CreateGlobalForward( "Timer_OnPlayerRunCmdPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Array, Param_Array );
 	g_hForward_OnStylesLoaded = CreateGlobalForward( "Timer_OnStylesLoaded", ET_Ignore, Param_Cell );
 	g_hForward_OnStyleChangedPre = CreateGlobalForward( "Timer_OnStyleChangedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
@@ -87,6 +92,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 {
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
 	CreateNative( "Timer_GetMapId", Native_GetMapId );
+	CreateNative( "Timer_IsClientLoaded", Native_IsClientLoaded );
+	CreateNative( "Timer_GetClientPlayerId", Native_GetClientPlayerId );
 	CreateNative( "Timer_GetClientCurrentTime", Native_GetClientCurrentTime );
 	CreateNative( "Timer_GetClientCurrentJumps", Native_GetClientCurrentJumps );
 	CreateNative( "Timer_GetClientCurrentStrafes", Native_GetClientCurrentStrafes );
@@ -131,14 +138,17 @@ public void OnClientAuthorized( int client, const char[] auth )
 {
 	if( !IsFakeClient( client ) )
 	{
+		SQL_LoadPlayerID( client );
 		sv_autobunnyhopping.ReplicateToClient( client, "1" );
 	}
 	
 	StopTimer( client );
+	ClearPlayerData( client );
 }
 
 public void OnClientDisconnect( int client )
 {
+	g_iPlayerId[client] = -1;
 	g_iClientBlockTickStart[client] = 0;
 	g_nClientBlockTicks[client] = 0;
 }
@@ -645,6 +655,8 @@ void SQL_DBConnect()
 
 void SQL_CreateTables()
 {
+	Transaction txn = new Transaction();
+
 	char query[512];
 	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_maps` ( mapid INT NOT NULL AUTO_INCREMENT, \
 																		mapname CHAR( 128 ) NOT NULL, \
@@ -652,17 +664,144 @@ void SQL_CreateTables()
 																		lastplayed INT NOT NULL, \
 																		playcount INT NOT NULL, \
 																		PRIMARY KEY (`mapid`) );" );
-																		
-	g_hDatabase.Query( CreateTables_Callback, query, _, DBPrio_High );
+	txn.AddQuery( query );
+	
+	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_players` ( playerid INT NOT NULL AUTO_INCREMENT, \
+																			steamaccountid INT NOT NULL, \
+																			lastname CHAR(64) NOT NULL, \
+																			firstconnect INT(16) NOT NULL, \
+																			lastconnect INT(16) NOT NULL, \
+																			country CHAR(32) NOT NULL, \
+																			ip CHAR(64) NOT NULL, \
+																			PRIMARY KEY (`playerid`) );" );
+	txn.AddQuery( query );
+	
+	g_hDatabase.Execute( txn, CreateTableSuccess_Callback, CreateTableFailure_Callback, _, DBPrio_High );
 }
 
-public void CreateTables_Callback( Database db, DBResultSet results, const char[] error, any data )
+public void CreateTableSuccess_Callback( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
+{
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) && IsClientAuthorized( i ) && !IsFakeClient( i ) )
+		{
+			SQL_LoadPlayerID( i );
+		}
+	}
+}
+
+public void CreateTableFailure_Callback( Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData )
+{
+	SetFailState( "[SQL ERROR] (CreateTableFailure_Callback) - %s", error );
+}
+
+void SQL_LoadPlayerID( int client )
+{
+	char query[128];
+	Format( query, sizeof( query ), "SELECT playerid FROM `t_players` WHERE steamaccountid = '%i';", GetSteamAccountID( client ) );
+	
+	g_hDatabase.Query( LoadPlayerID_Callback, query, GetClientUserId( client ), DBPrio_High );
+}
+
+public void LoadPlayerID_Callback( Database db, DBResultSet results, const char[] error, int uid )
 {
 	if( results == null )
 	{
-		LogError( "[SQL ERROR] (CreateTables_Callback) - %s", error );
+		LogError( "[SQL ERROR] (LoadPlayerID_Callback) - %s", error );
 		return;
 	}
+	
+	int client = GetClientOfUserId( uid );
+	if( !client ) // client no longer valid since id loaded :(
+	{
+		Timer_DebugPrint( "LoadPlayerID_Callback: Invalid userid %i (%i)", uid, client );
+		return;
+	}
+	
+	char ip[64];
+	GetClientIP( client, ip, sizeof(ip) );
+	
+	char country[64];
+	if( !GeoipCountry( ip, country, sizeof(country) ) )
+	{
+		strcopy( country, sizeof(country), "LAN" );
+	}
+	
+	if( results.RowCount ) // playerid already exists, this is returning user
+	{
+		if( results.FetchRow() )
+		{		
+			char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
+			GetClientName( client, name, sizeof( name ) );
+			g_hDatabase.Escape( name, name, sizeof( name ) );
+			
+			g_iPlayerId[client] = results.FetchInt( 0 );
+			
+			// update info
+			char query[256];
+			Format( query, sizeof( query ), "UPDATE `t_players` SET lastname = '%s', lastconnect = '%i', country = '%s', ip = '%s' WHERE playerid = '%i';", name, GetTime(), country, ip, g_iPlayerId[client] );
+			
+			Timer_DebugPrint( "LoadPlayerID_Callback: Existing user %L (playerid=%i)", client, g_iPlayerId[client] );
+			
+			g_hDatabase.Query( UpdatePlayerInfo_Callback, query, uid, DBPrio_Normal );
+		}
+	}
+	else  // new user
+	{
+		Timer_DebugPrint( "LoadPlayerID_Callback: New user %L", client );
+	
+		int timestamp = GetTime();
+		
+		char name[MAX_NAME_LENGTH * 2 + 1]; // worst case: every character is escaped + null character
+		GetClientName( client, name, sizeof( name ) );
+		g_hDatabase.Escape( name, name, sizeof( name ) );
+
+		char query[256];
+		Format( query, sizeof( query ), "INSERT INTO `t_players` (`steamaccountid`, `lastname`, `firstconnect`, `lastconnect`, `country`, `ip`) VALUES ('%i', '%s', '%i', '%i', '%s', '%s');", GetSteamAccountID( client ), name, timestamp, timestamp, country, ip );
+		
+		Timer_DebugPrint( "LoadPlayerID_Callback: %s", query );
+		
+		g_hDatabase.Query( InsertPlayerInfo_Callback, query, uid, DBPrio_High );
+	}
+}
+
+public void UpdatePlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (UpdatePlayerInfo_Callback) - %s", error );
+		return;
+	}
+	
+	int client = GetClientOfUserId( uid );
+	if( !client )
+	{
+		return;
+	}
+	
+	Call_StartForward( g_hForward_OnClientLoaded );
+	Call_PushCell( client );
+	Call_PushCell( g_iPlayerId[client] );
+	Call_PushCell( false );
+	Call_Finish();
+}
+
+public void InsertPlayerInfo_Callback( Database db, DBResultSet results, const char[] error, int uid )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (InsertPlayerInfo_Callback) - %s", error );
+		return;
+	}
+	
+	int client = GetClientOfUserId( uid );
+	g_iPlayerId[client] = results.InsertId;
+	
+	Call_StartForward( g_hForward_OnClientLoaded );
+	Call_PushCell( client );
+	Call_PushCell( g_iPlayerId[client] );
+	Call_PushCell( true );
+	Call_Finish();
 }
 
 void SQL_LoadMap()
@@ -779,6 +918,16 @@ public int Native_GetDatabase( Handle handler, int numParams )
 public int Native_GetMapId( Handle handler, int numParams )
 {
 	return g_iMapId;
+}
+
+public int Native_IsClientLoaded( Handle handler, int numParams )
+{
+	return g_iPlayerId[GetNativeCell( 1 )] > -1;
+}
+
+public int Native_GetClientPlayerId( Handle handler, int numParams )
+{
+	return g_iPlayerId[GetNativeCell( 1 )];
 }
 
 public int Native_GetClientTimerData( Handle handler, int numParams )
