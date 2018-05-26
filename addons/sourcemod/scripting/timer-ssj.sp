@@ -321,7 +321,7 @@ void GetStats( int client, const float vel[3], const float angles[3], float delt
 		float wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
 		
 		float currentspeed = GetVectorDotProduct( absvel, wishdir );
-		if( currentspeed < 30.0 )
+		if( currentspeed <= 30.0 )
 		{
 			g_nSyncedTicks[client]++;
 			gaincoeff = (wishspd - FloatAbs( currentspeed )) / wishspd;

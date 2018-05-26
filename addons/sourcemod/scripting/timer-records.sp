@@ -33,7 +33,7 @@ Handle 		g_hForward_OnRecordsCountRequested;
 Handle		g_hForward_OnLeaderboardRequested;
 
 Handle g_CustomRecordPlugin[MAX_STYLES];
-RecordsHandler g_CustomRecordHandler[MAX_STYLES];
+RecordsHandler g_CustomRecordHandler[MAX_STYLES] = { INVALID_FUNCTION, ... };
 
 ArrayList		g_aMapTopRecordIds[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList		g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];

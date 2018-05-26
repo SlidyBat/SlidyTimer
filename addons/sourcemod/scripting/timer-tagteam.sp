@@ -10,6 +10,7 @@
 
 Database g_hDatabase;
 char g_cMapName[PLATFORM_MAX_PATH];
+bool g_bStylesLoaded;
 
 ConVar g_cvMaxPasses;
 ConVar g_cvMaxUndos;
@@ -90,6 +91,11 @@ public void OnMapStart()
 	GetCurrentMap( g_cMapName, sizeof(g_cMapName) );
 }
 
+public void OnMapEnd()
+{
+	g_bStylesLoaded = false;
+}
+
 public void Timer_OnMapLoaded( int mapid )
 {
 	if( g_hDatabase != null )
@@ -109,11 +115,21 @@ public void Timer_OnDatabaseLoaded()
 
 public void Timer_OnStylesLoaded( int totalstyles )
 {
+	g_bStylesLoaded = true;
+
 	for( int i = 0; i < totalstyles; i++ )
 	{
 		if( Timer_StyleHasSetting( i, "tagteam" ) )
 		{
 			Timer_SetCustomRecordsHandler( i, OnTimerFinishCustom );
+		}
+	}
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) && !IsFakeClient( i ) )
+		{
+			SQL_LoadAllPlayerTimes( i );
 		}
 	}
 }
@@ -134,7 +150,7 @@ public void OnClientPutInServer( int client )
 
 public void Timer_OnClientLoaded( int client, int playerid, bool newplayer )
 {
-	if( !newplayer )
+	if( !newplayer && g_bStylesLoaded )
 	{
 		SQL_LoadAllPlayerTimes( client );
 	}
