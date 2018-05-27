@@ -112,12 +112,25 @@ public void OnPluginStart()
 	g_hCookieSSJRepeat = RegClientCookie( "sm_ssj_repeat", "SSJ repeat every interval", CookieAccess_Protected );
 
 	RegConsoleCmd( "sm_ssj", Command_SSJ );
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) && AreClientCookiesCached( i ) )
+		{
+			OnClientPutInServer( i );
+			OnClientCookiesCached( i );
+		}
+	}
 }
 
 public void OnClientPutInServer( int client )
 {
 	SDKHook( client, SDKHook_Touch, Hook_OnTouch );
+	ResetStats( client );
+}
 
+public void OnClientCookiesCached( int client )
+{
 	if( !GetClientCookieInt( client, g_hCookieSettings, g_Settings[client] ) )
 	{
 		g_Settings[client] = DEFAULT_SSJ_SETTINGS;
@@ -141,8 +154,6 @@ public void OnClientPutInServer( int client )
 		g_bSSJRepeat[client] = false;
 		SetClientCookieBool( client, g_hCookieSSJRepeat, false );
 	}
-
-	ResetStats( client );
 }
 
 public void Timer_OnPlayerRunCmdPost( int client, int buttons, int impulse, const float vel[3], const float angles[3] )
