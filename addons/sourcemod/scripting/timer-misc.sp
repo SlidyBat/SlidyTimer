@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
+#include <clientprefs>
 #include <cstrike>
 #include <slidy-timer>
 #include <menu_targeting>
@@ -38,6 +39,7 @@ enum Collision_Group_t
 ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
 
+Handle g_hCookie_HidePlayers;
 bool g_bHidePlayers[MAXPLAYERS + 1];
 
 public Plugin myinfo = 
@@ -58,6 +60,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_hCookie_HidePlayers = RegClientCookie( "sm_timer_misc_hideplayers", "Hides other players", CookieAccess_Public );
+
 	g_cvCreateSpawnPoints = CreateConVar( "sm_create_spawnpoints", "10", "Number of spawn points to create", _, true, 0.0, true, 2048.0 );
 
 	RegConsoleCmd( "sm_spec", Command_Spec );
@@ -129,6 +133,15 @@ public void OnClientPostAdminCheck( int client )
 	SDKHook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
 	SDKHook( client, SDKHook_WeaponDropPost, Hook_OnWeaponDropPostCallback );
 	SDKHook( client, SDKHook_SetTransmit, Hook_OnTransmit );
+}
+
+public void OnClientCookiesCached( int client )
+{
+	if( !GetClientCookieBool( client, g_hCookie_HidePlayers, g_bHidePlayers[client] ) )
+	{
+		g_bHidePlayers[client] = false;
+		SetClientCookieBool( client, g_hCookie_HidePlayers, false );
+	}
 }
 
 public void OnClientDisconnect( int client )
@@ -412,6 +425,7 @@ public void SetClientObserverTarget( int client, int target )
 public Action Command_Hide( int client, int args )
 {
 	g_bHidePlayers[client] = !g_bHidePlayers[client];
+	SetClientCookieBool( client, g_hCookie_HidePlayers, g_bHidePlayers[client] );
 	Timer_ReplyToCommand( client, "{primary}Players now: {secondary}%s", g_bHidePlayers[client] ? "Hidden" : "Visible" );
 	
 	return Plugin_Handled;
@@ -506,5 +520,24 @@ stock bool File_Copy( const char[] source, const char[] destination )
 	delete file_source;
 	delete file_destination;
 
+	return true;
+}
+
+stock void SetClientCookieBool( int client, Handle cookie, bool value )
+{
+	SetClientCookie( client, cookie, value ? "1" : "0" );
+}
+
+stock bool GetClientCookieBool( int client, Handle cookie, bool& value )
+{
+	char sValue[8];
+	GetClientCookie( client, cookie, sValue, sizeof(sValue) );
+
+	if( sValue[0] == '\0' )
+	{
+		return false;
+	}
+
+	value = StringToInt( sValue ) != 0;
 	return true;
 }
