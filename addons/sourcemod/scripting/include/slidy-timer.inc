@@ -637,7 +637,29 @@ forward Action Timer_OnReplaySavedPre( int client, ArrayList& frames );
  *
  * @noreturn
  */
-forward Action Timer_OnReplaySavedPost( int client, ArrayList& frames );
+forward void Timer_OnReplaySavedPost( int client, ArrayList& frames );
+
+/**
+ * Called when a replay is about to be loaded
+ *
+ * @param track						Track of replay being loaded
+ * @param style						Style of replay being loaded
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop replay from being loaded
+ */
+forward Action Timer_OnReplayLoadedPre( int track, int style );
+
+/**
+ * Called after a replay is saved due to being best available replay (not necessarily WR)
+ *
+ * @param track						Track of replay loaded
+ * @param style						Style of replay loaded
+ * @param recordid					Record Id in database of loaded replay
+ * @param frames					ArrayList with the frames of the loaded replay
+ *
+ * @noreturn
+ */
+forward void Timer_OnReplayLoadedPost( int track, int style, int recordid, ArrayList frames );
 
 /**
  * Called when a bots name is about to be set

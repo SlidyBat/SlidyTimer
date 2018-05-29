@@ -41,6 +41,8 @@ char			g_cCurrentMap[PLATFORM_MAX_PATH];
 
 Handle		g_hForward_OnReplaySavedPre;
 Handle		g_hForward_OnReplaySavedPost;
+Handle		g_hForward_OnReplayLoadedPre;
+Handle		g_hForward_OnReplayLoadedPost;
 Handle		g_hForward_OnBotNameSet;
 
 ArrayList		g_aReplayQueue;
@@ -107,6 +109,8 @@ public void OnPluginStart()
 {
 	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_CellByRef );
 	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Ignore, Param_Cell, Param_Cell );
+	g_hForward_OnReplayLoadedPre = CreateGlobalForward( "Timer_OnReplayLoadedPre", ET_Event, Param_Cell, Param_Cell );
+	g_hForward_OnReplayLoadedPost = CreateGlobalForward( "Timer_OnReplayLoadedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnBotNameSet = CreateGlobalForward( "Timer_OnBotNameSet", ET_Event, Param_Cell, Param_Cell, Param_String, Param_FloatByRef );
 	
 	bot_quota = FindConVar( "bot_quota" );
@@ -562,6 +566,17 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 
 void LoadReplay( int track, int style )
 {
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnReplayLoadedPre );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+
 	char path[PLATFORM_MAX_PATH];
 	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
@@ -623,6 +638,13 @@ void LoadReplay( int track, int style )
 
 		file.Close();
 	}
+	
+	Call_StartForward( g_hForward_OnReplayLoadedPost );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushCell( g_iReplayRecordIds[track][style] );
+	Call_PushCell( g_aReplayFrames[track][style] );
+	Call_Finish();
 }
 
 void SaveReplay( int client, float time, int track, int style, int recordid )
