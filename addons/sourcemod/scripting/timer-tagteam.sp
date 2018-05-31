@@ -42,6 +42,11 @@ int g_iNextTeamMember[MAXPLAYERS + 1];
 char g_cPlayerTeamName[MAXPLAYERS + 1][MAX_NAME_LENGTH];
 
 // records system
+ArrayList g_aCurrentSegmentStartTicks[MAX_TEAMS];
+ArrayList g_aCurrentSegmentPlayers[MAX_TEAMS];
+
+StringMap g_smSegmentPlayerNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
+
 ArrayList g_aMapTopRecordIds[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList g_aMapTopTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 ArrayList g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
@@ -115,6 +120,16 @@ public void Timer_OnStylesLoaded( int totalstyles )
 		{
 			Timer_SetCustomRecordsHandler( i, OnTimerFinishCustom );
 		}
+	}
+}
+
+public void Timer_OnReplayLoadedPost( int track, int style, int recordid, ArrayList frames )
+{
+	delete g_smSegmentPlayerNames[track][style];
+	
+	if( Timer_StyleHasSetting( style, "tagteam" ) )
+	{
+		SQL_LoadSegments( track, style, recordid );
 	}
 }
 
@@ -480,6 +495,14 @@ void CreateTeam( int[] members, int memberCount, int style )
 	g_nTeamPlayerCount[teamindex] = memberCount;
 	strcopy( g_cTeamName[teamindex], sizeof(g_cTeamName[]), g_cPlayerTeamName[members[0]] );
 	
+	delete g_aCurrentSegmentStartTicks[teamindex];
+	g_aCurrentSegmentStartTicks[teamindex] = new ArrayList();
+	delete g_aCurrentSegmentPlayers[teamindex];
+	g_aCurrentSegmentPlayers[teamindex] = new ArrayList();
+	
+	g_aCurrentSegmentStartTicks[teamindex].Push( 1 ); // not zero so that it doesnt spam print during first tick freeze time
+	g_aCurrentSegmentPlayers[teamindex].Push( Timer_GetClientPlayerId( members[0] ) );
+	
 	int next = members[0];
 	for( int i = memberCount - 1; i >= 0; i-- )
 	{
@@ -597,6 +620,9 @@ public void Timer_OnCPSavedPost( int client, int target, int idx )
 		any checkpoint[eCheckpoint];
 		Timer_GetClientCheckpoint( client, idx, checkpoint );
 		
+		g_aCurrentSegmentStartTicks[teamidx].Push( checkpoint[CP_ReplayFrames].Length - 1 );
+		g_aCurrentSegmentPlayers[teamidx].Push( Timer_GetClientPlayerId( next ) );
+		
 		PassToNext( client, next, checkpoint );
 		
 		g_bDidUndo[teamidx] = false;
@@ -653,7 +679,6 @@ public Action Command_Pass( int client, int args )
 	
 	g_nPassCount[teamidx]++;
 	
-	
 	any checkpoint[eCheckpoint];
 	bool usecp = Timer_GetTotalCheckpoints( client ) > 0;
 	
@@ -663,7 +688,10 @@ public Action Command_Pass( int client, int args )
 	}
 	
 	PassToNext( client, g_iNextTeamMember[client], checkpoint, usecp );
-		
+	
+	int lastidx = g_aCurrentSegmentPlayers[teamidx].Length - 1;
+	g_aCurrentSegmentPlayers[teamidx].Set( lastidx, Timer_GetClientPlayerId( g_iNextTeamMember[client] ) );
+	
 	if( maxPasses > -1 )
 	{
 		PrintToTeam( teamidx, "{name}%N {primary}has passed! It is now {name}%N{primary}'s turn. {secondary}%i/%i {primary}passes used.", client, g_iNextTeamMember[client], g_nPassCount[teamidx], maxPasses );
@@ -729,6 +757,8 @@ public Action Command_Undo( int client, int args )
 	}
 	
 	PassToNext( client, last, g_LastCheckpoint[teamidx] );
+	g_aCurrentSegmentStartTicks[teamidx].Erase( g_aCurrentSegmentStartTicks[teamidx].Length - 1 );
+	g_aCurrentSegmentPlayers[teamidx].Erase( g_aCurrentSegmentPlayers[teamidx].Length - 1 );
 	g_bDidUndo[teamidx] = true;
 	g_nUndoCount[teamidx]++;
 	
@@ -795,13 +825,10 @@ void SQL_CreateTables()
 																					
 	txn.AddQuery( query );
 	
-	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_tagteam_times` ( tt_timeid INT NOT NULL AUTO_INCREMENT, \
-																					playerid INT NOT NULL, \
-																					mapid INT NOT NULL, \
-																					track INT NOT NULL, \
-																					style INT NOT NULL, \
-																					tt_recordid INT NOT NULL, \
-																					PRIMARY KEY (`tt_timeid`) );" );
+	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_tagteam_pb` ( tt_timeid INT NOT NULL AUTO_INCREMENT, \
+																				playerid INT NOT NULL, \
+																				tt_recordid INT NOT NULL, \
+																				PRIMARY KEY (`tt_timeid`) );" );
 	
 	txn.AddQuery( query );
 	
@@ -854,8 +881,8 @@ void SQL_LoadPlayerTime( int client, int track, int style )
 {
 	char query[512];
 	Format( query, sizeof(query), "SELECT r.tt_recordid, r.time FROM `t_tagteam_records` r \
-								JOIN `t_tagteam_times` t ON r.tt_recordid = t.tt_recordid \
-								WHERE t.playerid = '%i' AND t.mapid = '%i' AND t.track = '%i' AND t.style = '%i'",
+								JOIN `t_tagteam_pb` t ON r.tt_recordid = t.tt_recordid \
+								WHERE t.playerid = '%i' AND r.mapid = '%i' AND r.track = '%i' AND r.style = '%i'",
 								Timer_GetClientPlayerId( client ),
 								Timer_GetMapId(),
 								track,
@@ -955,9 +982,6 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 		{
 			if( g_fPersonalBest[i][track][style] == 0.0 || time < g_fPersonalBest[i][track][style] )
 			{
-				g_iRecordId[i][track][style] = recordid;
-				g_fPersonalBest[i][track][style] = time;
-				
 				if( g_fPersonalBest[i][track][style] == 0.0 )
 				{
 					SQL_InsertPlayerTime( i, track, style, time, recordid, fwdInsertedPre, fwdInsertedPost );
@@ -969,6 +993,8 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 			}
 		}
 	}
+	
+	SQL_InsertSegments( teamidx, track, style, recordid );
 	
 	SQL_LoadMapRecords( track, style );
 }
@@ -988,10 +1014,13 @@ void SQL_InsertPlayerTime( int client, int track, int style, float time, int rec
 		return;
 	}
 
+	g_iRecordId[client][track][style] = recordid;
+	g_fPersonalBest[client][track][style] = time;
+	
 	char query[512];
-	Format( query, sizeof(query), "INSERT INTO `t_tagteam_times` (playerid, mapid, track, style, tt_recordid) \
+	Format( query, sizeof(query), "INSERT INTO `t_tagteam_pb` (playerid, tt_recordid) \
 								VALUES ('%i', '%i', '%i', '%i', '%i')",
-								Timer_GetClientPlayerId( client ), Timer_GetMapId(), track, style, recordid );
+								Timer_GetClientPlayerId( client ), recordid );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( GetClientUserId( client ) );
@@ -1022,6 +1051,11 @@ public void InsertPlayerTime_Callback( Database db, DBResultSet results, const c
 	Handle fwdInsertedPost = pack.ReadCell();
 	delete pack;
 	
+	if( !( 0 < client <= MaxClients ) )
+	{
+		return;
+	}
+	
 	Call_StartForward( fwdInsertedPost );
 	Call_PushCell( client );
 	Call_PushCell( track );
@@ -1047,9 +1081,9 @@ void SQL_UpdatePlayerTime( int client, int track, int style, float time, int rec
 	}
 
 	char query[512];
-	Format( query, sizeof(query), "UPDATE `t_tagteam_times` SET tt_recordid = '%i' \
-								WHERE playerid = '%i' AND mapid = '%i' AND track = '%i' AND style = '%i'",
-								recordid, Timer_GetClientPlayerId( client ), Timer_GetMapId(), track, style );
+	Format( query, sizeof(query), "UPDATE `t_tagteam_pb` SET tt_recordid = '%i' \
+								WHERE playerid = '%i' AND tt_recordid = '%i'",
+								recordid, g_iRecordId[client] );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( GetClientUserId( client ) );
@@ -1060,6 +1094,9 @@ void SQL_UpdatePlayerTime( int client, int track, int style, float time, int rec
 	pack.WriteCell( fwdUpdatedPost );
 	
 	g_hDatabase.Query( UpdatePlayerTime_Callback, query, pack );
+	
+	g_iRecordId[client][track][style] = recordid;
+	g_fPersonalBest[client][track][style] = time;
 }
 
 public void UpdatePlayerTime_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
@@ -1079,6 +1116,11 @@ public void UpdatePlayerTime_Callback( Database db, DBResultSet results, const c
 	int recordid = pack.ReadCell();
 	Handle fwdUpdatedPost = pack.ReadCell();
 	delete pack;
+	
+	if( !( 0 < client <= MaxClients ) )
+	{
+		return;
+	}
 	
 	Call_StartForward( fwdUpdatedPost );
 	Call_PushCell( client );
@@ -1147,6 +1189,91 @@ public void LoadMapRecords_Callback( Database db, DBResultSet results, const cha
 		g_aMapTopTimes[track][style].Push( results.FetchFloat( 1 ) );
 		results.FetchString( 2, name, sizeof(name) );
 		g_aMapTopNames[track][style].PushString( name );
+	}
+}
+
+void SQL_InsertSegments( int teamidx, int track, int style, int recordid )
+{
+	char query[256];
+
+	int length = g_aCurrentSegmentStartTicks[teamidx].Length;
+	for( int i = 0; i < length; i++ )
+	{
+		DataPack pack = new DataPack();
+		pack.WriteCell( track );
+		pack.WriteCell( style );
+		pack.WriteCell( recordid );
+	
+		Format( query, sizeof(query), "INSERT INTO `t_tagteam_segments` (playerid, recordid, starttick) VALUES ('%i', '%i', '%i')",
+										g_aCurrentSegmentPlayers[teamidx].Get( i ),
+										recordid,
+										g_aCurrentSegmentStartTicks[teamidx].Get( i ) );
+										
+		g_hDatabase.Query( InsertSegments_Callback, query, pack );
+	}
+}
+
+public void InsertSegments_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (InsertSegments_Callback) - %s", error );
+		delete pack;
+		return;
+	}
+	
+	pack.Reset();
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	delete pack;
+	
+	int recordid = Timer_GetReplayRecordId( track, style );
+	if( recordid > -1 )
+	{
+		SQL_LoadSegments( track, style, recordid );
+	}
+}
+
+void SQL_LoadSegments( int track, int style, int recordid )
+{
+	char query[512];
+	Format( query, sizeof(query), "SELECT s.starttick, p.lastname FROM `t_tagteam_segments` s \
+								JOIN `t_player` p ON p.playerid = s.playerid \
+								WHERE s.recordid = '%i' \
+								ORDER BY s.starttick ASC", recordid );
+	
+	DataPack pack = new DataPack();
+	pack.WriteCell( track );
+	pack.WriteCell( style );
+	
+	g_hDatabase.Query( LoadSegments_Callback, query );
+}
+
+public void LoadSegments_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (LoadSegments_Callback) - %s", error );
+		delete pack;
+		return;
+	}
+	
+	pack.Reset();
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	delete pack;
+	
+	delete g_smSegmentPlayerNames[track][style];
+	g_smSegmentPlayerNames[track][style] = new StringMap();
+	
+	char sStartTick[8];
+	char name[MAX_NAME_LENGTH];
+	while( results.FetchRow() )
+	{
+		IntToString( results.FetchInt( 0 ), sStartTick, sizeof(sStartTick) );
+		results.FetchString( 1, name, sizeof(name) );
+		
+		g_smSegmentPlayerNames[track][style].SetString( sStartTick, name );
 	}
 }
 
@@ -1387,4 +1514,45 @@ void PrintToTeam( int teamidx, char[] message, any ... )
 			Timer_PrintToChat( i, buffer );
 		}
 	}
+}
+
+public Action OnPlayerRunCmd( int client )
+{
+	int tick = Timer_GetReplayBotCurrentFrame( client );
+	int track = Timer_GetReplayBotTrack( client );
+	int style = Timer_GetReplayBotStyle( client );
+	
+	// not a valid replay bot or not currently replaying
+	if( tick == -1 || track == -1 || style == -1 )
+	{
+		return Plugin_Continue;
+	}
+	
+	if( g_smSegmentPlayerNames[track][style] == null )
+	{
+		return Plugin_Continue;
+	}
+	
+	char sTick[8];
+	IntToString( tick, sTick, sizeof(sTick) );
+	char name[MAX_NAME_LENGTH];
+	if( !g_smSegmentPlayerNames[track][style].GetString( sTick, name, sizeof(name) ) )
+	{
+		return Plugin_Continue;
+	}
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( i == client )
+		{
+			continue;
+		}
+		
+		if( GetClientObserverTarget( i ) == client )
+		{
+			Timer_PrintToChat( i, "{primary}Current section by: {name}%s", name );
+		}
+	}
+	
+	return Plugin_Continue;
 }
