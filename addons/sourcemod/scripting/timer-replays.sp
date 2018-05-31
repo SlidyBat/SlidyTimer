@@ -89,7 +89,7 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
-	CreateNative( "Timer_GetReplayBotRecordId", Native_GetReplayBotRecordId );
+	CreateNative( "Timer_GetReplayRecordId", Native_GetReplayRecordId );
 	CreateNative( "Timer_GetReplayBotTrack", Native_GetReplayBotTrack );
 	CreateNative( "Timer_GetReplayBotStyle", Native_GetReplayBotStyle );
 	CreateNative( "Timer_GetReplayBotType", Native_GetReplayBotType );
@@ -1077,7 +1077,7 @@ public Action Command_Replay( int client, int args )
 	return Plugin_Handled;
 }
 
-public int Native_GetReplayBotRecordId( Handle handler, int numParams )
+public int Native_GetReplayRecordId( Handle handler, int numParams )
 {	
 	return g_iReplayRecordIds[GetNativeCell( 1 )][GetNativeCell( 2 )];
 }
