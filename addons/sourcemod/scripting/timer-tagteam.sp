@@ -1238,7 +1238,7 @@ void SQL_LoadSegments( int track, int style, int recordid )
 {
 	char query[512];
 	Format( query, sizeof(query), "SELECT s.starttick, p.lastname FROM `t_tagteam_segments` s \
-								JOIN `t_player` p ON p.playerid = s.playerid \
+								JOIN `t_players` p ON p.playerid = s.playerid \
 								WHERE s.recordid = '%i' \
 								ORDER BY s.starttick ASC", recordid );
 	
@@ -1246,7 +1246,7 @@ void SQL_LoadSegments( int track, int style, int recordid )
 	pack.WriteCell( track );
 	pack.WriteCell( style );
 	
-	g_hDatabase.Query( LoadSegments_Callback, query );
+	g_hDatabase.Query( LoadSegments_Callback, query, pack );
 }
 
 public void LoadSegments_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )

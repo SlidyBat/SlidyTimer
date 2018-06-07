@@ -478,10 +478,13 @@ public void DeleteRecord_Callback( Database db, DBResultSet results, const char[
 void SQL_ReloadCache( int track, int style, bool reloadall = false )
 {
 	char query[512];
-	Format( query, sizeof( query ), "SELECT r.recordid, r.time, p.lastname \
+	Format( query, sizeof(query), "SELECT r.recordid, r.time, p.lastname \
 									FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid \
 									WHERE mapid = '%i' AND track = '%i' AND style = '%i'\
-									ORDER BY r.time ASC;", Timer_GetMapId(), track, style );
+									ORDER BY r.time ASC;",
+									Timer_GetMapId(),
+									track,
+									style );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );

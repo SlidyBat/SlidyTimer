@@ -242,7 +242,7 @@ public Action HookEvent_PlayerDisconnect( Event event, const char[] name, bool d
 	
 	int client = GetClientOfUserId( event.GetInt( "userid" ) );
 
-	if( client > 0 && IsFakeClient( client ) )
+	if( !( client > 0 ) || IsFakeClient( client ) )
 		return Plugin_Continue;
 		
 	char buffer[256];
