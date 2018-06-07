@@ -133,6 +133,7 @@ public void Timer_OnTimerFinishPost( int client, int track, int style, float tim
 		Call_PushCell( g_hForward_OnRecordInsertedPost );
 		Call_PushCell( g_hForward_OnRecordUpdatedPre );
 		Call_PushCell( g_hForward_OnRecordUpdatedPost );
+		Call_PushCell( g_hForward_OnWRBeaten );
 		Call_Finish();
 		
 		return;

@@ -827,12 +827,24 @@ public Action Command_Undo( int client, int args )
 
 // Records/Database stuff
 
-void OnTimerFinishCustom( int client, int track, int style, float time, Handle fwdInsertedPre, Handle fwdInsertedPost, Handle fwdUpdatedPre, Handle fwdUpdatedPost )
+void OnTimerFinishCustom( int client, int track, int style, float time, Handle fwdInsertedPre, Handle fwdInsertedPost, Handle fwdUpdatedPre, Handle fwdUpdatedPost, Handle fwdWRBeaten )
 {
 	if( g_iTeamIndex[client] == -1 )
 	{
 		LogError( "%N finished on tagteam without a team!", client );
 		return;
+	}
+	
+	float wr = g_aMapTopTimes[track][style].Get( 0 );
+	if( time < wr )
+	{
+		Call_StartForward( fwdWRBeaten );
+		Call_PushCell( client );
+		Call_PushCell( track );
+		Call_PushCell( style );
+		Call_PushCell( time );
+		Call_PushCell( wr );
+		Call_Finish();
 	}
 	
 	ArrayList frames = Timer_GetClientReplayFrames( client );

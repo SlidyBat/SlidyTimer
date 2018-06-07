@@ -10,7 +10,7 @@
 #define MAX_STYLES 24
 
 typedef SelectStyleCB = function void ( int client, int style );
-typedef RecordsHandler = function void ( int client, int track, int style, float time, Handle fwdInsertedPre, Handle fwdInsertedPost, Handle fwdUpdatedPre, Handle fwdUpdatedPost );
+typedef RecordsHandler = function void ( int client, int track, int style, float time, Handle fwdInsertedPre, Handle fwdInsertedPost, Handle fwdUpdatedPre, Handle fwdUpdatedPost, Handle fwdWRBeaten );
 
 static SelectStyleCB g_SelectStyleCallback[MAXPLAYERS + 1];
 
@@ -894,7 +894,7 @@ native int Timer_GetRecordsCount( int track, int style );
 /**
  * Sets a custom records handler for a style
  * The callback provided is called when a client finishes and the records plugin was about to handle it
- * NOTE: Make sure to call the forwards provided to your callback to ensure other plugins are notified when records are updated/inserted
+ * NOTE: Make sure to call the forwards provided to your callback to ensure other plugins are notified when records are updated/inserted or when a WR is beaten
  *
  * @param style						Style index to override
  * @param handler					The handler function to use
