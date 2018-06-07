@@ -623,21 +623,29 @@ forward Action Timer_OnTimerStart( int client );
  * Called when a replay is about to be saved due to being best available replay (not necessarily WR)
  *
  * @param client					Client index of player
+ * @param track						Track of replay being saved
+ * @param style						Style of replay being saved
+ * @param time						Replay length in seconds
+ * @param recordid					The record database id
  * @param frames					Reference to the frames that will be saved, can be edited or changed
  *
  * @return							Plugin_Handled or Plugin_Stop to stop replay from being saved
  */
-forward Action Timer_OnReplaySavedPre( int client, ArrayList& frames );
+forward Action Timer_OnReplaySavedPre( int client, int track, int style, float time, int recordid, ArrayList& frames );
 
 /**
  * Called after a replay is saved due to being best available replay (not necessarily WR)
  *
  * @param client					Client index of player
+ * @param track						Track of saved replay
+ * @param style						Style of saved replay
+ * @param time						Replay length in seconds
+ * @param recordid					The record database id
  * @param frames					Frames that will be saved
  *
  * @noreturn
  */
-forward void Timer_OnReplaySavedPost( int client, ArrayList& frames );
+forward void Timer_OnReplaySavedPost( int client, int track, int style, float time, int recordid, ArrayList frames );
 
 /**
  * Called when a replay is about to be loaded
@@ -654,12 +662,13 @@ forward Action Timer_OnReplayLoadedPre( int track, int style );
  *
  * @param track						Track of replay loaded
  * @param style						Style of replay loaded
+ * @param time						Replay length in seconds
  * @param recordid					Record Id in database of loaded replay
  * @param frames					ArrayList with the frames of the loaded replay
  *
  * @noreturn
  */
-forward void Timer_OnReplayLoadedPost( int track, int style, int recordid, ArrayList frames );
+forward void Timer_OnReplayLoadedPost( int track, int style, float time, int recordid, ArrayList frames );
 
 /**
  * Called when a bots name is about to be set
@@ -1069,6 +1078,16 @@ native bool Timer_IsClientInsideZone( int client, int zoneType, int zoneTrack, i
 native int Timer_GetReplayRecordId( int track, int style );
 
 /**
+ * Returns replay length in seconds for specified track/style
+ *
+ * @param track						Track (see ZoneTrack_*)
+ * @param style						Style index
+ *
+ * @return							Replay length in seconds
+ */
+native float Timer_GetReplayTime( int track, int style );
+
+/**
  * Returns what track a replay bot is playing
  *
  * @param client					Client index of replay bot
@@ -1358,6 +1377,8 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_IsClientInsideZone" );
 	
 	// replays
+	MarkNativeAsOptional( "Timer_GetReplayRecordId" );
+	MarkNativeAsOptional( "Timer_GetReplayTime" );
 	MarkNativeAsOptional( "Timer_GetReplayBotTrack" );
 	MarkNativeAsOptional( "Timer_GetReplayBotStyle" );
 	MarkNativeAsOptional( "Timer_GetReplayBotType" );

@@ -54,6 +54,10 @@ ArrayList g_aMapTopNames[TOTAL_ZONE_TRACKS][MAX_STYLES];
 int g_iRecordId[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES];
 float g_fPersonalBest[MAXPLAYERS + 1][TOTAL_ZONE_TRACKS][MAX_STYLES];
 
+// segments loading
+bool g_bFinishedInsertingSegments[TOTAL_ZONE_TRACKS][MAX_STYLES];
+bool g_bLoadSegmentsAfterInserting[TOTAL_ZONE_TRACKS][MAX_STYLES];
+
 public Plugin myinfo = 
 {
 	name = "Slidy's Timer - Tagteam relay",
@@ -134,13 +138,33 @@ public void Timer_OnStylesLoaded( int totalstyles )
 	}
 }
 
-public void Timer_OnReplayLoadedPost( int track, int style, int recordid, ArrayList frames )
+public void Timer_OnReplayLoadedPost( int track, int style, float time, int recordid, ArrayList frames )
 {
 	delete g_smSegmentPlayerNames[track][style];
 	
 	if( Timer_StyleHasSetting( style, "tagteam" ) )
 	{
 		SQL_LoadSegments( track, style, recordid );
+	}
+}
+
+public void Timer_OnReplaySavedPost( int client, int track, int style, float time, int recordid, ArrayList frames )
+{
+	// not tagteam, dont bother
+	if( !Timer_StyleHasSetting( style, "tagteam" ) )
+	{
+		return;
+	}
+
+	if( g_bFinishedInsertingSegments[track][style] )
+	{
+		Timer_DebugPrint( "Timer_OnReplaySavedPost: Loading segments" );
+		SQL_LoadSegments( track, style, recordid );
+	}
+	else
+	{
+		Timer_DebugPrint( "Timer_OnReplaySavedPost: Waiting for segments to be inserted" );
+		g_bLoadSegmentsAfterInserting[track][style] = true;
 	}
 }
 
@@ -222,7 +246,7 @@ public Action Timer_OnStyleChangedPre( int client, int oldstyle, int newstyle )
 		if( g_iTeamIndex[client] == -1 ) // not in a team, make them create or join one before changing style
 		{
 			OpenInviteSelectMenu( client, 0, true, newstyle );
-			Timer_PrintToChat( client, "{primary}Created '{secondary}%s{primary}'! Use {secondary}!teamname {primary}to set your team name.", g_cPlayerTeamName[client] );
+			Timer_PrintToChat( client, "{primary}Created {secondary}%s{primary}! Use {secondary}!teamname {primary}to set your team name.", g_cPlayerTeamName[client] );
 			return Plugin_Handled;
 		}
 		
@@ -512,7 +536,7 @@ void FinishInvite( int client )
 	}
 	buffer[letters - 3] = '\0';
 	
-	PrintToTeam( g_iTeamIndex[client], "{secondary}%s has been assembled! Members: %s", g_cTeamName[g_iTeamIndex[client]], buffer );
+	PrintToTeam( g_iTeamIndex[client], "{secondary}%s {primary}has been assembled! Members: %s", g_cTeamName[g_iTeamIndex[client]], buffer );
 }
 
 void CancelInvite( int client )
@@ -835,8 +859,8 @@ void OnTimerFinishCustom( int client, int track, int style, float time, Handle f
 		return;
 	}
 	
-	float wr = g_aMapTopTimes[track][style].Get( 0 );
-	if( time < wr )
+	float wr = g_aMapTopTimes[track][style].Length ? g_aMapTopTimes[track][style].Get( 0 ) : 0.0;
+	if( wr == 0.0 || time < wr )
 	{
 		Call_StartForward( fwdWRBeaten );
 		Call_PushCell( client );
@@ -980,6 +1004,7 @@ public void LoadPlayerTime_Callback( Database db, DBResultSet results, const cha
 		return;
 	}
 	
+	
 	if( results.FetchRow() )
 	{
 		g_iRecordId[client][track][style] = results.FetchInt( 0 );
@@ -1058,6 +1083,8 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 		}
 	}
 	
+	g_bLoadSegmentsAfterInserting[track][style] = false;
+	g_bFinishedInsertingSegments[track][style] = false;
 	SQL_InsertSegments( teamidx, track, style, recordid );
 	
 	SQL_LoadMapRecords( track, style );
@@ -1149,7 +1176,7 @@ void SQL_UpdatePlayerTime( int client, int track, int style, float time, int rec
 	char query[512];
 	Format( query, sizeof(query), "UPDATE `t_tagteam_pb` SET tt_recordid = '%i' \
 								WHERE playerid = '%i' AND tt_recordid = '%i'",
-								recordid, g_iRecordId[client] );
+								recordid, Timer_GetClientPlayerId( client ), g_iRecordId[client] );
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( GetClientUserId( client ) );
@@ -1264,17 +1291,20 @@ void SQL_InsertSegments( int teamidx, int track, int style, int recordid )
 
 	int length = g_aCurrentSegmentStartTicks[teamidx].Length;
 	for( int i = 0; i < length; i++ )
-	{
-		DataPack pack = new DataPack();
-		pack.WriteCell( track );
-		pack.WriteCell( style );
-		pack.WriteCell( recordid );
-	
+	{	
 		Format( query, sizeof(query), "INSERT INTO `t_tagteam_segments` (playerid, recordid, starttick) VALUES ('%i', '%i', '%i')",
 										g_aCurrentSegmentPlayers[teamidx].Get( i ),
 										recordid,
 										g_aCurrentSegmentStartTicks[teamidx].Get( i ) );
-										
+		
+		DataPack pack = null;
+		if( i == length - 1 )
+		{
+			pack = new DataPack();
+			pack.WriteCell( track );
+			pack.WriteCell( style );
+		}
+		
 		g_hDatabase.Query( InsertSegments_Callback, query, pack );
 	}
 }
@@ -1288,15 +1318,29 @@ public void InsertSegments_Callback( Database db, DBResultSet results, const cha
 		return;
 	}
 	
+	if( pack == null )
+	{
+		return;
+	}
+	
 	pack.Reset();
 	int track = pack.ReadCell();
 	int style = pack.ReadCell();
 	delete pack;
 	
-	int recordid = Timer_GetReplayRecordId( track, style );
-	if( recordid > -1 )
+	if( g_bLoadSegmentsAfterInserting[track][style] )
 	{
-		SQL_LoadSegments( track, style, recordid );
+		int recordid = Timer_GetReplayRecordId( track, style );
+		Timer_DebugPrint( "InsertSegments_Callback: Loading segments (recordid=%i)", recordid );
+		if( recordid > -1 )
+		{
+			SQL_LoadSegments( track, style, recordid );
+		}
+	}
+	else
+	{
+		Timer_DebugPrint( "InsertSegments_Callback: Finished inserting segments" );
+		g_bFinishedInsertingSegments[track][style] = true;
 	}
 }
 

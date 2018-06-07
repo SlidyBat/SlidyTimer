@@ -90,6 +90,7 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
 	CreateNative( "Timer_GetReplayRecordId", Native_GetReplayRecordId );
+	CreateNative( "Timer_GetReplayTime", Native_GetReplayTime );
 	CreateNative( "Timer_GetReplayBotTrack", Native_GetReplayBotTrack );
 	CreateNative( "Timer_GetReplayBotStyle", Native_GetReplayBotStyle );
 	CreateNative( "Timer_GetReplayBotType", Native_GetReplayBotType );
@@ -107,10 +108,10 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
-	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_CellByRef );
-	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Ignore, Param_Cell, Param_Cell );
+	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_CellByRef );
+	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Cell );
 	g_hForward_OnReplayLoadedPre = CreateGlobalForward( "Timer_OnReplayLoadedPre", ET_Event, Param_Cell, Param_Cell );
-	g_hForward_OnReplayLoadedPost = CreateGlobalForward( "Timer_OnReplayLoadedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnReplayLoadedPost = CreateGlobalForward( "Timer_OnReplayLoadedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Cell );
 	g_hForward_OnBotNameSet = CreateGlobalForward( "Timer_OnBotNameSet", ET_Event, Param_Cell, Param_Cell, Param_String, Param_FloatByRef );
 	
 	bot_quota = FindConVar( "bot_quota" );
@@ -642,6 +643,7 @@ void LoadReplay( int track, int style )
 	Call_StartForward( g_hForward_OnReplayLoadedPost );
 	Call_PushCell( track );
 	Call_PushCell( style );
+	Call_PushFloat( g_fReplayRecordTimes[track][style] );
 	Call_PushCell( g_iReplayRecordIds[track][style] );
 	Call_PushCell( g_aReplayFrames[track][style] );
 	Call_Finish();
@@ -661,6 +663,10 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 	any result = Plugin_Continue;
 	Call_StartForward( g_hForward_OnReplaySavedPre );
 	Call_PushCell( client );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushFloat( time );
+	Call_PushCell( recordid );
 	Call_PushCellRef( g_aReplayFrames[track][style] );
 	Call_Finish( result );
 	
@@ -670,6 +676,7 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 	}
 	
 	g_fReplayRecordTimes[track][style] = time;
+	g_iReplayRecordIds[track][style] = recordid;
 	
 	any header[ReplayHeader];
 	header[HD_MagicNumber] = MAGIC_NUMBER;
@@ -742,6 +749,10 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 	
 	Call_StartForward( g_hForward_OnReplaySavedPost );
 	Call_PushCell( client );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushFloat( time );
+	Call_PushCell( recordid );
 	Call_PushCell( g_aReplayFrames[track][style] );
 	Call_Finish();
 }
@@ -1080,6 +1091,11 @@ public Action Command_Replay( int client, int args )
 public int Native_GetReplayRecordId( Handle handler, int numParams )
 {	
 	return g_iReplayRecordIds[GetNativeCell( 1 )][GetNativeCell( 2 )];
+}
+
+public int Native_GetReplayTime( Handle handler, int numParams )
+{	
+	return view_as<int>(g_fReplayRecordTimes[GetNativeCell( 1 )][GetNativeCell( 2 )]);
 }
 
 public int Native_GetReplayBotTrack( Handle handler, int numParams )
