@@ -1257,6 +1257,36 @@ native void Timer_TeleportClientToCheckpoint( int client, int index );
  */
 native void Timer_ClearClientCheckpoints( int client );
 
+/**
+ * Whether or not a client is currently in a team, use this to check if current client style is a tagteam style
+ *
+ * @param client					Client index
+ * @param teamidx					Optional specific tagteam to check for, otherwise checks for any team
+ *
+ * @return							True if in tagteam, otherwise false
+ */
+native bool Timer_IsClientInTagTeam( int client, int teamidx = -1 );
+
+/**
+ * Returns the current team index of a client
+ *
+ * @param client					Client index
+ *
+ * @return							Team index or -1 if not in a team
+ */
+native int Timer_GetClientTeamIndex( int client );
+
+/**
+ * Gets name of specified team index
+ *
+ * @param teamidx					Team index
+ * @param name						Output buffer
+ * @param maxlen					Max length of output buffer
+ *
+ * @return							True if successfully got team name or false if invalid team index
+ */
+native bool Timer_GetTeamName( int teamidx, char[] name, int maxlen );
+
 stock void Timer_OpenSelectStyleMenu( int client, SelectStyleCB cb )
 {
 	g_SelectStyleCallback[client] = cb;
@@ -1351,5 +1381,10 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_SetClientCheckpoint" );
 	MarkNativeAsOptional( "Timer_TeleportClientToCheckpoint" );
 	MarkNativeAsOptional( "Timer_ClearClientCheckpoints" );
+	
+	// tagteam
+	MarkNativeAsOptional( "Timer_IsClientInTagTeam" );
+	MarkNativeAsOptional( "Timer_GetClientTeamIndex" );
+	MarkNativeAsOptional( "Timer_GetTeamName" );
 }
 #endif

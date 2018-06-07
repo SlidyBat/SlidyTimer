@@ -63,6 +63,17 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
+{
+	CreateNative( "Timer_IsClientInTagTeam", Native_IsClientInTagTeam );
+	CreateNative( "Timer_GetClientTeamIndex", Native_GetClientTeamIndex );
+	CreateNative( "Timer_GetTeamName", Native_GetTeamName );
+
+	RegPluginLibrary( "timer-tagteam" );
+	
+	return APLRes_Success;
+}
+
 public void OnPluginStart()
 {
 	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
@@ -161,6 +172,47 @@ public void OnClientDisconnect( int client )
 	{
 		ExitTeam( client );
 	}
+}
+
+public Action OnPlayerRunCmd( int client )
+{
+	int tick = Timer_GetReplayBotCurrentFrame( client );
+	int track = Timer_GetReplayBotTrack( client );
+	int style = Timer_GetReplayBotStyle( client );
+	
+	// not a valid replay bot or not currently replaying
+	if( tick == -1 || track == -1 || style == -1 )
+	{
+		return Plugin_Continue;
+	}
+	
+	if( g_smSegmentPlayerNames[track][style] == null )
+	{
+		return Plugin_Continue;
+	}
+	
+	char sTick[8];
+	IntToString( tick, sTick, sizeof(sTick) );
+	char name[MAX_NAME_LENGTH];
+	if( !g_smSegmentPlayerNames[track][style].GetString( sTick, name, sizeof(name) ) )
+	{
+		return Plugin_Continue;
+	}
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( i == client )
+		{
+			continue;
+		}
+		
+		if( IsClientInGame( i ) && GetClientObserverTarget( i ) == client )
+		{
+			Timer_PrintToChat( i, "{primary}Current section by: {name}%s", name );
+		}
+	}
+	
+	return Plugin_Continue;
 }
 
 public Action Timer_OnStyleChangedPre( int client, int oldstyle, int newstyle )
@@ -500,7 +552,7 @@ void CreateTeam( int[] members, int memberCount, int style )
 	delete g_aCurrentSegmentPlayers[teamindex];
 	g_aCurrentSegmentPlayers[teamindex] = new ArrayList();
 	
-	g_aCurrentSegmentStartTicks[teamindex].Push( 1 ); // not zero so that it doesnt spam print during first tick freeze time
+	g_aCurrentSegmentStartTicks[teamindex].Push( 2 ); // not zero so that it doesnt spam print during first tick freeze time
 	g_aCurrentSegmentPlayers[teamindex].Push( Timer_GetClientPlayerId( members[0] ) );
 	
 	int next = members[0];
@@ -980,7 +1032,7 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 	{
 		if( g_iTeamIndex[i] == teamidx )
 		{
-			if( g_fPersonalBest[i][track][style] == 0.0 || time < g_fPersonalBest[i][track][style] )
+			if( g_fPersonalBest[i][track][style] == 0.0 || time <= g_fPersonalBest[i][track][style] )
 			{
 				if( g_fPersonalBest[i][track][style] == 0.0 )
 				{
@@ -1001,6 +1053,8 @@ public void InsertRecord_Callback( Database db, DBResultSet results, const char[
 
 void SQL_InsertPlayerTime( int client, int track, int style, float time, int recordid, Handle fwdInsertedPre, Handle fwdInsertedPost )
 {
+	Timer_DebugPrint( "Inserting time for %N", client );
+
 	any result = Plugin_Continue;
 	Call_StartForward( fwdInsertedPre );
 	Call_PushCell( client );
@@ -1019,7 +1073,7 @@ void SQL_InsertPlayerTime( int client, int track, int style, float time, int rec
 	
 	char query[512];
 	Format( query, sizeof(query), "INSERT INTO `t_tagteam_pb` (playerid, tt_recordid) \
-								VALUES ('%i', '%i', '%i', '%i', '%i')",
+								VALUES ('%i', '%i')",
 								Timer_GetClientPlayerId( client ), recordid );
 	
 	DataPack pack = new DataPack();
@@ -1435,6 +1489,41 @@ int GetClientMapRank( int client, int track, int style )
 	return GetRankForTime( g_fPersonalBest[client][track][style], track, style ) - 1;
 }
 
+// natives
+
+public int Native_IsClientInTagTeam( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	int teamidx = GetNativeCell( 2 );
+
+	if( teamidx == -1 )
+	{
+		return g_iTeamIndex[client] != -1;
+	}
+	
+	return g_iTeamIndex[client] == teamidx;
+}
+
+public int Native_GetClientTeamIndex( Handle handler, int numParams )
+{
+	return g_iTeamIndex[GetNativeCell( 1 )];
+}
+
+public int Native_GetTeamName( Handle handler, int numParams )
+{
+	int teamidx = GetNativeCell( 1 );
+	if( !g_bTeamTaken[teamidx] )
+	{
+		return false;
+	}
+	
+	SetNativeString( 2, g_cTeamName[teamidx], GetNativeCell( 3 ) );
+	
+	return true;
+}
+
+// helper functions
+
 void TeleportClientToZone( int client, int zoneType, int zoneTrack )
 {
 	g_bAllowReset[client] = true;
@@ -1514,45 +1603,4 @@ void PrintToTeam( int teamidx, char[] message, any ... )
 			Timer_PrintToChat( i, buffer );
 		}
 	}
-}
-
-public Action OnPlayerRunCmd( int client )
-{
-	int tick = Timer_GetReplayBotCurrentFrame( client );
-	int track = Timer_GetReplayBotTrack( client );
-	int style = Timer_GetReplayBotStyle( client );
-	
-	// not a valid replay bot or not currently replaying
-	if( tick == -1 || track == -1 || style == -1 )
-	{
-		return Plugin_Continue;
-	}
-	
-	if( g_smSegmentPlayerNames[track][style] == null )
-	{
-		return Plugin_Continue;
-	}
-	
-	char sTick[8];
-	IntToString( tick, sTick, sizeof(sTick) );
-	char name[MAX_NAME_LENGTH];
-	if( !g_smSegmentPlayerNames[track][style].GetString( sTick, name, sizeof(name) ) )
-	{
-		return Plugin_Continue;
-	}
-	
-	for( int i = 1; i <= MaxClients; i++ )
-	{
-		if( i == client )
-		{
-			continue;
-		}
-		
-		if( GetClientObserverTarget( i ) == client )
-		{
-			Timer_PrintToChat( i, "{primary}Current section by: {name}%s", name );
-		}
-	}
-	
-	return Plugin_Continue;
 }
