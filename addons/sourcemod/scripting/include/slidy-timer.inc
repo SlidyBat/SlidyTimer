@@ -585,6 +585,17 @@ forward Action Timer_OnRecordUpdatedPre( int client, int track, int style, float
 forward void Timer_OnRecordUpdatedPost( int client, int track, int style, float time, int recordid );
 
 /**
+ * Called after a record has been deleted from the database
+ *
+ * @param track						Track of record
+ * @param style						Style of record
+ * @param recordid					Record id in database
+ *
+ * @noreturn
+ */
+forward void Timer_OnRecordDeleted( int track, int style, int recordid );
+
+/**
  * Called when a plugin requests to get the total records count
  * Use this forward to implement custom style behaviour that can't be handled by the
  * default timer configuration
@@ -899,6 +910,20 @@ native void Timer_GetWRName( int track, int style, char[] buffer, int maxlen );
  * @return							Total record count
  */
 native int Timer_GetRecordsCount( int track, int style );
+
+/**
+ * Triggers the OnRecordDeleted forward with the specified parameters.
+ *
+ * Use this when implementing custom styles to notify other plugins when a time
+ * has been deleted.
+ *
+ * @param track						Track of deleted record
+ * @param style						Style of deleted record
+ * @param recordid					Identifier of deleted record
+ *
+ * @noreturn
+ */
+native void Timer_CallOnRecordDeleted( int track, int style, int recordid );
 
 /**
  * Sets a custom records handler for a style
@@ -1369,6 +1394,7 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_GetWRTime" );
 	MarkNativeAsOptional( "Timer_GetWRName" );
 	MarkNativeAsOptional( "Timer_GetRecordsCount" );
+	MarkNativeAsOptional( "Timer_CallOnRecordDeleted" );
 	
 	// zones
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );

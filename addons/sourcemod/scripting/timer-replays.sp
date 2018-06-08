@@ -344,6 +344,14 @@ public void Timer_OnRecordUpdatedPost( int client, int track, int style, float t
 	}
 }
 
+public void Timer_OnRecordDeleted( int track, int style, int recordid )
+{
+	if( g_iReplayRecordIds[track][style] == recordid )
+	{
+		DeleteReplay( track, style );
+	}
+}
+
 public void Timer_OnStylesLoaded( int totalstyles )
 {
 	GetCurrentMap( g_cCurrentMap, sizeof(g_cCurrentMap) );
@@ -755,6 +763,51 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 	Call_PushCell( recordid );
 	Call_PushCell( g_aReplayFrames[track][style] );
 	Call_Finish();
+}
+
+void DeleteReplay( int track, int style )
+{
+	char path[PLATFORM_MAX_PATH];
+	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	
+	if( FileExists( path ) )
+	{
+		DeleteFile( path );
+	}
+
+	delete g_aReplayFrames[track][style];
+	g_iReplayRecordIds[track][style] = -1;
+	g_fReplayRecordTimes[track][style] = 0.0;
+	g_cReplayRecordNames[track][style][0] = '\0';
+
+	for( int i = 0; i < g_nMultireplayBots; i++ )
+	{
+		if( g_MultireplayCurrentlyReplayingTrack[i] == track && g_MultireplayCurrentlyReplayingStyle[i] == style )
+		{
+			g_MultireplayCurrentlyReplayingTrack[i] = -1;
+			g_MultireplayCurrentlyReplayingStyle[i] = -1;
+			
+			int botidx = g_iMultireplayBotIndexes[i];
+			delete g_aPlayerFrameData[botidx];
+			g_iCurrentFrame[botidx] = 0;
+			
+			SetBotName( botidx );
+			Timer_TeleportClientToZone( botidx, Zone_Start, ZoneTrack_Main );
+		}
+	}
+	
+	for( int i = 0; i < g_nStyleBots; i++ )
+	{
+		if( g_StyleBotReplayingTrack[i] == track && g_StyleBotReplayingStyle[i] == style )
+		{
+			int botidx = g_iStyleBotIndexes[i];
+			delete g_aPlayerFrameData[botidx];
+			g_iCurrentFrame[botidx] = 0;
+			
+			SetBotName( botidx );
+			Timer_TeleportClientToZone( botidx, Zone_Start, ZoneTrack_Main );
+		}
+	}
 }
 
 void SetBotName( int client, int target = 0 )

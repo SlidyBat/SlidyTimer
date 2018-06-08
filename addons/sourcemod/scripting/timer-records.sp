@@ -25,6 +25,7 @@ Handle		g_hForward_OnRecordInsertedPre;
 Handle		g_hForward_OnRecordInsertedPost;
 Handle		g_hForward_OnRecordUpdatedPre;
 Handle		g_hForward_OnRecordUpdatedPost;
+Handle		g_hForward_OnRecordDeleted;
 Handle		g_hForward_OnClientRankRequested;
 Handle 		g_hForward_OnClientPBTimeRequested;
 Handle 		g_hForward_OnWRTimeRequested;
@@ -50,6 +51,7 @@ public void OnPluginStart()
 	g_hForward_OnRecordInsertedPost = CreateGlobalForward( "Timer_OnRecordInsertedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell );
 	g_hForward_OnRecordUpdatedPre = CreateGlobalForward( "Timer_OnRecordUpdatedPre", ET_Hook, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell );
 	g_hForward_OnRecordUpdatedPost = CreateGlobalForward( "Timer_OnRecordUpdatedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell );
+	g_hForward_OnRecordDeleted = CreateGlobalForward( "Timer_OnRecordDeleted", ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnClientRankRequested = CreateGlobalForward( "Timer_OnClientRankRequested", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_CellByRef );
 	g_hForward_OnClientPBTimeRequested = CreateGlobalForward( "Timer_OnClientPBTimeRequested", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_FloatByRef );
 	g_hForward_OnWRTimeRequested = CreateGlobalForward( "Timer_OnWRTimeRequested", ET_Event, Param_Cell, Param_Cell, Param_FloatByRef );
@@ -85,6 +87,7 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	CreateNative( "Timer_GetWRName", Native_GetWRName );
 	CreateNative( "Timer_GetRecordsCount", Native_GetRecordsCount );
 	CreateNative( "Timer_SetCustomRecordsHandler", Native_SetCustomRecordsHandler );
+	CreateNative( "Timer_CallOnRecordDeleted", Native_CallOnRecordDeleted );
 
 	RegPluginLibrary( "timer-records" );
 	
@@ -455,6 +458,7 @@ void SQL_DeleteRecord( int recordid, int track, int style )
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );
 	pack.WriteCell( style );
+	pack.WriteCell( recordid );
 	
 	g_hDatabase.Query( DeleteRecord_Callback, query, pack, DBPrio_Normal );
 }
@@ -471,9 +475,25 @@ public void DeleteRecord_Callback( Database db, DBResultSet results, const char[
 	pack.Reset();
 	int track = pack.ReadCell();
 	int style = pack.ReadCell();
+	int recordid = pack.ReadCell();
 	delete pack;
 	
-	SQL_ReloadCache( track, style, true );
+	Call_StartForward( g_hForward_OnRecordDeleted );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushCell( recordid );
+	Call_Finish();
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( g_iPlayerRecordId[i][track][style] == recordid )
+		{
+			g_iPlayerRecordId[i][track][style] = -1;
+			g_fPlayerPersonalBest[i][track][style] = 0.0;
+		}
+	}
+	
+	SQL_ReloadCache( track, style );
 }
 
 void SQL_ReloadCache( int track, int style, bool reloadall = false )
@@ -963,6 +983,17 @@ public int Native_SetCustomRecordsHandler( Handle handler, int numParams )
 	int style = GetNativeCell( 1 );
 	g_CustomRecordPlugin[style] = handler;
 	g_CustomRecordHandler[style] = view_as<RecordsHandler>(GetNativeFunction( 2 ));
+	
+	return 1;
+}
+
+public int Native_CallOnRecordDeleted( Handle handler, int numParams )
+{
+	Call_StartForward( g_hForward_OnRecordDeleted );
+	Call_PushCell( GetNativeCell( 1 ) );
+	Call_PushCell( GetNativeCell( 2 ) );
+	Call_PushCell( GetNativeCell( 3 ) );
+	Call_Finish();
 	
 	return 1;
 }

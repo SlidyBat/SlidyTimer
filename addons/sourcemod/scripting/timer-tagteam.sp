@@ -473,9 +473,19 @@ void OpenLobbyMenu( int client )
 	Format( buffer, sizeof(buffer), "%s\n \nMembers:\n%N\n", g_cPlayerTeamName[client], client );
 	
 	int length = g_aAcceptedPlayers[client].Length;
+	if( length == 0 )
+	{
+		Format( buffer, sizeof(buffer), "%s \n", buffer );
+	}
+	
 	for( int i = 0; i < length; i++ )
 	{
-		Format( buffer, sizeof(buffer), "%N\n", GetClientOfUserId( g_aAcceptedPlayers[client].Get( i ) ) );
+		Format( buffer, sizeof(buffer), "%s%N\n", buffer, GetClientOfUserId( g_aAcceptedPlayers[client].Get( i ) ) );
+		
+		if( i == length - 1 )
+		{
+			Format( buffer, sizeof(buffer), "%s \n", buffer );
+		}
 	}
 	
 	menu.SetTitle( buffer );
@@ -1500,7 +1510,7 @@ public int Leaderboard_Handler( Menu menu, MenuAction action, int param1, int pa
 		menu.GetItem( param2, info, sizeof(info) );
 		
 		int recordid = StringToInt( info );
-		SQL_ShowStats( param1, recordid );
+		SQL_ShowTeamStats( param1, recordid );
 	}
 	else if( action == MenuAction_End )
 	{
@@ -1508,9 +1518,268 @@ public int Leaderboard_Handler( Menu menu, MenuAction action, int param1, int pa
 	}
 }
 
-void SQL_ShowStats( int client, int recordid )
+void SQL_ShowTeamStats( int client, int recordid )
 {
-	Timer_PrintToChat( client, "{primary}Tagteam record stats soon! (%i)", recordid );
+	// tt_recordid INT NOT NULL AUTO_INCREMENT,
+	// teamname CHAR(64) NOT NULL,
+	// mapid INT NOT NULL,
+	// timestamp INT NOT NULL,
+	// time FLOAT NOT NULL,
+	// track INT NOT NULL,
+	// style INT NOT NULL,
+	// jumps INT NOT NULL,
+	// strafes INT NOT NULL,
+	// sync FLOAT NOT NULL,
+	// strafetime FLOAT NOT NULL,
+	// ssj INT NOT NULL,
+
+	DataPack pack = new DataPack();
+	pack.WriteCell( GetClientUserId( client ) );
+	pack.WriteCell( recordid );
+	
+	char query[1024];
+	Format( query, sizeof(query), "SELECT pb.playerid, player.lastname, r.teamname, map.mapname, r.timestamp, r.time, r.track, r.style, r.jumps, r.strafes, r.sync, r.strafetime, r.ssj \
+								FROM `t_tagteam_records` r \
+								JOIN `t_tagteam_pb` pb ON pb.tt_recordid = r.tt_recordid \
+								JOIN `t_players` player ON pb.playerid = player.playerid \
+								JOIN `t_maps` map ON r.mapid = map.mapid \
+								WHERE r.tt_recordid = '%i'",
+								recordid );
+	
+	g_hDatabase.Query( ShowTeamStats_Callback, query, pack );
+}
+
+public void ShowTeamStats_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (ShowTeamStats_Callback) - %s", error );
+		delete pack;
+		return;
+	}
+	
+	pack.Reset();
+	int client = GetClientOfUserId( pack.ReadCell() );
+	int recordid = pack.ReadCell();
+	delete pack;
+	
+	if( !( 0 < client <= MaxClients ) )
+	{
+		return;
+	}
+	
+	ArrayList playerids = new ArrayList();
+	ArrayList playernames = new ArrayList( ByteCountToCells( MAX_NAME_LENGTH ) );
+	
+	char buffer[512];
+	char teamname[64];
+	char mapname[PLATFORM_MAX_PATH];
+	int timestamp;
+	float time;
+	int track;
+	int style;
+	int jumps;
+	int strafes;
+	float sync;
+	float strafetime;
+	int ssj;
+	
+	bool fetchedStats = false;
+	while( results.FetchRow() )
+	{
+		playerids.Push( results.FetchInt( 0 ) );
+		results.FetchString( 1, buffer, sizeof(buffer) );
+		playernames.PushString( buffer );
+		
+		// kind of aids, but i dont wan't to split this up into 2 queries.
+		// just get the info once at the start, all rows should have the same stats
+		if( !fetchedStats )
+		{
+			results.FetchString( 2, teamname, sizeof(teamname) );
+			results.FetchString( 3, mapname, sizeof(mapname) );
+			timestamp = results.FetchInt( 4 );
+			time = results.FetchFloat( 5 );
+			track = results.FetchInt( 6 );
+			style = results.FetchInt( 7 );
+			jumps = results.FetchInt( 8 );
+			strafes = results.FetchInt( 9 );
+			sync = results.FetchFloat( 10 );
+			strafetime = results.FetchFloat( 11 );
+			ssj = results.FetchInt( 12 );
+			
+			fetchedStats = true;
+		}
+	}
+
+	Menu menu = new Menu( ShowTeamStats_Handler );
+
+	char date[128];
+	FormatTime( date, sizeof(date), "%d/%m/%Y - %H:%M:%S", timestamp );
+	char sTime[64];
+	Timer_FormatTime( time, sTime, sizeof(sTime) );
+	
+	char sTrack[16];
+	Timer_GetZoneTrackName( track, sTrack, sizeof(sTrack) );
+	
+	any settings[styleSettings];
+	Timer_GetStyleSettings( style, settings );
+	
+	char sSync[10];
+	if( settings[Sync] )
+	{
+		Format( sSync, sizeof(sSync), "(%.2f)", sync );
+	}
+	
+	Format( buffer, sizeof(buffer), "%s - %s %s\n \n%s:", mapname, sTrack, settings[StyleName], teamname);
+	menu.SetTitle( buffer );
+	
+	char sInfo[8];
+	
+	int playerCount = playerids.Length;
+	for( int i = 0; i < playerCount; i++ )
+	{
+		IntToString( playerids.Get( i ), sInfo, sizeof(sInfo) );
+		playernames.GetString( i, buffer, sizeof(buffer) );
+		
+		if( i == playerCount - 1 )
+		{
+			Format( buffer, sizeof(buffer), "%s\n \n", buffer );
+			Format( buffer, sizeof(buffer), "%sDate: %s\n", buffer, date );
+			Format( buffer, sizeof(buffer), "%sTime: %s\n \n", buffer, sTime );
+			Format( buffer, sizeof(buffer), "%sJumps: %i\n", buffer, jumps );
+			Format( buffer, sizeof(buffer), "%sStrafes: %i %s\n", buffer, strafes, sSync );
+			Format( buffer, sizeof(buffer), "%sStrafe Time %: %.2f\n", buffer, strafetime );
+			Format( buffer, sizeof(buffer), "%sSSJ: %i\n \n", buffer, ssj );
+		}
+		
+		menu.AddItem( sInfo, buffer );
+	}
+	
+	if( CheckCommandAccess( client, "delete_time", ADMFLAG_RCON ) )
+	{
+		Format( buffer, sizeof(buffer), "delete;%i;%i;%i", track, style, recordid );
+		menu.AddItem( buffer, "Delete Time" );
+	}
+	
+	menu.Display( client, MENU_TIME_FOREVER );
+	
+	delete playerids;
+	delete playernames;
+}
+
+public int ShowTeamStats_Handler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		
+		char sInfo[64];
+		menu.GetItem( param2, sInfo, sizeof(sInfo) );
+		
+		// user pressed delete
+		if( StrContains( sInfo, "delete" ) )
+		{
+			char sRecordData[4][32];
+			ExplodeString( sInfo, ";", sRecordData, sizeof(sRecordData), sizeof(sRecordData[]) );
+			
+			int track = StringToInt( sRecordData[1] );
+			int style = StringToInt( sRecordData[2] );
+			int recordid = StringToInt( sRecordData[3] );
+			SQL_DeleteRecord( track, style, recordid );
+		}
+		// user pressed player name
+		else
+		{
+			// TODO: show player stats once its implemented in timer-records
+		}
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+void SQL_DeleteRecord( int track, int style, int recordid )
+{
+	char query[512];
+
+	{
+		DataPack pack = new DataPack();
+		pack.WriteCell( track );
+		pack.WriteCell( style );
+		pack.WriteCell( recordid );
+		
+		Format( query, sizeof(query), "DELETE FROM `t_tagteam_records` WHERE tt_recordid = '%i'", recordid );
+		g_hDatabase.Query( DeleteRecord_Callback, query, pack );
+	}
+	
+	{
+		DataPack pack = new DataPack();
+		pack.WriteCell( track );
+		pack.WriteCell( style );
+		pack.WriteCell( recordid );
+	
+		Format( query, sizeof(query), "DELETE FROM `t_tagteam_pb` WHERE tt_recordid = '%i'", recordid );
+		g_hDatabase.Query( DeletePB_Callback, query, recordid );
+	}
+	
+	{
+		Format( query, sizeof(query), "DELETE FROM `t_tagteam_segments` WHERE tt_recordid = '%i'", recordid );
+		g_hDatabase.Query( DeleteSegments_Callback, query );
+	}
+}
+
+public void DeleteRecord_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (DeleteRecord_Callback) - %s", error );
+		delete pack;
+		return;
+	}
+	
+	pack.Reset();
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	int recordid = pack.ReadCell();
+	delete pack;
+	
+	Timer_CallOnRecordDeleted( track, style, recordid );
+	
+	SQL_LoadMapRecords( track, style );
+}
+
+public void DeletePB_Callback( Database db, DBResultSet results, const char[] error, DataPack pack )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (DeletePB_Callback) - %s", error );
+		delete pack;
+		return;
+	}
+	
+	pack.Reset();
+	int track = pack.ReadCell();
+	int style = pack.ReadCell();
+	int recordid = pack.ReadCell();
+	delete pack;
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( g_iRecordId[i][track][style] == recordid )
+		{
+			g_iRecordId[i][track][style] = -1;
+			g_fPersonalBest[i][track][style] = 0.0;
+		}
+	}
+}
+
+public void DeleteSegments_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (DeleteSegments_Callback) - %s", error );
+		return;
+	}
 }
 
 int GetRankForTime( float time, int track, int style )
