@@ -191,7 +191,7 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
 	cp[CP_GroundEnt] = GetEntPropEnt(target, Prop_Data, "m_hGroundEntity");
-	//Timer_GetClientTimerData( target, cp[CP_TimerData] );
+	Timer_GetClientTimerData( target, cp[CP_TimerData] );
 	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
 	
 	char buffer[32];
@@ -274,7 +274,7 @@ public void LoadCheckpoint( int client, int index )
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
 	SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", cp[CP_GroundEnt]);
-	//Timer_SetClientTimerData( client, cp[CP_TimerData] );
+	Timer_SetClientTimerData( client, cp[CP_TimerData] );
 	Timer_SetClientReplayFrames( client, cp[CP_ReplayFrames] );
 	
 	char buffer[32];
