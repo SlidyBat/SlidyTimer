@@ -22,6 +22,8 @@ enum
 /* Forwards */
 Handle		g_hForward_OnEnterZone;
 Handle		g_hForward_OnExitZone;
+Handle		g_hForward_OnClientTeleportToZonePre;
+Handle		g_hForward_OnClientTeleportToZonePost;
 
 /* Globals */
 bool			g_bLoaded;
@@ -61,7 +63,9 @@ public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max
 {
 	// zone natives
 	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
+	CreateNative( "Timer_SetClientZoneType", Native_SetClientZoneType );
 	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
+	CreateNative( "Timer_SetClientZoneTrack", Native_SetClientZoneTrack );
 	CreateNative( "Timer_TeleportClientToZone", Native_TeleportClientToZone );
 	CreateNative( "Timer_IsClientInsideZone", Native_IsClientInsideZone );
 
@@ -96,25 +100,15 @@ public void OnPluginStart()
 	
 	
 	// Forwards
-	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnEnterZone = CreateGlobalForward( "Timer_OnEnterZone", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnExitZone = CreateGlobalForward( "Timer_OnExitZone", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnClientTeleportToZonePre = CreateGlobalForward( "Timer_OnClientTeleportToZonePre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnClientTeleportToZonePost = CreateGlobalForward( "Timer_OnClientTeleportToZonePost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Cell );
 
 	HookEvent( "round_start", Hook_RoundStartPost, EventHookMode_Post );
 	
-	if( LibraryExists( "timer-core" ) )
-	{
-		g_hDatabase = Timer_GetDatabase();
-		SetSQLInfo();
-	}
-}
-
-public void OnLibraryAdded( const char[] name )
-{
-	if( StrEqual( name, "timer-core" ) )
-	{
-		g_hDatabase = Timer_GetDatabase();
-		SetSQLInfo();
-	}
+	g_hDatabase = Timer_GetDatabase();
+	SQL_CreateTables();
 }
 
 public void OnMapStart()
@@ -131,7 +125,10 @@ public void OnMapStart()
 	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vtf" );
 	
 	CreateTimer( DRAW_TIMER_INTERVAL, Timer_DrawZones, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE );
-	
+}
+
+public void Timer_OnMapLoaded( int mapid )
+{
 	SQL_LoadZones();
 }
 
@@ -341,6 +338,19 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 		return;
 	}
 	
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnClientTeleportToZonePre );
+	Call_PushCell( client );
+	Call_PushCell( zoneType );
+	Call_PushCell( zoneTrack );
+	Call_PushCell( subindex );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+	
 	if( !IsPlayerAlive( client ) )
 	{
 		CS_RespawnPlayer( client );
@@ -362,6 +372,13 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 	RequestFrame( DelaySetZone, pack );
 	
 	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
+	
+	Call_StartForward( g_hForward_OnClientTeleportToZonePost );
+	Call_PushCell( client );
+	Call_PushCell( zoneType );
+	Call_PushCell( zoneTrack );
+	Call_PushCell( subindex );
+	Call_Finish();
 }
 
 void OpenCreateZoneMenu( int client )
@@ -780,7 +797,7 @@ public Action Entity_StartTouch( int caller, int activator )
 
 public Action Entity_EndTouch( int caller, int activator )
 {
-	if( ( 0 < activator <= MaxClients ) && !IsFakeClient( activator ) )
+	if( ( 0 < activator <= MaxClients ) && !IsFakeClient( activator ) && IsPlayerAlive( activator ) )
 	{
 		char entName[512];
 		GetEntPropString( caller, Prop_Data, "m_iName", entName, sizeof( entName ) );
@@ -987,9 +1004,21 @@ public int Native_GetClientZoneType( Handle handler, int numParams )
 	return g_PlayerCurrentZoneType[GetNativeCell( 1 )];
 }
 
+public int Native_SetClientZoneType( Handle handler, int numParams )
+{
+	g_PlayerCurrentZoneType[GetNativeCell( 1 )] = GetNativeCell( 2 );
+	return 1;
+}
+
 public int Native_GetClientZoneTrack( Handle handler, int numParams )
 {
 	return g_PlayerCurrentZoneTrack[GetNativeCell( 1 )];
+}
+
+public int Native_SetClientZoneTrack( Handle handler, int numParams )
+{
+	g_PlayerCurrentZoneTrack[GetNativeCell( 1 )] = GetNativeCell( 2 );
+	return 1;
 }
 
 public int Native_TeleportClientToZone( Handle handler, int numParams )
@@ -1007,66 +1036,44 @@ public int Native_IsClientInsideZone( Handle handler, int numParams )
 
 public void OnDatabaseLoaded()
 {
-	g_hDatabase = Timer_GetDatabase();
-	SQL_CreateTables();
-}
-
-public Action CheckForSQLInfo( Handle timer, any data )
-{
-	return SetSQLInfo();
-}
-
-Action SetSQLInfo()
-{
 	if( g_hDatabase == null )
 	{
 		g_hDatabase = Timer_GetDatabase();
-		CreateTimer( 0.5, CheckForSQLInfo );
-	}
-	else
-	{
 		SQL_CreateTables();
-		return Plugin_Stop;
 	}
-
-	return Plugin_Continue;
 }
 
 void SQL_CreateTables()
 {
-	if( g_bLoaded )
+	if( g_hDatabase == null )
 	{
 		return;
 	}
 	
-	Transaction txn = SQL_CreateTransaction();
-	
 	char query[512];
+	Format( query, sizeof(query), "CREATE TABLE IF NOT EXISTS `t_zones` (zoneid INT NOT NULL AUTO_INCREMENT, mapid INT NOT NULL, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
 	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_zones` (mapname CHAR(128) NOT NULL, zoneid INT NOT NULL AUTO_INCREMENT, subindex INT NOT NULL, zonetype INT NOT NULL, zonetrack INT NOT NULL, a_x FLOAT NOT NULL, a_y FLOAT NOT NULL, a_z FLOAT NOT NULL, b_x FLOAT NOT NULL, b_y FLOAT NOT NULL, b_z FLOAT NOT NULL, PRIMARY KEY (`zoneid`));" );
-	txn.AddQuery( query );
-	
-	Format( query, sizeof( query ), "CREATE TABLE IF NOT EXISTS `t_checkpoints` (mapname CHAR(128) NOT NULL, playerid INT NOT NULL, subindex INT NOT NULL, checkpointtime INT NOT NULL, style INT NOT NULL, zonetrack INT NOT NULL, PRIMARY KEY (`mapname`, `playerid`, `subindex`, `style`, `zonetrack`));" );
-	txn.AddQuery( query );
-	
-	g_hDatabase.Execute( txn, SQL_OnCreateTableSuccess, SQL_OnCreateTableFailure, _, DBPrio_High );
+	g_hDatabase.Query( CreateTable_Callback, query, _, DBPrio_High );
 }
 
-public void SQL_OnCreateTableSuccess( Database db, any data, int numQueries, DBResultSet[] results, any[] queryData )
+public void CreateTable_Callback( Database db, DBResultSet results, const char[] error, any data )
 {
-	SQL_LoadZones();
-}
-
-public void SQL_OnCreateTableFailure( Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData )
-{
-	SetFailState( "[SQL ERROR] (SQL_CreateTables) - %s", error );
+	if( results == null )
+	{
+		SetFailState( "[SQL ERROR] (CreateTable_Callback) - %s", error );
+	}
+	
+	if( Timer_GetMapId() > -1 )
+	{
+		SQL_LoadZones();
+	}
 }
 
 void SQL_LoadZones()
 {
 	char query[512];
 	
-	Format( query, sizeof( query ), "SELECT zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z FROM `t_zones` WHERE mapname = '%s' ORDER BY `zoneid` ASC;", g_cCurrentMap );
+	Format( query, sizeof( query ), "SELECT zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z FROM `t_zones` WHERE mapid = '%i' ORDER BY `zoneid` ASC;", Timer_GetMapId() );
 	g_hDatabase.Query( LoadZones_Callback, query, _, DBPrio_High );
 }
 
@@ -1125,7 +1132,7 @@ void SQL_InsertZone( float pointA[3], float pointB[3], int zoneType, int zoneTra
 	if( zoneType >= Zone_Checkpoint || id == -1 )
 	{
 		// insert the zone
-		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapname, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%s', '0', '%i', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f');", g_cCurrentMap, subindex, zoneType, zoneTrack, pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
+		Format( query, sizeof( query ), "INSERT INTO `t_zones` (mapid, zoneid, subindex, zonetype, zonetrack, a_x, a_y, a_z, b_x, b_y, b_z) VALUES ('%i', '0', '%i', '%i', '%i', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f', '%.3f');", Timer_GetMapId(), subindex, zoneType, zoneTrack, pointA[0], pointA[1], pointA[2], pointB[0], pointB[1], pointB[2] );
 	}
 	else
 	{

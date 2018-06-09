@@ -10,6 +10,7 @@
 #define MAX_STYLES 24
 
 typedef SelectStyleCB = function void ( int client, int style );
+typedef RecordsHandler = function void ( int client, int track, int style, float time, Handle fwdInsertedPre, Handle fwdInsertedPost, Handle fwdUpdatedPre, Handle fwdUpdatedPost, Handle fwdWRBeaten );
 
 static SelectStyleCB g_SelectStyleCallback[MAXPLAYERS + 1];
 
@@ -99,12 +100,23 @@ enum ReplayFrameData
 
 enum
 {
+	ReplayBot_None,
+	ReplayBot_Multireplay,
+	ReplayBot_Style,
+	TOTAL_REPALY_BOT_TYPES
+}
+
+enum
+{
 	Timer_FrameCount,
 	Timer_Jumps,
 	Timer_AirFrames,
 	Timer_SyncedFrames,
 	Timer_StrafedFrames,
 	Timer_Strafes,
+	Timer_SSJ,
+	Timer_ZoneTrack,
+	Timer_ZoneType,
 	TIMER_DATA_SIZE
 }
 
@@ -318,6 +330,15 @@ stock void Timer_DebugPrint( const char[] message, any ... )
 forward void Timer_OnDatabaseLoaded();
 
 /**
+ * Called when map has been loaded from database by core timer plugin
+ *
+ * @param mapid						Map id in database
+ *
+ * @noreturn
+ */
+forward void Timer_OnMapLoaded( int mapid );
+
+/**
  * Called when client has been loaded by core timer plugin and been provided a playerid
  *
  * @param client					Client index of player
@@ -327,6 +348,19 @@ forward void Timer_OnDatabaseLoaded();
  * @noreturn
  */
 forward void Timer_OnClientLoaded( int client, int playerid, bool newplayer );
+
+/**
+ * Called after the core timer runs OnPlayerRunCmd and provides values after they have been modified
+ *
+ * @param client					Client index of player
+ * @param buttons					Client buttons
+ * @param impulse					Client impulse commands
+ * @param vel						forward/side/up move values
+ * @param angles					Client eye angles
+ *
+ * @noreturn
+ */
+forward void Timer_OnPlayerRunCmdPost( int client, int buttons, int impulse, const float vel[3], const float angles[3] );
 
 /**
  * Called when all styles have been loaded from config file
@@ -365,12 +399,10 @@ forward void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle );
  * @param track						Track that client finished in
  * @param newstyle					Style that client finished in
  * @param time						Time that client finished in
- * @param pbtime					Clients personal best time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
- * @param wrtime					WR time for that track/style (old one, still hasnt been replaced if it was beaten), 0.0 if none
  *
  * @return							Plugin_Handled or Plugin_Stop to stop client from finishing
  */
-forward Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime );
+forward Action Timer_OnTimerFinishPre( int client, int track, int style, float time );
 
 /**
  * Called after client finishes
@@ -379,12 +411,10 @@ forward Action Timer_OnFinishPre( int client, int track, int style, float time, 
  * @param track						Track that client finished in
  * @param style						Style that client finished in
  * @param time						Time that client finished in
- * @param pbtime					Clients personal best time for that track/style (old one, still hasnt been replaced if it was beaten)
- * @param wrtime					WR time for that track/style (old one, still hasnt been replaced if it was beaten)
  *
  * @noreturn
  */
-forward void Timer_OnFinishPost( int client, int track, int style, float time, float pbtime, float wrtime );
+forward void Timer_OnTimerFinishPost( int client, int track, int style, float time );
 
 /**
  * Called after client finishes
@@ -406,11 +436,11 @@ forward void Timer_OnWRBeaten( int client, int track, int style, float time, flo
  * @param zoneId					id of zone (useful for identifying zone in db)
  * @param zoneType					type of zone (ie. start, end, checkpoint ...)
  * @param zoneTrack					track of zone (ie. main/bonus)
- * @param zone_subindex				subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
  *
  * @noreturn
  */
-forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTrack, int zone_subindex );
+forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTrack, int subindex );
 
 /**
  * Called when a client exits a zone
@@ -419,11 +449,177 @@ forward void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTr
  * @param zoneId					id of zone (useful for identifying zone in db)
  * @param zoneType					type of zone (ie. start, end, checkpoint ...)
  * @param zoneTrack					track of zone (ie. main/bonus)
- * @param zone_subindex				subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
  *
  * @noreturn
  */
-forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTrack, int zone_subindex );
+forward void Timer_OnExitZone( int client, int zoneId, int zoneType, int zoneTrack, int subindex );
+
+/**
+ * Called before a client attempts to teleport to a zone
+ *
+ * @param client					Client index of player that exited zone
+ * @param zoneType					type of zone (ie. start, end, checkpoint ...)
+ * @param zoneTrack					track of zone (ie. main/bonus)
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ *
+ * @return							Plugin_Handled or Plugin_Stop to block client from teleporting to the zone
+ */
+forward Action Timer_OnClientTeleportToZonePre( int client, int zoneType, int zoneTrack, int subindex );
+
+/**
+ * Called after a client attempts to teleport to a zone
+ *
+ * @param client					Client index of player that exited zone
+ * @param zoneType					type of zone (ie. start, end, checkpoint ...)
+ * @param zoneTrack					track of zone (ie. main/bonus)
+ * @param subindex					Subindex of zone, useful for identifying which checkpoint/anticheat zone was entered
+ *
+ * @noreturn
+ */
+forward void Timer_OnClientTeleportToZonePost( int client, int zoneType, int zoneTrack, int subindex );
+
+/**
+ * Called when a plugin requests to get a clients rank
+ * Use this forward to implement custom style behaviour that can't be handled by the
+ * default timer configuration
+ *
+ * @param client					Client whose rank was requested
+ * @param track						Track requested
+ * @param style						Style requested
+ * @param rank						The default rank that would be returned by the records module
+ *
+ * @return							Plugin_Changed to use the changed rank value, Plugin_Continue otherwise
+ */
+forward Action Timer_OnClientRankRequested( int client, int track, int style, int& rank );
+
+/**
+ * Called when a plugin requests to get a clients rank
+ * Use this forward to implement custom style behaviour that can't be handled by the
+ * default timer configuration
+ *
+ * @param client					Client whose PB was requested
+ * @param track						Track requested
+ * @param style						Style requested
+ * @param time						The default time that would be returned by the records module
+ *
+ * @return							Plugin_Changed to use the changed time value, Plugin_Continue otherwise
+ */
+forward Action Timer_OnClientPBTimeRequested( int client, int track, int style, float& time );
+
+/**
+ * Called when a plugin requests to get a WR time
+ * Use this forward to implement custom style behaviour that can't be handled by the
+ * default timer configuration
+ *
+ * @param track						Track requested
+ * @param style						Style requested
+ * @param time						The default time that would be returned by the records module
+ *
+ * @return							Plugin_Changed to use the changed time value, Plugin_Continue otherwise
+ */
+forward Action Timer_OnWRTimeRequested( int track, int style, float& time );
+
+/**
+ * Called when a plugin requests to get a WR name
+ * Use this forward to implement custom style behaviour that can't be handled by the
+ * default timer configuration
+ *
+ * @param track						Track requested
+ * @param style						Style requested
+ * @param name						The default name that would be returned by the records module
+ *
+ * @return							Plugin_Changed to use the changed name value, Plugin_Continue otherwise
+ */
+forward Action Timer_OnWRNameRequested( int track, int style, char name[MAX_NAME_LENGTH] );
+
+/**
+ * Called right before a record is about to be inserted into the database
+ *
+ * @param client					Client whose record is going to be inserted
+ * @param track						Track of record
+ * @param style						Style of record
+ * @param time						Time of record
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop the time from being inserted
+ */
+forward Action Timer_OnRecordInsertedPre( int client, int track, int style, float time );
+
+/**
+ * Called after a record has been inserted into the database
+ *
+ * @param client					Client whose record was inserted
+ * @param track						Track of record
+ * @param style						Style of record
+ * @param time						Time of record
+ * @param recordid					Record id in database
+ *
+ * @noreturn
+ */
+forward void Timer_OnRecordInsertedPost( int client, int track, int style, float time, int recordid );
+
+/**
+ * Called right before a record is about to be updated in the database
+ *
+ * @param client					Client whose record will be updated
+ * @param track						Track of record
+ * @param style						Style of record
+ * @param time						Time of record
+ * @param recordid					Record id in database
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop the time from being inserted
+ */
+forward Action Timer_OnRecordUpdatedPre( int client, int track, int style, float time, int recordid );
+
+/**
+ * Called after a record has been updated in the database
+ *
+ * @param client					Client whose record was updated
+ * @param track						Track of record
+ * @param style						Style of record
+ * @param time						Time of record
+ * @param recordid					Record id in database
+ *
+ * @noreturn
+ */
+forward void Timer_OnRecordUpdatedPost( int client, int track, int style, float time, int recordid );
+
+/**
+ * Called after a record has been deleted from the database
+ *
+ * @param track						Track of record
+ * @param style						Style of record
+ * @param recordid					Record id in database
+ *
+ * @noreturn
+ */
+forward void Timer_OnRecordDeleted( int track, int style, int recordid );
+
+/**
+ * Called when a plugin requests to get the total records count
+ * Use this forward to implement custom style behaviour that can't be handled by the
+ * default timer configuration
+ *
+ * @param track						Track requested
+ * @param style						Style requested
+ * @param recordcount				The default records count that would be returned by the records module
+ *
+ * @return							Plugin_Changed to use the changed recordcount value, Plugin_Continue otherwise
+ */
+forward Action Timer_OnRecordsCountRequested( int track, int style, int& recordcount );
+
+/**
+ * Called when a times leaderboard is going to be shown to a client
+ * Use this forward to implement custom style behaviour that can't be handled by the
+ * default timer configuration
+ *
+ * @param client					Client that requested the leaderboard
+ * @param track						Track requested
+ * @param style						Style requested
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop the leaderboard from being shown
+ */
+forward Action Timer_OnLeaderboardRequested( int client, int track, int style );
 
 /**
  * Called when clients timer starts
@@ -438,21 +634,65 @@ forward Action Timer_OnTimerStart( int client );
  * Called when a replay is about to be saved due to being best available replay (not necessarily WR)
  *
  * @param client					Client index of player
+ * @param track						Track of replay being saved
+ * @param style						Style of replay being saved
+ * @param time						Replay length in seconds
+ * @param recordid					The record database id
  * @param frames					Reference to the frames that will be saved, can be edited or changed
  *
  * @return							Plugin_Handled or Plugin_Stop to stop replay from being saved
  */
-forward Action Timer_OnReplaySavedPre( int client, ArrayList& frames );
+forward Action Timer_OnReplaySavedPre( int client, int track, int style, float time, int recordid, ArrayList& frames );
 
 /**
  * Called after a replay is saved due to being best available replay (not necessarily WR)
  *
  * @param client					Client index of player
+ * @param track						Track of saved replay
+ * @param style						Style of saved replay
+ * @param time						Replay length in seconds
+ * @param recordid					The record database id
  * @param frames					Frames that will be saved
  *
  * @noreturn
  */
-forward Action Timer_OnReplaySavedPost( int client, ArrayList& frames );
+forward void Timer_OnReplaySavedPost( int client, int track, int style, float time, int recordid, ArrayList frames );
+
+/**
+ * Called when a replay is about to be loaded
+ *
+ * @param track						Track of replay being loaded
+ * @param style						Style of replay being loaded
+ *
+ * @return							Plugin_Handled or Plugin_Stop to stop replay from being loaded
+ */
+forward Action Timer_OnReplayLoadedPre( int track, int style );
+
+/**
+ * Called after a replay is saved due to being best available replay (not necessarily WR)
+ *
+ * @param track						Track of replay loaded
+ * @param style						Style of replay loaded
+ * @param time						Replay length in seconds
+ * @param recordid					Record Id in database of loaded replay
+ * @param frames					ArrayList with the frames of the loaded replay
+ *
+ * @noreturn
+ */
+forward void Timer_OnReplayLoadedPost( int track, int style, float time, int recordid, ArrayList frames );
+
+/**
+ * Called when a bots name is about to be set
+ * NOTE: This is not called when it is a self-replay bot
+ *
+ * @param track						Bot track
+ * @param style						Bot style
+ * @param name						Current player name being used
+ * @param time						Current player time being used
+ *
+ * @return							Plugin_Handled or Plugin_Changed to use changed values
+ */
+forward Action Timer_OnBotNameSet( int track, int style, char name[MAX_NAME_LENGTH], float& displayTime );
 
 /**
  * Called before a CP is saved by a client
@@ -542,6 +782,15 @@ native float Timer_GetClientCurrentSync( int client );
 native float Timer_GetClientCurrentStrafeTime( int client );
 
 /**
+ * Gets clients current SSJ
+ *
+ * @param client					Client index
+ *
+ * @return							Current SSJ of client, or 0 if their timer is stopped (or they havent reached 6th jump)
+ */
+native int Timer_GetClientCurrentSSJ( int client );
+
+/**
  * Gets clients timer status (stopped, paused, running ...)
  *
  * @param client					Client index
@@ -551,18 +800,28 @@ native float Timer_GetClientCurrentStrafeTime( int client );
 native TimerStatus Timer_GetClientTimerStatus( int client );
 
 /**
- * Gets clients rank for specified track and style
+ * Gets clients rank for current map on specified track and style
  *
  * @param client					Client index
  * @param track						Zone track
  * @param style						Style index
  *
- * @return							TimerStatus of client
+ * @return							Rank of client or -1 if client has no time
  */
-native TimerStatus Timer_GetClientRank( int client, int track, int style );
+native int Timer_GetClientMapRank( int client, int track, int style );
 
 /**
- * Gets clients style
+ * Sets client's style
+ *
+ * @param client					Client index
+ * @param style						Style index
+ *
+ * @noreturn
+ */
+native void Timer_SetClientStyle( int client, int style );
+
+/**
+ * Gets client's style
  *
  * @param client					Client index
  *
@@ -643,6 +902,42 @@ native float Timer_GetWRTime( int track, int style );
 native void Timer_GetWRName( int track, int style, char[] buffer, int maxlen );
 
 /**
+ * Gets total records for specified track and style on current map
+ *
+ * @param track						Zone track to check (ie. main/bonus)
+ * @param style						Style index to check
+ *
+ * @return							Total record count
+ */
+native int Timer_GetRecordsCount( int track, int style );
+
+/**
+ * Triggers the OnRecordDeleted forward with the specified parameters.
+ *
+ * Use this when implementing custom styles to notify other plugins when a time
+ * has been deleted.
+ *
+ * @param track						Track of deleted record
+ * @param style						Style of deleted record
+ * @param recordid					Identifier of deleted record
+ *
+ * @noreturn
+ */
+native void Timer_CallOnRecordDeleted( int track, int style, int recordid );
+
+/**
+ * Sets a custom records handler for a style
+ * The callback provided is called when a client finishes and the records plugin was about to handle it
+ * NOTE: Make sure to call the forwards provided to your callback to ensure other plugins are notified when records are updated/inserted or when a WR is beaten
+ *
+ * @param style						Style index to override
+ * @param handler					The handler function to use
+ *
+ * @noreturn
+ */
+native void Timer_SetCustomRecordsHandler( int style, RecordsHandler handler );
+
+/**
  * Gets PB of client for specified track and style
  *
  * @param client					Client index
@@ -663,6 +958,16 @@ native float Timer_GetClientPBTime( int client, int track, int style );
 native int Timer_GetClientZoneType( int client );
 
 /**
+ * Sets zone type client is currently in
+ *
+ * @param client					Client index.
+ * @param type						Zone type to set
+ *
+ * @noreturn
+ */
+native void Timer_SetClientZoneType( int client, int type );
+
+/**
  * Gets track client is currently in (ie. main/bonus)
  *
  * @param client					Client index.
@@ -672,11 +977,28 @@ native int Timer_GetClientZoneType( int client );
 native int Timer_GetClientZoneTrack( int client );
 
 /**
+ * Sets zone track client is currently in (ie. main/bonus)
+ *
+ * @param client					Client index.
+ * @param track						Zone track to set
+ *
+ * @noreturn
+ */
+native void Timer_SetClientZoneTrack( int client, int track );
+
+/**
  * Provides database handle from timer
  *
  * @return Database handle
  */
 native Database Timer_GetDatabase();
+
+/**
+ * Gets the current map database id
+ *
+ * @return Map id
+ */
+native int Timer_GetMapId();
 
 /**
  * Native to make sure client has been loaded by timer and has been provided a database id
@@ -687,6 +1009,15 @@ native Database Timer_GetDatabase();
  * @return							Whether client is connected
  */
 native bool Timer_IsClientLoaded( int client );
+
+/**
+ * Gets a clients database playerid
+ *
+ * @param client					Client index
+ *
+ * @return							playerid or -1 if client has not yet loaded (or isn't connected)
+ */
+native bool Timer_GetClientPlayerId( int client );
 
 /**
  * Returns whether clients timer is currently running
@@ -762,6 +1093,53 @@ native void Timer_TeleportClientToZone( int client, int zoneType, int zoneTrack,
 native bool Timer_IsClientInsideZone( int client, int zoneType, int zoneTrack, int subindex = 0 );
 
 /**
+ * Returns recordid stored for specified track/style
+ *
+ * @param track						Track (see ZoneTrack_*)
+ * @param style						Style index
+ *
+ * @return							Recordid stored for track/style or -1 if it does not exist
+ */
+native int Timer_GetReplayRecordId( int track, int style );
+
+/**
+ * Returns replay length in seconds for specified track/style
+ *
+ * @param track						Track (see ZoneTrack_*)
+ * @param style						Style index
+ *
+ * @return							Replay length in seconds
+ */
+native float Timer_GetReplayTime( int track, int style );
+
+/**
+ * Returns what track a replay bot is playing
+ *
+ * @param client					Client index of replay bot
+ *
+ * @return							Replay bot track or -1 if invalid replay bot or not currently replaying
+ */
+native int Timer_GetReplayBotTrack( int client );
+
+/**
+ * Returns what style a replay bot is playing
+ *
+ * @param client					Client index of replay bot
+ *
+ * @return							Replay bot style or -1 if invalid replay bot or not currently replaying
+ */
+native int Timer_GetReplayBotStyle( int client );
+
+/**
+ * Returns what type of replay bot a bot is
+ *
+ * @param client					Client index of replay bot
+ *
+ * @return							Replay bot type, see ReplayBot_* enum
+ */
+native int Timer_GetReplayBotType( int client );
+
+/**
  * Returns what frame the specified bot is on
  *
  * @param client					Client index of replay bot
@@ -799,7 +1177,7 @@ native ArrayList Timer_GetClientReplayFrames( int client );
 native void Timer_SetClientReplayFrames( int client, ArrayList frames );
 
 /**
- * Returns what frame the specified bot is on
+ * Gets what the player name is of the specified replay bot
  *
  * @param client					Client index of replay bot
  * @param output					Output buffer
@@ -808,6 +1186,16 @@ native void Timer_SetClientReplayFrames( int client, ArrayList frames );
  * @noreturn
  */
 native void Timer_GetReplayBotPlayerName( int client, char[] output, int maxlen );
+
+/**
+ * Sets what the player name is of the specified replay bot
+ *
+ * @param client					Client index of replay bot
+ * @param newName					New name string
+ *
+ * @noreturn
+ */
+native void Timer_SetReplayBotPlayerName( int client, char[] newName );
 
 /**
  * Prints to specified client's chat using the timers chat processing
@@ -854,6 +1242,15 @@ native void Timer_PrintToAdmins( int flags, char[] message, any ... );
 native void Timer_ReplyToCommand( int client, char[] message, any ... );
 
 /**
+ * Opens checkpoints menu for a client
+ *
+ * @param client					Client index
+ *
+ * @noreturn
+ */
+native void Timer_OpenCheckpointsMenu( int client );
+
+/**
  * Gets the total number of CPs that a client has saved
  *
  * @param client					Client index
@@ -874,13 +1271,65 @@ native int Timer_GetTotalCheckpoints( int client );
 native void Timer_GetClientCheckpoint( int client, int index, any cp[eCheckpoint] );
 
 /**
+ * Sets CP data for a client at specified index
+ *
+ * @param client					Client index
+ * @param index					Index of CP to set, or -1 to push cp as last
+ * @param cp						Buffer with cp data
+ *
+ * @noreturn
+ */
+native void Timer_SetClientCheckpoint( int client, int index, any cp[eCheckpoint] );
+
+/**
+ * Teleports client to cp at specified index
+ *
+ * @param client					Client index
+ * @param index					Index of CP to teleport to
+ *
+ * @noreturn
+ */
+native void Timer_TeleportClientToCheckpoint( int client, int index );
+
+/**
  * Clears all saved CPs for specified client
+ * NOTE: It is the callers responsibility to delete replay frames handle from the client's CPs
  *
  * @param client					Client index
  *
  * @noreturn
  */
 native void Timer_ClearClientCheckpoints( int client );
+
+/**
+ * Whether or not a client is currently in a team, use this to check if current client style is a tagteam style
+ *
+ * @param client					Client index
+ * @param teamidx					Optional specific tagteam to check for, otherwise checks for any team
+ *
+ * @return							True if in tagteam, otherwise false
+ */
+native bool Timer_IsClientInTagTeam( int client, int teamidx = -1 );
+
+/**
+ * Returns the current team index of a client
+ *
+ * @param client					Client index
+ *
+ * @return							Team index or -1 if not in a team
+ */
+native int Timer_GetClientTeamIndex( int client );
+
+/**
+ * Gets name of specified team index
+ *
+ * @param teamidx					Team index
+ * @param name						Output buffer
+ * @param maxlen					Max length of output buffer
+ *
+ * @return							True if successfully got team name or false if invalid team index
+ */
+native bool Timer_GetTeamName( int teamidx, char[] name, int maxlen );
 
 stock void Timer_OpenSelectStyleMenu( int client, SelectStyleCB cb )
 {
@@ -916,29 +1365,36 @@ public SharedPlugin __pl_slidy_timer =
 public void __pl_slidy_timer_SetNTVOptional()
 {
 	// core
+	MarkNativeAsOptional( "Timer_GetDatabase" );
+	MarkNativeAsOptional( "Timer_GetMapId" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentTime" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentJumps" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentStrafes" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentSync" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentStrafeTime" );
+	MarkNativeAsOptional( "Timer_GetClientCurrentSSj" );
+	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
+	MarkNativeAsOptional( "Timer_SetClientStyle" );
 	MarkNativeAsOptional( "Timer_GetClientStyle" );
-	MarkNativeAsOptional( "Timer_GetClientPBTime" );
-	MarkNativeAsOptional( "Timer_GetWRTime" );
-	MarkNativeAsOptional( "Timer_GetWRName" );
+	MarkNativeAsOptional( "Timer_GetClientTimerData" );
+	MarkNativeAsOptional( "Timer_SetClientTimerData" );
 	MarkNativeAsOptional( "Timer_GetStyleCount" );
 	MarkNativeAsOptional( "Timer_GetStyleSettings" );
 	MarkNativeAsOptional( "Timer_GetStyleName" );
 	MarkNativeAsOptional( "Timer_GetStylePrefix" );
 	MarkNativeAsOptional( "Timer_StyleHasSetting" );
-	MarkNativeAsOptional( "Timer_GetClientTimerStatus" );
-	MarkNativeAsOptional( "Timer_GetClientRank" );
-	MarkNativeAsOptional( "Timer_GetDatabase" );
-	MarkNativeAsOptional( "Timer_IsClientLoaded" );
 	MarkNativeAsOptional( "Timer_IsTimerRunning" );
 	MarkNativeAsOptional( "Timer_StopTimer" );
 	MarkNativeAsOptional( "Timer_BlockTimer" );
-	MarkNativeAsOptional( "Timer_GetClientTimerData" );
-	MarkNativeAsOptional( "Timer_SetClientTimerData" );
+	
+	// records
+	MarkNativeAsOptional( "Timer_IsClientLoaded" );
+	MarkNativeAsOptional( "Timer_GetClientMapRank" );
+	MarkNativeAsOptional( "Timer_GetClientPBTime" );
+	MarkNativeAsOptional( "Timer_GetWRTime" );
+	MarkNativeAsOptional( "Timer_GetWRName" );
+	MarkNativeAsOptional( "Timer_GetRecordsCount" );
+	MarkNativeAsOptional( "Timer_CallOnRecordDeleted" );
 	
 	// zones
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
@@ -947,9 +1403,15 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_IsClientInsideZone" );
 	
 	// replays
+	MarkNativeAsOptional( "Timer_GetReplayRecordId" );
+	MarkNativeAsOptional( "Timer_GetReplayTime" );
+	MarkNativeAsOptional( "Timer_GetReplayBotTrack" );
+	MarkNativeAsOptional( "Timer_GetReplayBotStyle" );
+	MarkNativeAsOptional( "Timer_GetReplayBotType" );
 	MarkNativeAsOptional( "Timer_GetReplayBotCurrentFrame" );
 	MarkNativeAsOptional( "Timer_GetReplayBotTotalFrames" );
 	MarkNativeAsOptional( "Timer_GetReplayBotPlayerName" );
+	MarkNativeAsOptional( "Timer_SetReplayBotPlayerName" );
 	MarkNativeAsOptional( "Timer_GetClientReplayFrames" );
 	MarkNativeAsOptional( "Timer_SetClientReplayFrames" );
 	
@@ -960,6 +1422,16 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_ReplyToCommand" );
 	
 	// cp
-	MarkNativeAsOptional( "Timer_GetClientCP" );
+	MarkNativeAsOptional( "Timer_OpenCheckpointsMenu" );
+	MarkNativeAsOptional( "Timer_GetTotalCheckpoints" );
+	MarkNativeAsOptional( "Timer_GetClientCheckpoint" );
+	MarkNativeAsOptional( "Timer_SetClientCheckpoint" );
+	MarkNativeAsOptional( "Timer_TeleportClientToCheckpoint" );
+	MarkNativeAsOptional( "Timer_ClearClientCheckpoints" );
+	
+	// tagteam
+	MarkNativeAsOptional( "Timer_IsClientInTagTeam" );
+	MarkNativeAsOptional( "Timer_GetClientTeamIndex" );
+	MarkNativeAsOptional( "Timer_GetTeamName" );
 }
 #endif

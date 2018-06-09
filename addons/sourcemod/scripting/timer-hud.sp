@@ -202,7 +202,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	}
 	else
 	{
-		hudtype = (Timer_GetClientZoneType( client ) == Zone_Start) ? HudType_StartZone : HudType_Timing;
+		hudtype = (Timer_GetClientZoneType( target ) == Zone_Start) ? HudType_StartZone : HudType_Timing;
 	}
 
 	static char hudtext[256];
@@ -260,18 +260,6 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 		{
 			bStartedElement = true;
 		}
-	}
-	
-	static char buffer[64];
-	
-	for( int i = 1; i <= MaxClients; i++ )
-	{
-		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != client )
-		{
-			continue;
-		}
-		
-		PrintHintText( i, buffer );
 	}
 	
 	PrintHintText( client, hudtext );
@@ -550,7 +538,7 @@ void DrawTopLeftOverlay( int client )
 			char sPBTime[16];
 			Timer_FormatTime( pbtime, sPBTime, sizeof(sPBTime) );
 			
-			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientRank( target, track, style ) );
+			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientMapRank( target, track, style ) );
 		}
 		else
 		{

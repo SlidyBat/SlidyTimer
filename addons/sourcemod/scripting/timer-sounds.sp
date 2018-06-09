@@ -38,25 +38,27 @@ public void OnMapStart()
 	PrecacheSounds();
 }
 
-public void Timer_OnFinishPost( int client, int track, int style, float time, float pbtime, float wrtime )
+public void Timer_OnTimerFinishPost( int client, int track, int style, float time )
 {
+	float wrtime = Timer_GetWRTime( track, style );
 	if( wrtime == 0.0 || time < wrtime )
 	{
-		Timer_DebugPrint( "Timer_OnFinishPost: Exiting" );
+		Timer_DebugPrint( "Timer_OnTimerFinishPost: Exiting" );
 		return; // will be handled by OnWRBeaten forward
 	}
 
+	float pbtime = Timer_GetClientPBTime( client, track, style );
 	if( pbtime == 0.0 || time < pbtime )
 	{
 		// pb sound
 		PlayRandomSound( SoundType_PBSound, client );		
-		Timer_DebugPrint( "Timer_OnFinishPost: Playing PB sound" );
+		Timer_DebugPrint( "Timer_OnTimerFinishPost: Playing PB sound" );
 	}
 	else
 	{
 		// normal finish sound
 		PlayRandomSound( SoundType_FinishSound, client );
-		Timer_DebugPrint( "Timer_OnFinishPost: Playing finish sound" );
+		Timer_DebugPrint( "Timer_OnTimerFinishPost: Playing finish sound" );
 	}
 }
 
@@ -64,7 +66,7 @@ public void Timer_OnWRBeaten( int client, int track, int style, float time, floa
 {
 	// play wr sound
 	PlayRandomSound( SoundType_WRSound );
-	Timer_DebugPrint( "Timer_OnFinishPost: Playing WR sound" );
+	Timer_DebugPrint( "Timer_OnWRBeaten: Playing WR sound" );
 }
 
 void PrecacheSounds()
