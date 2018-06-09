@@ -191,7 +191,7 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
 	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
 	cp[CP_GroundEnt] = GetEntPropEnt(target, Prop_Data, "m_hGroundEntity");
-	Timer_GetClientTimerData( target, cp[CP_TimerData] );
+	//Timer_GetClientTimerData( target, cp[CP_TimerData] );
 	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
 	
 	char buffer[32];
@@ -274,7 +274,7 @@ public void LoadCheckpoint( int client, int index )
 	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
 	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
 	SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", cp[CP_GroundEnt]);
-	Timer_SetClientTimerData( client, cp[CP_TimerData] );
+	//Timer_SetClientTimerData( client, cp[CP_TimerData] );
 	Timer_SetClientReplayFrames( client, cp[CP_ReplayFrames] );
 	
 	char buffer[32];
@@ -396,13 +396,30 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 		}
 		else if( StrEqual( sInfo, "tele" ) )
 		{
+
 			if( !g_aCheckpoints[param1].Length )
 			{
 				Timer_PrintToChat( param1, "{primary}No checkpoints found" );
 			}
 			else
 			{
+				int maxstyles;
+				bool DoesSegment[MAXPLAYERS+1] = false;
+				for( int i = 0; i < maxstyles; i++ ) //this should be bad but didn't saw how you get clients style yet
+				{
+					if( Timer_StyleHasSetting( i, "segment" ) )
+					{
+						DoesSegment[param1] = true;
+					}
+				}
+				if( Timer_IsClientInTagTeam( param1 ) ||  DoesSegment[param1] )
+				{
 				LoadCheckpoint( param1, AUTO_SELECT_CP );
+				}
+				else
+				{
+					Timer_PrintToChat( param1, "{primary}You style is not segment!" );
+				}
 			}
 			OpenCPMenu( param1 );
 		}
@@ -578,8 +595,24 @@ public Action Command_Tele( int client, int args )
 		Timer_ReplyToCommand( client, "{primary}Invalid checkpoint {secondary}%i", index );
 		return Plugin_Handled;
 	}
-	
+	int maxstyles;
+	bool DoesSegment[MAXPLAYERS+1] = false;
+	for( int i = 0; i < maxstyles; i++ ) //same here z.z
+	{
+		if( Timer_StyleHasSetting( i, "segment" ) )
+		{
+			DoesSegment[client] = true;
+		}
+	}
+	if( Timer_IsClientInTagTeam( client ) ||  DoesSegment[client] )
+	{
 	LoadCheckpoint( client, index );
+	}
+	else
+	{
+		Timer_PrintToChat( client, "{primary}You style is not segment!" );
+	}
+
 
 	return Plugin_Handled;
 }
