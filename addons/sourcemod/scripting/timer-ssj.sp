@@ -110,7 +110,9 @@ public void OnPluginStart()
 	g_hCookieJumpInterval = RegClientCookie( "sm_ssj_jumpinterval", "SSJ jump interval", CookieAccess_Protected );
 	g_hCookieSSJEnabled = RegClientCookie( "sm_ssj_enabled", "SSJ enabled", CookieAccess_Protected );
 	g_hCookieSSJRepeat = RegClientCookie( "sm_ssj_repeat", "SSJ repeat every interval", CookieAccess_Protected );
-
+	
+	HookEvent("player_jump", OnJump);
+	
 	RegConsoleCmd( "sm_ssj", Command_SSJ );
 	
 	for( int i = 1; i <= MaxClients; i++ )
@@ -175,7 +177,6 @@ public void Timer_OnPlayerRunCmdPost( int client, int buttons, int impulse, cons
 		}
 		if( buttons & IN_JUMP && g_nGroundTicks[client] > 0 )
 		{
-			OnJump( client );
 			GetStats( client, vel, angles, deltayaw );
 			g_nGroundTicks[client] = 0;
 		}
@@ -215,7 +216,7 @@ public Action Hook_OnTouch( int client, int entity )
 	}
 }
 
-void OnJump( int client )
+public void OnJump( Event event, const char[] name, bool useless )
 {
 	float pos[3];
 	GetClientAbsOrigin( client, pos );
