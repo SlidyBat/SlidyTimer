@@ -44,6 +44,8 @@ char		g_cCurrentMap[PLATFORM_MAX_PATH];
 Handle g_hCookie_HidePlayers;
 bool g_bHidePlayers[MAXPLAYERS + 1];
 
+float g_fLastValidPosition[MAXPLAYERS + 1][3];
+
 public Plugin myinfo = 
 {
 	name = "Slidy's Timer - Misc",
@@ -71,6 +73,8 @@ public void OnPluginStart()
 	RegConsoleCmd( "sm_spec", Command_Spec );
 	RegConsoleCmd( "sm_tpto", Command_TeleportTo );
 	RegConsoleCmd( "sm_hide", Command_Hide );
+	RegConsoleCmd( "sm_lost", Command_Lost );
+	
 	RegConsoleCmd( "sm_knife", Command_Knife );
 	RegConsoleCmd( "sm_glock", Command_Glock );
 	RegConsoleCmd( "sm_usp", Command_USP );
@@ -167,9 +171,21 @@ public void OnClientCookiesCached( int client )
 	}
 }
 
-public void OnClientDisconnect( int client )
+public Action OnPlayerRunCmd( int client )
 {
-	SDKUnhook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
+	if( IsFakeClient( client ) )
+	{
+		return Plugin_Continue;
+	}
+	
+	float pos[3];
+	GetClientAbsOrigin( client, pos );
+	if( !TR_PointOutsideWorld( pos ) )
+	{
+		g_fLastValidPosition[client] = pos;
+	}
+	
+	return Plugin_Continue;
 }
 
 public Action CS_OnTerminateRound( float& delay, CSRoundEndReason& reason )
@@ -450,6 +466,14 @@ public Action Command_Hide( int client, int args )
 	g_bHidePlayers[client] = !g_bHidePlayers[client];
 	SetClientCookieBool( client, g_hCookie_HidePlayers, g_bHidePlayers[client] );
 	Timer_ReplyToCommand( client, "{primary}Players now: {secondary}%s", g_bHidePlayers[client] ? "Hidden" : "Visible" );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Lost( int client, int args )
+{
+	TeleportEntity( client, g_fLastValidPosition[client], NULL_VECTOR, NULL_VECTOR );
+	Timer_ReplyToCommand( client, "{primary}Teleported to last valid position" );
 	
 	return Plugin_Handled;
 }
