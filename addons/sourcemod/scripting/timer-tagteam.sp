@@ -600,6 +600,7 @@ void CreateTeam( int[] members, int memberCount, int style )
 		g_iTeamIndex[members[i]] = teamindex;
 		
 		g_bAllowStyleChange[members[i]] = true;
+		Timer_ClearClientCheckpoints( members[i] );
 		Timer_SetClientStyle( members[i], style );
 	}
 	
@@ -1914,6 +1915,7 @@ void PassToNext( int client, int next, any checkpoint[eCheckpoint], bool usecp =
 		Timer_TeleportClientToCheckpoint( next, 0 );
 	}
 	Timer_OpenCheckpointsMenu( next );
+	Timer_OpenCheckpointsMenu( client );
 }
 
 void PrintToTeam( int teamidx, char[] message, any ... )

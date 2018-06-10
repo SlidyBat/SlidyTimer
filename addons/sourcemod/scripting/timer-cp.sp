@@ -141,6 +141,13 @@ public void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle )
 
 void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 {
+	int specmode = GetEntProp( client, Prop_Send, "m_iObserverMode" );
+	if( IsClientObserver( client ) && (specmode < 3 || specmode > 5) )
+	{
+		Timer_PrintToChat( client, "{primary}Can't save checkpoint without a target!" );
+		return;
+	}
+
 	int target = GetClientObserverTarget( client );
 	if( !( 0 < target <= MaxClients ) )
 	{
@@ -185,6 +192,11 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_Gravity] = GetEntityGravity( target );
 	cp[CP_LaggedMovement] = GetEntPropFloat( target, Prop_Data, "m_flLaggedMovementValue" );
 	cp[CP_MoveType] = GetEntityMoveType( target );
+	// dont let the player get into noclip without timer knowing
+	if( cp[CP_MoveType] == MOVETYPE_NOCLIP )
+	{
+		cp[CP_MoveType] = MOVETYPE_WALK;
+	}
 	cp[CP_Flags] = GetEntityFlags( target ) | FL_CLIENT | FL_AIMTARGET;
 	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));

@@ -373,6 +373,8 @@ void TeleportClientToZone( int client, int zoneType, int zoneTrack, int subindex
 	
 	TeleportEntity( client, spawn, NULL_VECTOR, view_as<float>( { 0.0, 0.0, 0.0 } ) );
 	
+	SetEntityMoveType( client, MOVETYPE_WALK );
+	
 	Call_StartForward( g_hForward_OnClientTeleportToZonePost );
 	Call_PushCell( client );
 	Call_PushCell( zoneType );
