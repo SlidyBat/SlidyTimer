@@ -472,6 +472,8 @@ public Action Command_Hide( int client, int args )
 
 public Action Command_Lost( int client, int args )
 {
+	Timer_StopTimer( client );
+	Timer_BlockTimer( client, 1 );
 	TeleportEntity( client, g_fLastValidPosition[client], NULL_VECTOR, NULL_VECTOR );
 	Timer_ReplyToCommand( client, "{primary}Teleported to last valid position" );
 	
