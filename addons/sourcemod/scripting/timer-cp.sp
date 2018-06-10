@@ -403,22 +403,11 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 			}
 			else
 			{
-				int maxstyles;
-				bool DoesSegment[MAXPLAYERS+1] = false;
-				for( int i = 0; i < maxstyles; i++ ) //this should be bad but didn't saw how you get clients style yet
+				int mystyle = Timer_GetClientStyle( param1 );
+				if( mystyle != 13 || Timer_IsClientInTagTeam( param1 ) )
 				{
-					if( Timer_StyleHasSetting( i, "segment" ) )
-					{
-						DoesSegment[param1] = true;
-					}
-				}
-				if( Timer_IsClientInTagTeam( param1 ) ||  DoesSegment[param1] )
-				{
-				LoadCheckpoint( param1, AUTO_SELECT_CP );
-				}
-				else
-				{
-					Timer_PrintToChat( param1, "{primary}You style is not segment!" );
+					Timer_SetClientStyle( param1, 13 );
+					LoadCheckpoint( param1, AUTO_SELECT_CP );
 				}
 			}
 			OpenCPMenu( param1 );
@@ -595,24 +584,14 @@ public Action Command_Tele( int client, int args )
 		Timer_ReplyToCommand( client, "{primary}Invalid checkpoint {secondary}%i", index );
 		return Plugin_Handled;
 	}
-	int maxstyles;
-	bool DoesSegment[MAXPLAYERS+1] = false;
-	for( int i = 0; i < maxstyles; i++ ) //same here z.z
+	
+	int mystyle = Timer_GetClientStyle( client );
+	
+	if( mystyle != 13 || Timer_IsClientInTagTeam( client ) )
 	{
-		if( Timer_StyleHasSetting( i, "segment" ) )
-		{
-			DoesSegment[client] = true;
-		}
+		Timer_SetClientStyle( client, 13 );
+		LoadCheckpoint( client, index );
 	}
-	if( Timer_IsClientInTagTeam( client ) ||  DoesSegment[client] )
-	{
-	LoadCheckpoint( client, index );
-	}
-	else
-	{
-		Timer_PrintToChat( client, "{primary}You style is not segment!" );
-	}
-
 
 	return Plugin_Handled;
 }
