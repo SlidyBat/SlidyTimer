@@ -36,6 +36,8 @@ enum Collision_Group_t
 	COLLISION_GROUP_NPC_SCRIPTED		// USed for NPCs in scripts that should not collide with each other
 };
 
+bool g_bLateLoad;
+
 ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
 
@@ -54,6 +56,8 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
 	RegPluginLibrary( "timer-misc" );
+	
+	g_bLateLoad = late;
 	
 	return APLRes_Success;
 }
@@ -82,6 +86,22 @@ public void OnPluginStart()
 	HookUserMessage( GetUserMessageId( "SayText2" ), UserMsg_SayText2, true );
 	AddCommandListener( HookEvent_Chat, "say" );
 	AddCommandListener( HookEvent_Chat, "say_team" );
+	
+	if( g_bLateLoad )
+	{
+		OnMapStart();
+		for( int i = 1; i <= MaxClients; i++ )
+		{
+			if( IsClientInGame( i ) )
+			{
+				OnClientPutInServer( i );
+				if( AreClientCookiesCached( i ) )
+				{
+					OnClientCookiesCached( i );
+				}
+			}
+		}
+	}
 }
 
 public void OnMapStart()
@@ -131,7 +151,7 @@ public void OnMapStart()
 	SetConVars();
 }
 
-public void OnClientPostAdminCheck( int client )
+public void OnClientPutInServer( int client )
 {
 	SDKHook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
 	SDKHook( client, SDKHook_WeaponDropPost, Hook_OnWeaponDropPostCallback );
