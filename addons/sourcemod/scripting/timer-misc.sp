@@ -67,6 +67,9 @@ public void OnPluginStart()
 	RegConsoleCmd( "sm_spec", Command_Spec );
 	RegConsoleCmd( "sm_tpto", Command_TeleportTo );
 	RegConsoleCmd( "sm_hide", Command_Hide );
+	RegConsoleCmd( "sm_knife", Command_Knife );
+	RegConsoleCmd( "sm_glock", Command_Glock );
+	RegConsoleCmd( "sm_usp", Command_USP );
 	
 	HookEvent( "game_end", HookEvent_GameEnd, EventHookMode_Pre );
 	
@@ -431,10 +434,59 @@ public Action Command_Hide( int client, int args )
 	return Plugin_Handled;
 }
 
+public Action Command_Knife( int client, int args )
+{
+	TryGiveItem( client, "weapon_knife", CS_SLOT_KNIFE );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Glock( int client, int args )
+{
+	TryGiveItem( client, "weapon_glock", CS_SLOT_SECONDARY );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_USP( int client, int args )
+{
+	TryGiveItem( client, "weapon_usp_silencer", CS_SLOT_SECONDARY );
+	
+	return Plugin_Handled;
+}
+
+public void TryGiveItem( int client, char[] itemname, int slot )
+{
+	if( IsPlayerAlive( client ) )
+	{
+		int weapon = GetPlayerWeaponSlot( client, slot );
+
+		if( weapon != -1 ) 
+		{
+			RemovePlayerItem( client, weapon );
+			RemoveEdict( weapon );
+		}
+
+		weapon = GivePlayerItem( client, itemname );
+		FakeClientCommand( client, "use %s", itemname );
+
+		if( slot != CS_SLOT_KNIFE )
+		{
+			static int offset = -1;
+			if( offset == -1 )
+			{
+				offset = FindSendPropInfo( "CCSPlayer", "m_iAmmo" );
+			}
+			int ammo = GetEntProp( weapon, Prop_Send, "m_iPrimaryAmmoType" );
+			SetEntData( client, offset + (ammo * 4), 255, 4, true );
+
+			SetEntProp( weapon, Prop_Send, "m_iPrimaryReserveAmmoCount", 255 );
+		}
+	}
+}
+
 public Action Command_TeleportTo( int client, int args )
 {
-	Timer_StopTimer( client );
-
 	if( args )
 	{
 		char arg[MAX_NAME_LENGTH];
@@ -453,6 +505,8 @@ public void TeleportTo( int client, int target )
 {
 	if( IsClientInGame( target ) && IsPlayerAlive( target ) )
 	{
+		Timer_StopTimer( client );
+	
 		float pos[3];
 		GetClientAbsOrigin( target, pos );
 		
