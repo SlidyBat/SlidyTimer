@@ -160,6 +160,7 @@ public void OnMapStart()
 	g_hHudSynchronizer = CreateHudSynchronizer();
 	
 	CreateTimer( 0.1, Timer_DrawHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE );
+	CreateTimer( 0.75, Timer_DrawHudUpperleft, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE );
 }
 
 public void OnClientCookiesCached( int client )
@@ -426,6 +427,21 @@ public Action Timer_DrawHud( Handle timer )
 	g_iCount %= 25;
 }
 
+public Action Timer_DrawHudUpperleft( Handle timer )
+{
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( !IsClientInGame( i ) || IsFakeClient( i ) )
+		{
+			continue;
+		}
+		if( g_iHudSettings[i] & HUD_TOPLEFT )
+		{
+			DrawTopLeftOverlay( i );
+		}
+	}
+}
+
 void DrawPanel( int client )
 {
 	int target = GetClientObserverTarget( client );
@@ -545,7 +561,7 @@ void DrawTopLeftOverlay( int client )
 			FormatEx( message, sizeof(message), "WR: %s (%s)", sWRTime, sWRName );
 		}
 
-		SetHudTextParams( 0.01, 0.01, 2.5, 255, 255, 255, 255 );
+		SetHudTextParams( 0.01, 0.01, 1.5, 255, 255, 255, 255 );
 		ShowSyncHudText( client, g_hHudSynchronizer, message );
 	}
 }
