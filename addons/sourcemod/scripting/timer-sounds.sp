@@ -33,6 +33,21 @@ public Plugin myinfo =
 	url = ""
 }
 
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	g_bLateLoad = late;
+
+	return APLRes_Success;
+}
+
+public void OnPluginStart()
+{
+	if( g_bLateLoad )
+	{
+		OnMapStart();
+	}
+}
+
 public void OnMapStart()
 {
 	PrecacheSounds();
