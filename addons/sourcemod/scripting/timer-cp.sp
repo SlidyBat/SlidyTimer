@@ -54,8 +54,11 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_OpenCheckpointsMenu", Native_OpenCheckpointsMenu );
 	CreateNative( "Timer_GetTotalCheckpoints", Native_GetTotalCheckpoints );
 	CreateNative( "Timer_GetClientCheckpoint", Native_GetClientCheckpoint );
+	CreateNative( "Timer_SetClientCheckpoint", Native_SetClientCheckpoint );
+	CreateNative( "Timer_TeleportClientToCheckpoint", Native_TeleportClientToCheckpoint );
 	CreateNative( "Timer_ClearClientCheckpoints", Native_ClearClientCheckpoints );
 
 	RegPluginLibrary( "timer-cp" );
@@ -65,10 +68,10 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
-	g_hForward_OnCPSavedPre = CreateForward( ET_Event, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnCPSavedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
-	g_hForward_OnCPLoadedPre = CreateForward( ET_Event, Param_Cell, Param_Cell );
-	g_hForward_OnCPLoadedPost = CreateForward( ET_Ignore, Param_Cell, Param_Cell );
+	g_hForward_OnCPSavedPre = CreateGlobalForward( "Timer_OnCPSavedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPSavedPost = CreateGlobalForward( "Timer_OnCPSavedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPre = CreateGlobalForward( "Timer_OnCPLoadedPre", ET_Event, Param_Cell, Param_Cell );
+	g_hForward_OnCPLoadedPost = CreateGlobalForward( "Timer_OnCPLoadedPost", ET_Ignore, Param_Cell, Param_Cell );
 
 	g_aTargetnames = new ArrayList( ByteCountToCells( 32 ) );
 	g_smTargetnames = new StringMap();
@@ -99,9 +102,12 @@ public void OnClientPutInServer( int client )
 	int length = g_aCheckpoints[client].Length;
 	for( int i = 0; i < length; i++ )
 	{
-		delete view_as<ArrayList>(g_aCheckpoints[client].Get( i, view_as<int>(CP_ReplayFrames) ));
+		any cp[eCheckpoint];
+		g_aCheckpoints[client].GetArray( i, cp[0] );
+		delete cp[CP_ReplayFrames];
 	}
 	g_aCheckpoints[client].Clear();
+	
 	g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
 	g_bUsedCP[client] = false;
 	g_bCPMenuOpen[client] = false;
@@ -112,9 +118,9 @@ public Action Timer_OnTimerStart( int client )
 	g_bUsedCP[client] = false;
 }
 
-public Action Timer_OnFinishPre( int client, int track, int style, float time, float pbtime, float wrtime )
+public Action Timer_OnTimerFinishPre( int client, int track, int style, float time )
 {
-	Timer_DebugPrint( "Timer_OnFinishPre: %N style=%i usedcp=%s allowssegment=%s", client, style, g_bUsedCP[client] ? "true" : "false", Timer_StyleHasSetting( style, "segment" ) ? "true" : "false" );
+	Timer_DebugPrint( "Timer_OnTimerFinishPre: %N style=%i usedcp=%s allowssegment=%s", client, style, g_bUsedCP[client] ? "true" : "false", Timer_StyleHasSetting( style, "segment" ) ? "true" : "false" );
 	if( g_bUsedCP[client] && !Timer_StyleHasSetting( style, "segment" ) ) // only save time/replay if its a segment style
 	{
 		Timer_PrintToChat( client, "{primary}Finished in {secondary}%.2fs {primary}(Practice Mode)", time );
@@ -135,6 +141,13 @@ public void Timer_OnStyleChangedPost( int client, int oldstyle, int newstyle )
 
 void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 {
+	int specmode = GetEntProp( client, Prop_Send, "m_iObserverMode" );
+	if( IsClientObserver( client ) && (specmode < 3 || specmode > 5) )
+	{
+		Timer_PrintToChat( client, "{primary}Can't save checkpoint without a target!" );
+		return;
+	}
+
 	int target = GetClientObserverTarget( client );
 	if( !( 0 < target <= MaxClients ) )
 	{
@@ -179,6 +192,11 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_Gravity] = GetEntityGravity( target );
 	cp[CP_LaggedMovement] = GetEntPropFloat( target, Prop_Data, "m_flLaggedMovementValue" );
 	cp[CP_MoveType] = GetEntityMoveType( target );
+	// dont let the player get into noclip without timer knowing
+	if( cp[CP_MoveType] == MOVETYPE_NOCLIP )
+	{
+		cp[CP_MoveType] = MOVETYPE_WALK;
+	}
 	cp[CP_Flags] = GetEntityFlags( target ) | FL_CLIENT | FL_AIMTARGET;
 	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
@@ -297,7 +315,10 @@ public void DeleteCheckpoint( int client, int index )
 		g_iSelectedCheckpoint[client]--;
 	}
 
-	delete view_as<ArrayList>(g_aCheckpoints[client].Get( index, view_as<int>(CP_ReplayFrames) ));
+	any cp[eCheckpoint];
+	g_aCheckpoints[client].GetArray( index, cp[0] );
+	delete cp[CP_ReplayFrames];
+	
 	g_aCheckpoints[client].Erase( index );
 }
 
@@ -606,6 +627,14 @@ public Action Command_Delete( int client, int args )
 
 // natives
 
+public int Native_OpenCheckpointsMenu( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	OpenCPMenu( client );
+	
+	return 1;
+}
+
 public int Native_GetTotalCheckpoints( Handle handler, int numParams )
 {
 	int client = GetNativeCell( 1 );
@@ -622,9 +651,41 @@ public int Native_GetClientCheckpoint( Handle handler, int numParams )
 	return 1;
 }
 
+public int Native_SetClientCheckpoint( Handle handler, int numParams )
+{
+	any cp[eCheckpoint];
+	GetNativeArray( 3, cp, sizeof(cp) );
+	
+	int client = GetNativeCell( 1 );
+	
+	int idx = GetNativeCell( 2 );
+	if( idx == AUTO_SELECT_CP )
+	{
+		idx = g_aCheckpoints[client].Length;
+		g_aCheckpoints[client].Push( 0 );
+	}
+	
+	g_iSelectedCheckpoint[client] = idx;
+	g_aCheckpoints[client].SetArray( idx, cp );
+	
+	return 1;
+}
+
+public int Native_TeleportClientToCheckpoint( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	g_iSelectedCheckpoint[client] = GetNativeCell( 2 );
+	LoadCheckpoint( client, AUTO_SELECT_CP );
+	
+	return 1;
+}
+
 public int Native_ClearClientCheckpoints( Handle handler, int numParams )
 {
-	g_aCheckpoints[GetNativeCell( 1 )].Clear();
+	int client = GetNativeCell( 1 );
+	
+	g_aCheckpoints[client].Clear();
+	g_iSelectedCheckpoint[client] = 0;
 	
 	return 1;
 }

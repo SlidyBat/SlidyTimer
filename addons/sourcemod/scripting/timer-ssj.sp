@@ -17,10 +17,11 @@ enum (<<= 1)
 	SSJ_GAIN,
 	SSJ_EFFICIENCY,
 	SSJ_DELTAHEIGHT,
+	SSJ_TIME,
 	SSJ_DELTATIME
 }
 
-#define TOTAL_SSJ_SETTINGS 10
+#define TOTAL_SSJ_SETTINGS 11
 #define DEFAULT_SSJ_SETTINGS SSJ_PRESPEED | SSJ_JUMPNUMBER | SSJ_SPEED | SSJ_SYNC | SSJ_DELTASPEED | SSJ_DELTATIME
 
 #define MAX_SSJ_JUMP_INTERVAL 25
@@ -52,6 +53,7 @@ char g_cSSJSettingNames[TOTAL_SSJ_SETTINGS][] =
 	"Gain",
 	"Efficiency",
 	"Δ Height",
+	"Time",
 	"Δ Time"
 };
 
@@ -62,6 +64,7 @@ enum SSJStats
 	SSJ_Tick,
 	SSJ_SyncedTicks,
 	SSJ_StrafedTicks,
+	Float:SSJ_Displacement,
 	Float:SSJ_Distance,
 	Float:SSJ_TotalGain
 }
@@ -81,8 +84,10 @@ Handle g_hCookieSSJRepeat;
 bool g_bSSJRepeat[MAXPLAYERS + 1];
 
 int g_nJumps[MAXPLAYERS + 1];
+int g_nTickCount[MAXPLAYERS + 1];
 int g_nSyncedTicks[MAXPLAYERS + 1];
 int g_nStrafedTicks[MAXPLAYERS + 1];
+float g_fDisplacement[MAXPLAYERS + 1][3];
 
 bool g_bTouchesWall[MAXPLAYERS + 1];
 int g_nTouchTicks[MAXPLAYERS + 1];
@@ -107,12 +112,25 @@ public void OnPluginStart()
 	g_hCookieSSJRepeat = RegClientCookie( "sm_ssj_repeat", "SSJ repeat every interval", CookieAccess_Protected );
 
 	RegConsoleCmd( "sm_ssj", Command_SSJ );
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) && AreClientCookiesCached( i ) )
+		{
+			OnClientPutInServer( i );
+			OnClientCookiesCached( i );
+		}
+	}
 }
 
 public void OnClientPutInServer( int client )
 {
 	SDKHook( client, SDKHook_Touch, Hook_OnTouch );
+	ResetStats( client );
+}
 
+public void OnClientCookiesCached( int client )
+{
 	if( !GetClientCookieInt( client, g_hCookieSettings, g_Settings[client] ) )
 	{
 		g_Settings[client] = DEFAULT_SSJ_SETTINGS;
@@ -136,11 +154,9 @@ public void OnClientPutInServer( int client )
 		g_bSSJRepeat[client] = false;
 		SetClientCookieBool( client, g_hCookieSSJRepeat, false );
 	}
-
-	ResetStats( client );
 }
 
-public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
+public void Timer_OnPlayerRunCmdPost( int client, int buttons, int impulse, const float vel[3], const float angles[3] )
 {
 	static float s_LastAngles[MAXPLAYERS + 1][3];
 
@@ -206,12 +222,13 @@ void OnJump( int client )
 
 	any stats[SSJStats];
 	stats[SSJ_Speed] = GetClientSpeed( client );
-	stats[SSJ_Tick] = GetGameTickCount();
+	stats[SSJ_Tick] = g_nTickCount[client];
 	stats[SSJ_Pos][0] = pos[0];
 	stats[SSJ_Pos][1] = pos[1];
 	stats[SSJ_Pos][2] = pos[2];
 	stats[SSJ_SyncedTicks] = g_nSyncedTicks[client];
 	stats[SSJ_StrafedTicks] = g_nStrafedTicks[client];
+	stats[SSJ_Displacement] = GetVectorLength( g_fDisplacement[client] );
 	stats[SSJ_Distance] = g_fDistanceTravelled[client];
 	stats[SSJ_TotalGain] = g_fTotalGain[client];
 
@@ -262,14 +279,17 @@ void ResetStats( int client )
 	g_aJumpStats[client] = new ArrayList( view_as<int>(SSJStats) );
 
 	g_nJumps[client] = 0;
+	g_nTickCount[client] = 0;
 	g_nSyncedTicks[client] = 0;
 	g_nStrafedTicks[client] = 0;
 	g_fDistanceTravelled[client] = 0.0;
 	g_fTotalGain[client] = 0.0;
 }
 
-void GetStats( int client, float vel[3], float angles[3], float deltayaw )
+void GetStats( int client, const float vel[3], const float angles[3], float deltayaw )
 {
+	g_nTickCount[client]++;
+
 	if( deltayaw != 0.0 )
 	{
 		g_nStrafedTicks[client]++;
@@ -279,8 +299,11 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 	GetEntPropVector( client, Prop_Data, "m_vecAbsVelocity", absvel );
 	absvel[2] = 0.0;
 
-	g_fDistanceTravelled[client] += GetVectorLength( absvel ) * GetTickInterval() * GetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue");
-
+	float timescale = GetTickInterval() * GetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue");
+	g_fDistanceTravelled[client] += GetVectorLength( absvel ) * timescale;
+	g_fDisplacement[client][0] += absvel[0] * timescale;
+	g_fDisplacement[client][1] += absvel[1] * timescale;
+	
 	float fore[3], side[3], wishvel[3], wishdir[3];
 	
 	GetAngleVectors(angles, fore, side, NULL_VECTOR);
@@ -295,9 +318,9 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 		wishvel[i] = fore[i] * vel[0] + side[i] * vel[1];
 	}
 
-	float maxspeed = GetEntPropFloat(client, Prop_Send, "m_flMaxspeed");
+	float maxspeed = GetEntPropFloat( client, Prop_Send, "m_flMaxspeed" );
 	
-	float wishspeed = NormalizeVector(wishvel, wishdir);
+	float wishspeed = NormalizeVector( wishvel, wishdir );
 	if( wishspeed > maxspeed && maxspeed != 0.0 )
 	{
 		wishspeed = maxspeed;
@@ -309,10 +332,10 @@ void GetStats( int client, float vel[3], float angles[3], float deltayaw )
 		float wishspd = (wishspeed > 30.0) ? 30.0 : wishspeed;
 		
 		float currentspeed = GetVectorDotProduct( absvel, wishdir );
-		if( wishspd - currentspeed > 0.0 )
+		if( currentspeed <= 30.0 )
 		{
 			g_nSyncedTicks[client]++;
-			gaincoeff = (wishspd - currentspeed) / wishspd;
+			gaincoeff = (wishspd - FloatAbs( currentspeed )) / wishspd;
 		}
 		if( g_bTouchesWall[client] && g_nTouchTicks[client] && gaincoeff > 0.5 )
 		{
@@ -353,7 +376,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	//"Δ Height",
 	//"Δ Time"
 
-	int tickcount = (stats[SSJ_Tick] - lastStats[SSJ_Tick]) + 1;
+	int tickcount = stats[SSJ_Tick] - lastStats[SSJ_Tick];
 	float gain = (stats[SSJ_TotalGain] - lastStats[SSJ_TotalGain]) / tickcount;
 
 	if( g_Settings[client] & SSJ_JUMPNUMBER )
@@ -387,18 +410,7 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	}
 	if( g_Settings[client] & SSJ_EFFICIENCY )
 	{
-		float startpos[3];
-		startpos[0] = lastStats[SSJ_Pos][0];
-		startpos[1] = lastStats[SSJ_Pos][1];
-
-		float endpos[3];
-		endpos[0] = stats[SSJ_Pos][0];
-		endpos[1] = stats[SSJ_Pos][1];
-
-		float displacement[3];
-		SubtractVectors( endpos, startpos, displacement );
-		
-		float displacementLength = GetVectorLength( displacement );
+		float displacementLength = stats[SSJ_Displacement] - lastStats[SSJ_Displacement];
 		float distanceTravelled = stats[SSJ_Distance] - lastStats[SSJ_Distance];
 		if( displacementLength > distanceTravelled )
 		{
@@ -413,6 +425,10 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 	{
 		float deltaheight = stats[SSJ_Pos][2] - lastStats[SSJ_Pos][2];
 		Format( message, sizeof(message), "%s{primary}Δ Height{white}: {secondary}%s%.2f {white}| ", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
+	}
+	if( g_Settings[client] & SSJ_TIME )
+	{
+		Format( message, sizeof(message), "%s{primary}Time{white}: {secondary}%.2f {white}| ", message, Timer_GetClientCurrentTime( target ) );
 	}
 	if( g_Settings[client] & SSJ_DELTATIME )
 	{

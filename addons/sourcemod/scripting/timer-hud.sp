@@ -202,7 +202,7 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	}
 	else
 	{
-		hudtype = (Timer_GetClientZoneType( client ) == Zone_Start) ? HudType_StartZone : HudType_Timing;
+		hudtype = (Timer_GetClientZoneType( target ) == Zone_Start) ? HudType_StartZone : HudType_Timing;
 	}
 
 	static char hudtext[256];
@@ -260,18 +260,6 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 		{
 			bStartedElement = true;
 		}
-	}
-	
-	static char buffer[64];
-	
-	for( int i = 1; i <= MaxClients; i++ )
-	{
-		if( i == client || !IsClientInGame( i ) || IsFakeClient( i ) || !IsClientObserver( i ) || GetEntPropEnt( i, Prop_Send, "m_hObserverTarget" ) != client )
-		{
-			continue;
-		}
-		
-		PrintHintText( i, buffer );
 	}
 	
 	PrintHintText( client, hudtext );
@@ -499,7 +487,12 @@ void DrawPanel( int client )
 			panel.DrawItem( "", ITEMDRAW_RAWLINE );
 		
 			int buttons = GetClientButtons( target );
-			FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s", ( buttons & IN_DUCK ) > 0 ? "DUCK":"     ", ( buttons & IN_FORWARD ) > 0? "W":"-", ( buttons & IN_MOVELEFT ) > 0? "A":"-", ( buttons & IN_BACK ) > 0? "S":"-", ( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
+			FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s",
+											( buttons & IN_DUCK ) > 0 ? "DUCK":"     ",
+											( buttons & IN_FORWARD ) > 0? "W":"-",
+											( buttons & IN_MOVELEFT ) > 0? "A":"-",
+											( buttons & IN_BACK ) > 0? "S":"-",
+											( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
 		
 			panel.DrawItem( buffer, ITEMDRAW_RAWLINE );
 		}
@@ -550,7 +543,7 @@ void DrawTopLeftOverlay( int client )
 			char sPBTime[16];
 			Timer_FormatTime( pbtime, sPBTime, sizeof(sPBTime) );
 			
-			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientRank( target, track, style ) );
+			FormatEx( message, sizeof(message), "WR: %s (%s)\nPB: %s (#%i)", sWRTime, sWRName, sPBTime, Timer_GetClientMapRank( target, track, style ) );
 		}
 		else
 		{

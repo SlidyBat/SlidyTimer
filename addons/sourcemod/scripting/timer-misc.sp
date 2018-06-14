@@ -1,6 +1,7 @@
 #include <sourcemod>
 #include <sdkhooks>
 #include <sdktools>
+#include <clientprefs>
 #include <cstrike>
 #include <slidy-timer>
 #include <menu_targeting>
@@ -35,8 +36,15 @@ enum Collision_Group_t
 	COLLISION_GROUP_NPC_SCRIPTED		// USed for NPCs in scripts that should not collide with each other
 };
 
+bool g_bLateLoad;
+
 ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
+
+Handle g_hCookie_HidePlayers;
+bool g_bHidePlayers[MAXPLAYERS + 1];
+
+float g_fLastValidPosition[MAXPLAYERS + 1][3];
 
 public Plugin myinfo = 
 {
@@ -51,14 +59,25 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 {
 	RegPluginLibrary( "timer-misc" );
 	
+	g_bLateLoad = late;
+	
 	return APLRes_Success;
 }
 
 public void OnPluginStart()
 {
+	g_hCookie_HidePlayers = RegClientCookie( "sm_timer_misc_hideplayers", "Hides other players", CookieAccess_Public );
+
 	g_cvCreateSpawnPoints = CreateConVar( "sm_create_spawnpoints", "10", "Number of spawn points to create", _, true, 0.0, true, 2048.0 );
 
 	RegConsoleCmd( "sm_spec", Command_Spec );
+	RegConsoleCmd( "sm_tpto", Command_TeleportTo );
+	RegConsoleCmd( "sm_hide", Command_Hide );
+	RegConsoleCmd( "sm_lost", Command_Lost );
+	
+	RegConsoleCmd( "sm_knife", Command_Knife );
+	RegConsoleCmd( "sm_glock", Command_Glock );
+	RegConsoleCmd( "sm_usp", Command_USP );
 	
 	HookEvent( "game_end", HookEvent_GameEnd, EventHookMode_Pre );
 	
@@ -71,6 +90,22 @@ public void OnPluginStart()
 	HookUserMessage( GetUserMessageId( "SayText2" ), UserMsg_SayText2, true );
 	AddCommandListener( HookEvent_Chat, "say" );
 	AddCommandListener( HookEvent_Chat, "say_team" );
+	
+	if( g_bLateLoad )
+	{
+		OnMapStart();
+		for( int i = 1; i <= MaxClients; i++ )
+		{
+			if( IsClientInGame( i ) )
+			{
+				OnClientPutInServer( i );
+				if( AreClientCookiesCached( i ) )
+				{
+					OnClientCookiesCached( i );
+				}
+			}
+		}
+	}
 }
 
 public void OnMapStart()
@@ -120,15 +155,37 @@ public void OnMapStart()
 	SetConVars();
 }
 
-public void OnClientPostAdminCheck( int client )
+public void OnClientPutInServer( int client )
 {
 	SDKHook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
 	SDKHook( client, SDKHook_WeaponDropPost, Hook_OnWeaponDropPostCallback );
+	SDKHook( client, SDKHook_SetTransmit, Hook_OnTransmit );
 }
 
-public void OnClientDisconnect( int client )
+public void OnClientCookiesCached( int client )
 {
-	SDKUnhook( client, SDKHook_OnTakeDamage, Hook_OnTakeDamageCallback );
+	if( !GetClientCookieBool( client, g_hCookie_HidePlayers, g_bHidePlayers[client] ) )
+	{
+		g_bHidePlayers[client] = false;
+		SetClientCookieBool( client, g_hCookie_HidePlayers, false );
+	}
+}
+
+public Action OnPlayerRunCmd( int client )
+{
+	if( IsFakeClient( client ) )
+	{
+		return Plugin_Continue;
+	}
+	
+	float pos[3];
+	GetClientAbsOrigin( client, pos );
+	if( !TR_PointOutsideWorld( pos ) )
+	{
+		g_fLastValidPosition[client] = pos;
+	}
+	
+	return Plugin_Continue;
 }
 
 public Action CS_OnTerminateRound( float& delay, CSRoundEndReason& reason )
@@ -162,6 +219,27 @@ public Action Hook_OnTakeDamageCallback( int victim, int& attacker, int& inflict
 	return Plugin_Handled;
 }
 
+public Action Hook_OnTransmit( int entity, int client )
+{
+	if( entity != client && g_bHidePlayers[client] )
+	{
+		if( IsClientObserver( client ) )
+		{
+			int target = GetClientObserverTarget( client );
+			if( target != -1 && target != entity )
+			{
+				return Plugin_Handled;
+			}
+		}
+		else
+		{
+			return Plugin_Handled;
+		}
+	}
+	
+	return Plugin_Continue;
+}
+
 public void Hook_OnWeaponDropPostCallback( int client, int weapon )
 {
 	if( IsValidEntity( weapon ) )
@@ -180,7 +258,7 @@ public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBr
 		
 		if( !IsFakeClient( client ) )
 		{
-			RequestFrame( HideRadar, client );
+			RequestFrame( HideRadar, GetClientUserId( client ) );
 
 			SendConVarValue( client, FindConVar( "mp_playercashawards" ), "0" );
 			SendConVarValue( client, FindConVar( "mp_teamcashawards" ), "0" );
@@ -203,7 +281,7 @@ public Action HookEvent_PlayerDisconnect( Event event, const char[] name, bool d
 	
 	int client = GetClientOfUserId( event.GetInt( "userid" ) );
 
-	if( client > 0 && IsFakeClient( client ) )
+	if( !( client > 0 ) || IsFakeClient( client ) )
 		return Plugin_Continue;
 		
 	char buffer[256];
@@ -315,8 +393,13 @@ public Action HookEvent_Chat( int client, char[] command, int args )
 			buffer[i] = CharToLower( buffer[i + 1] );
 		}
 
-		FakeClientCommand( client, "sm_%s", buffer );
-		return Plugin_Handled;
+		Format( buffer, sizeof(buffer), "sm_%s", buffer );
+		
+		if( CommandExists( buffer ) )
+		{
+			FakeClientCommand( client, buffer );
+			return Plugin_Handled;
+		}
 	}
 
 	return Plugin_Continue;
@@ -335,8 +418,14 @@ public Action Timer_ClearEntity( Handle timer, int entref )
 	}
 }
 
-public void HideRadar( int client )
+public void HideRadar( int userid )
 {
+	int client = GetClientOfUserId( userid );
+	if( !( 0 < client <= MaxClients ) )
+	{
+		return;
+	}
+	
 	SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
 }
 
@@ -365,6 +454,110 @@ public void SetClientObserverTarget( int client, int target )
 	{
 		SetEntPropEnt( client, Prop_Send, "m_hObserverTarget", target );
 		SetEntProp( client, Prop_Send, "m_iObserverMode", 4 );
+	}
+	else
+	{
+		Timer_ReplyToCommand( client, "{name}%N {primary}is not alive", target );
+	}
+}
+
+public Action Command_Hide( int client, int args )
+{
+	g_bHidePlayers[client] = !g_bHidePlayers[client];
+	SetClientCookieBool( client, g_hCookie_HidePlayers, g_bHidePlayers[client] );
+	Timer_ReplyToCommand( client, "{primary}Players now: {secondary}%s", g_bHidePlayers[client] ? "Hidden" : "Visible" );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Lost( int client, int args )
+{
+	Timer_StopTimer( client );
+	Timer_BlockTimer( client, 1 );
+	TeleportEntity( client, g_fLastValidPosition[client], NULL_VECTOR, NULL_VECTOR );
+	Timer_ReplyToCommand( client, "{primary}Teleported to last valid position" );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Knife( int client, int args )
+{
+	TryGiveItem( client, "weapon_knife", CS_SLOT_KNIFE );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_Glock( int client, int args )
+{
+	TryGiveItem( client, "weapon_glock", CS_SLOT_SECONDARY );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_USP( int client, int args )
+{
+	TryGiveItem( client, "weapon_usp_silencer", CS_SLOT_SECONDARY );
+	
+	return Plugin_Handled;
+}
+
+public void TryGiveItem( int client, char[] itemname, int slot )
+{
+	if( IsPlayerAlive( client ) )
+	{
+		int weapon = GetPlayerWeaponSlot( client, slot );
+
+		if( weapon != -1 ) 
+		{
+			RemovePlayerItem( client, weapon );
+			RemoveEdict( weapon );
+		}
+
+		weapon = GivePlayerItem( client, itemname );
+		FakeClientCommand( client, "use %s", itemname );
+
+		if( slot != CS_SLOT_KNIFE )
+		{
+			static int offset = -1;
+			if( offset == -1 )
+			{
+				offset = FindSendPropInfo( "CCSPlayer", "m_iAmmo" );
+			}
+			int ammo = GetEntProp( weapon, Prop_Send, "m_iPrimaryAmmoType" );
+			SetEntData( client, offset + (ammo * 4), 255, 4, true );
+
+			SetEntProp( weapon, Prop_Send, "m_iPrimaryReserveAmmoCount", 255 );
+		}
+	}
+}
+
+public Action Command_TeleportTo( int client, int args )
+{
+	if( args )
+	{
+		char arg[MAX_NAME_LENGTH];
+		GetCmdArgString( arg, sizeof( arg ) );
+
+		if( !SelectTarget( client, arg, TeleportTo ) )
+		{
+			Timer_ReplyToCommand( client, "{primary}No matching players" );	
+		}
+	}
+	
+	return Plugin_Handled;
+}
+
+public void TeleportTo( int client, int target )
+{
+	if( IsClientInGame( target ) && IsPlayerAlive( target ) )
+	{
+		Timer_StopTimer( client );
+	
+		float pos[3];
+		GetClientAbsOrigin( target, pos );
+		
+		Timer_BlockTimer( client, 1 );
+		TeleportEntity( client, pos, NULL_VECTOR, NULL_VECTOR );
 	}
 	else
 	{
@@ -427,5 +620,24 @@ stock bool File_Copy( const char[] source, const char[] destination )
 	delete file_source;
 	delete file_destination;
 
+	return true;
+}
+
+stock void SetClientCookieBool( int client, Handle cookie, bool value )
+{
+	SetClientCookie( client, cookie, value ? "1" : "0" );
+}
+
+stock bool GetClientCookieBool( int client, Handle cookie, bool& value )
+{
+	char sValue[8];
+	GetClientCookie( client, cookie, sValue, sizeof(sValue) );
+
+	if( sValue[0] == '\0' )
+	{
+		return false;
+	}
+
+	value = StringToInt( sValue ) != 0;
 	return true;
 }

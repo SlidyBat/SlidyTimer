@@ -6,7 +6,7 @@
 #pragma newdecls required
 #pragma semicolon 1
 
-#define REPLAY_VERSION 1
+#define REPLAY_VERSION 2
 #define MAGIC_NUMBER 0x59444C53 // "SLDY"
 
 #define FRAME_DATA_SIZE 6
@@ -14,19 +14,11 @@
 #define MAX_MULTIREPLAY_BOTS 5
 #define MAX_STYLE_BOTS 5
 
-enum
-{
-	ReplayBot_None,
-	ReplayBot_Multireplay,
-	ReplayBot_Style,
-	TOTAL_REPALY_BOT_TYPES
-}
-
 enum ReplayHeader
 {
 	HD_MagicNumber,
 	HD_ReplayVersion,
-	HD_SteamAccountId,
+	HD_RecordId,
 	Float:HD_Time,
 	HD_Size,
 	HD_TickRate,
@@ -49,10 +41,14 @@ char			g_cCurrentMap[PLATFORM_MAX_PATH];
 
 Handle		g_hForward_OnReplaySavedPre;
 Handle		g_hForward_OnReplaySavedPost;
+Handle		g_hForward_OnReplayLoadedPre;
+Handle		g_hForward_OnReplayLoadedPost;
+Handle		g_hForward_OnBotNameSet;
 
 ArrayList		g_aReplayQueue;
 
 ArrayList		g_aReplayFrames[TOTAL_ZONE_TRACKS][MAX_STYLES];
+int			g_iReplayRecordIds[TOTAL_ZONE_TRACKS][MAX_STYLES];
 float			g_fReplayRecordTimes[TOTAL_ZONE_TRACKS][MAX_STYLES];
 char			g_cReplayRecordNames[TOTAL_ZONE_TRACKS][MAX_STYLES][MAX_NAME_LENGTH];
 
@@ -93,9 +89,15 @@ public Plugin myinfo =
 
 public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_max )
 {
+	CreateNative( "Timer_GetReplayRecordId", Native_GetReplayRecordId );
+	CreateNative( "Timer_GetReplayTime", Native_GetReplayTime );
+	CreateNative( "Timer_GetReplayBotTrack", Native_GetReplayBotTrack );
+	CreateNative( "Timer_GetReplayBotStyle", Native_GetReplayBotStyle );
+	CreateNative( "Timer_GetReplayBotType", Native_GetReplayBotType );
 	CreateNative( "Timer_GetReplayBotCurrentFrame", Native_GetReplayBotCurrentFrame );
 	CreateNative( "Timer_GetReplayBotTotalFrames", Native_GetReplayBotTotalFrames );
 	CreateNative( "Timer_GetReplayBotPlayerName", Native_GetReplayBotPlayerName );
+	CreateNative( "Timer_SetReplayBotPlayerName", Native_SetReplayBotPlayerName );
 	CreateNative( "Timer_GetClientReplayFrames", Native_GetClientReplayFrames );
 	CreateNative( "Timer_SetClientReplayFrames", Native_SetClientReplayFrames );
 
@@ -106,9 +108,12 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
-	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_CellByRef );
-	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Event, Param_Cell, Param_Cell );
-
+	g_hForward_OnReplaySavedPre = CreateGlobalForward( "Timer_OnReplaySavedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_CellByRef );
+	g_hForward_OnReplaySavedPost = CreateGlobalForward( "Timer_OnReplaySavedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Cell );
+	g_hForward_OnReplayLoadedPre = CreateGlobalForward( "Timer_OnReplayLoadedPre", ET_Event, Param_Cell, Param_Cell );
+	g_hForward_OnReplayLoadedPost = CreateGlobalForward( "Timer_OnReplayLoadedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Float, Param_Cell, Param_Cell );
+	g_hForward_OnBotNameSet = CreateGlobalForward( "Timer_OnBotNameSet", ET_Event, Param_Cell, Param_Cell, Param_String, Param_FloatByRef );
+	
 	bot_quota = FindConVar( "bot_quota" );
 	bot_quota.AddChangeHook( OnBotQuotaChanged );
 	
@@ -127,24 +132,25 @@ public void OnPluginStart()
 	
 	g_aReplayQueue = new ArrayList( 3 );
 	
-	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
+	GetCurrentMap( g_cCurrentMap, sizeof(g_cCurrentMap) );
 	
 	char path[PLATFORM_MAX_PATH];
 
-	BuildPath( Path_SM, path, sizeof( path ), "data/Timer" );
+	BuildPath( Path_SM, path, sizeof(path), "data/Timer" );
 
 	if( !DirExists( path ) )
 	{
-		CreateDirectory( path, sizeof( path ) );
+		CreateDirectory( path, sizeof(path) );
 	}
 
+	// 2 folders, replays and replay backups
 	for( int i = 0; i < 2; i++ )
 	{
-		BuildPath( Path_SM, path, sizeof( path ), "data/Timer/%s", g_cReplayFolders[i] );
+		BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s", g_cReplayFolders[i] );
 		
 		if( !DirExists( path ) )
 		{
-			CreateDirectory( path, sizeof( path ) );
+			CreateDirectory( path, sizeof(path) );
 		}
 
 		for( int x = 0; x < TOTAL_ZONE_TRACKS; x++ )
@@ -153,20 +159,23 @@ public void OnPluginStart()
 
 			if( !DirExists( path ) )
 			{
-				CreateDirectory( path, sizeof( path ) );
+				CreateDirectory( path, sizeof(path) );
 			}
 
 			for( int y = 0; y < MAX_STYLES; y++ )
 			{
-				BuildPath( Path_SM, path, sizeof( path ), "data/Timer/%s/%i/%i", g_cReplayFolders[i], x, y );
+				BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i", g_cReplayFolders[i], x, y );
 
 				if( !DirExists( path ) )
 				{
-					CreateDirectory( path, sizeof( path ) );
+					CreateDirectory( path, sizeof(path) );
 				}
 			}
 		}
 	}
+	
+	// Clear all data
+	OnMapEnd();
 }
 
 public void OnAllPluginsLoaded()
@@ -185,7 +194,7 @@ public void OnConfigsExecuted()
 
 public void OnMapStart()
 {
-	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
+	GetCurrentMap( g_cCurrentMap, sizeof(g_cCurrentMap) );
 }
 
 public void OnMapEnd()
@@ -205,6 +214,7 @@ public void OnMapEnd()
 		for( int j = 0; j < totalstyles; j++ )
 		{
 			delete g_aReplayFrames[i][j];
+			g_iReplayRecordIds[i][j] = -1;
 			g_cReplayRecordNames[i][j] = "";
 			g_fReplayRecordTimes[i][j] = 0.0;
 			
@@ -229,10 +239,7 @@ public void OnClientPutInServer( int client )
 
 	if( !IsFakeClient( client ) )
 	{
-		if( g_aPlayerFrameData[client] != null )
-		{
-			delete g_aPlayerFrameData[client];
-		}
+		delete g_aPlayerFrameData[client];
 		g_aPlayerFrameData[client] = new ArrayList( FRAME_DATA_SIZE );
 	}
 	else
@@ -321,17 +328,33 @@ public Action Timer_OnTimerStart( int client )
 	g_iCurrentFrame[client] = 0;
 }
 
-public void Timer_OnFinishPost( int client, int track, int style, float time, float pbtime, float wrtime )
+public void Timer_OnRecordInsertedPost( int client, int track, int style, float time, int recordid )
 {
 	if( g_fReplayRecordTimes[track][style] == 0.0 || time < g_fReplayRecordTimes[track][style] )
 	{
-		SaveReplay( client, time, track, style );
+		SaveReplay( client, time, track, style, recordid );
+	}
+}
+
+public void Timer_OnRecordUpdatedPost( int client, int track, int style, float time, int recordid )
+{
+	if( g_fReplayRecordTimes[track][style] == 0.0 || time < g_fReplayRecordTimes[track][style] )
+	{
+		SaveReplay( client, time, track, style, recordid );
+	}
+}
+
+public void Timer_OnRecordDeleted( int track, int style, int recordid )
+{
+	if( g_iReplayRecordIds[track][style] == recordid )
+	{
+		DeleteReplay( track, style );
 	}
 }
 
 public void Timer_OnStylesLoaded( int totalstyles )
 {
-	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
+	GetCurrentMap( g_cCurrentMap, sizeof(g_cCurrentMap) );
 
 	// load specific bots
 	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
@@ -552,15 +575,26 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 
 void LoadReplay( int track, int style )
 {
+	any result = Plugin_Continue;
+	Call_StartForward( g_hForward_OnReplayLoadedPre );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_Finish( result );
+	
+	if( result == Plugin_Handled || result == Plugin_Stop )
+	{
+		return;
+	}
+
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof( path ), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
 	if( FileExists( path ) )
 	{
 		File file = OpenFile( path, "rb" );
 		any header[ReplayHeader];
 		
-		if( !file.Read( header[0], sizeof( header ), 4 ) )
+		if( !file.Read( header[0], sizeof(header), 4 ) )
 		{
 			return;
 		}
@@ -576,12 +610,23 @@ void LoadReplay( int track, int style )
 			return;
 		}
 		
+		g_iReplayRecordIds[track][style] = header[HD_RecordId];
 		g_fReplayRecordTimes[track][style] = header[HD_Time];
 		
 		Timer_DebugPrint( "LoadReplay: track=%i style=%i time=%f", track, style, g_fReplayRecordTimes[track][style] );
 		
 		char query[128];
-		Format( query, sizeof( query ), "SELECT lastname FROM `t_players` WHERE steamaccountid = '%i'", header[HD_SteamAccountId] );
+		
+		if( header[HD_ReplayVersion] < 2 )
+		{
+			// stored steamaccountid instead of recordid
+			Format( query, sizeof(query), "SELECT lastname FROM `t_players` WHERE steamaccountid = '%i'", header[HD_RecordId] );
+		}
+		else
+		{
+			Format( query, sizeof(query), "SELECT p.lastname FROM `t_records` r JOIN `t_players` p ON p.playerid = r.playerid WHERE recordid = '%i'", header[HD_RecordId] );
+		}
+		
 		DataPack pack = new DataPack();
 		pack.WriteCell( track );
 		pack.WriteCell( style );
@@ -594,7 +639,7 @@ void LoadReplay( int track, int style )
 		any frameData[ReplayFrameData];
 		for( int i = 0; i < header[HD_Size]; i++ )
 		{
-			if( file.Read( frameData[0], sizeof( frameData ), 4 ) >= 0 )
+			if( file.Read( frameData[0], sizeof(frameData), 4 ) >= 0 )
 			{
 				g_aReplayFrames[track][style].SetArray( i, frameData[0] );
 			}
@@ -602,11 +647,19 @@ void LoadReplay( int track, int style )
 
 		file.Close();
 	}
+	
+	Call_StartForward( g_hForward_OnReplayLoadedPost );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushFloat( g_fReplayRecordTimes[track][style] );
+	Call_PushCell( g_iReplayRecordIds[track][style] );
+	Call_PushCell( g_aReplayFrames[track][style] );
+	Call_Finish();
 }
 
-void SaveReplay( int client, float time, int track, int style )
+void SaveReplay( int client, float time, int track, int style, int recordid )
 {
-	if( !GetClientName( client, g_cReplayRecordNames[track][style], sizeof( g_cReplayRecordNames[][] ) ) )
+	if( !GetClientName( client, g_cReplayRecordNames[track][style], sizeof(g_cReplayRecordNames[][]) ) )
 	{
 		LogError( "Failed to get client name when saving replay" );
 		return;
@@ -618,6 +671,10 @@ void SaveReplay( int client, float time, int track, int style )
 	any result = Plugin_Continue;
 	Call_StartForward( g_hForward_OnReplaySavedPre );
 	Call_PushCell( client );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushFloat( time );
+	Call_PushCell( recordid );
 	Call_PushCellRef( g_aReplayFrames[track][style] );
 	Call_Finish( result );
 	
@@ -627,18 +684,19 @@ void SaveReplay( int client, float time, int track, int style )
 	}
 	
 	g_fReplayRecordTimes[track][style] = time;
+	g_iReplayRecordIds[track][style] = recordid;
 	
 	any header[ReplayHeader];
 	header[HD_MagicNumber] = MAGIC_NUMBER;
-	header[HD_ReplayVersion] = 1;
+	header[HD_ReplayVersion] = REPLAY_VERSION;
 	header[HD_Size] = g_aReplayFrames[track][style].Length;
 	header[HD_Time] = time;
-	header[HD_SteamAccountId] = GetSteamAccountID( client );
+	header[HD_RecordId] = recordid;
 	header[HD_TickRate] = RoundFloat( 1.0 / g_fFrameTime );
 	header[HD_Timestamp] = GetTime();
 	
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof( path ), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
 	if( FileExists( path ) )
 	{
@@ -648,7 +706,7 @@ void SaveReplay( int client, float time, int track, int style )
 		do
 		{
 			temp++;
-			BuildPath( Path_SM, copypath, sizeof( copypath ), "data/Timer/%s/%i/%i/%s-%i.rec", g_cReplayFolders[1], track, style, g_cCurrentMap, temp );
+			BuildPath( Path_SM, copypath, sizeof(copypath), "data/Timer/%s/%i/%i/%s-%i.rec", g_cReplayFolders[1], track, style, g_cCurrentMap, temp );
 		} while( FileExists( copypath ) );
 
 		File_Copy( path, copypath );
@@ -699,8 +757,57 @@ void SaveReplay( int client, float time, int track, int style )
 	
 	Call_StartForward( g_hForward_OnReplaySavedPost );
 	Call_PushCell( client );
+	Call_PushCell( track );
+	Call_PushCell( style );
+	Call_PushFloat( time );
+	Call_PushCell( recordid );
 	Call_PushCell( g_aReplayFrames[track][style] );
 	Call_Finish();
+}
+
+void DeleteReplay( int track, int style )
+{
+	char path[PLATFORM_MAX_PATH];
+	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	
+	if( FileExists( path ) )
+	{
+		DeleteFile( path );
+	}
+
+	delete g_aReplayFrames[track][style];
+	g_iReplayRecordIds[track][style] = -1;
+	g_fReplayRecordTimes[track][style] = 0.0;
+	g_cReplayRecordNames[track][style][0] = '\0';
+
+	for( int i = 0; i < g_nMultireplayBots; i++ )
+	{
+		if( g_MultireplayCurrentlyReplayingTrack[i] == track && g_MultireplayCurrentlyReplayingStyle[i] == style )
+		{
+			g_MultireplayCurrentlyReplayingTrack[i] = -1;
+			g_MultireplayCurrentlyReplayingStyle[i] = -1;
+			
+			int botidx = g_iMultireplayBotIndexes[i];
+			delete g_aPlayerFrameData[botidx];
+			g_iCurrentFrame[botidx] = 0;
+			
+			SetBotName( botidx );
+			Timer_TeleportClientToZone( botidx, Zone_Start, ZoneTrack_Main );
+		}
+	}
+	
+	for( int i = 0; i < g_nStyleBots; i++ )
+	{
+		if( g_StyleBotReplayingTrack[i] == track && g_StyleBotReplayingStyle[i] == style )
+		{
+			int botidx = g_iStyleBotIndexes[i];
+			delete g_aPlayerFrameData[botidx];
+			g_iCurrentFrame[botidx] = 0;
+			
+			SetBotName( botidx );
+			Timer_TeleportClientToZone( botidx, Zone_Start, ZoneTrack_Main );
+		}
+	}
 }
 
 void SetBotName( int client, int target = 0 )
@@ -730,9 +837,9 @@ void SetBotName( int client, int target = 0 )
 		int style = (replaytype == ReplayBot_Multireplay) ? g_MultireplayCurrentlyReplayingStyle[botid] : g_StyleBotReplayingStyle[botid];
 
 		char sTrack[16];
-		Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
+		Timer_GetZoneTrackName( track, sTrack, sizeof(sTrack) );
 		char sStyle[16];
-		Timer_GetStylePrefix( style, sStyle, sizeof( sStyle ) );
+		Timer_GetStylePrefix( style, sStyle, sizeof(sStyle) );
 		
 		Format( tag, sizeof(tag), "[%s %s]", sTrack, sStyle );
 		
@@ -752,8 +859,24 @@ void SetBotName( int client, int target = 0 )
 			}
 			else
 			{
+				float time = g_fReplayRecordTimes[track][style];
 				strcopy( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), g_cReplayRecordNames[track][style] );
-				Timer_FormatTime( g_fReplayRecordTimes[track][style], sTime, sizeof(sTime) );
+				
+				any result = Plugin_Continue;
+				Call_StartForward( g_hForward_OnBotNameSet );
+				Call_PushCell( track );
+				Call_PushCell( style );
+				Call_PushStringEx( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), SM_PARAM_STRING_COPY, SM_PARAM_COPYBACK );
+				Call_PushFloatRef( time );
+				Call_Finish( result );
+				
+				if( result == Plugin_Continue )
+				{
+					time = g_fReplayRecordTimes[track][style];
+					strcopy( g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]), g_cReplayRecordNames[track][style] );
+				}
+				
+				Timer_FormatTime( time, sTime, sizeof(sTime) );
 			}
 			
 			Format( name, sizeof(name), "%s (%s)", g_cBotPlayerName[client], sTime );
@@ -875,14 +998,14 @@ void OpenReplayMenu( int client, int track, int style )
 	
 	char buffer[64], sInfo[8];
 	
-	Timer_GetZoneTrackName( track, buffer, sizeof( buffer ) );
-	Format( buffer, sizeof( buffer ), "Track: %s\n\n", buffer );
-	IntToString( track, sInfo, sizeof( sInfo ) );
+	Timer_GetZoneTrackName( track, buffer, sizeof(buffer) );
+	Format( buffer, sizeof(buffer), "Track: %s\n\n", buffer );
+	IntToString( track, sInfo, sizeof(sInfo) );
 	menu.AddItem( sInfo, buffer );
 	
-	IntToString( style, sInfo, sizeof( sInfo ) );
-	Timer_GetStyleName( style, buffer, sizeof( buffer ) );
-	Format( buffer, sizeof( buffer ), "Style Up\n  > Current Style: %s", buffer );
+	IntToString( style, sInfo, sizeof(sInfo) );
+	Timer_GetStyleName( style, buffer, sizeof(buffer) );
+	Format( buffer, sizeof(buffer), "Style Up\n  > Current Style: %s", buffer );
 	menu.AddItem( sInfo, buffer );
 	menu.AddItem( sInfo, "Style Down\n \n" );
 	
@@ -898,9 +1021,9 @@ public int ReplayMenu_Handler( Menu menu, MenuAction action, int param1, int par
 	if( action == MenuAction_Select )
 	{
 		char sInfo[8];
-		menu.GetItem( 0, sInfo, sizeof( sInfo ) );
+		menu.GetItem( 0, sInfo, sizeof(sInfo) );
 		int track = StringToInt( sInfo );
-		menu.GetItem( 1, sInfo, sizeof( sInfo ) );
+		menu.GetItem( 1, sInfo, sizeof(sInfo) );
 		int style = StringToInt( sInfo );
 		
 		int totalstyles = Timer_GetStyleCount();
@@ -991,7 +1114,7 @@ public void GetName_Callback( Database db, DBResultSet results, const char[] err
 	
 	if( results.FetchRow() )
 	{
-		results.FetchString( 0, g_cReplayRecordNames[track][style], MAX_NAME_LENGTH );
+		results.FetchString( 0, g_cReplayRecordNames[track][style], sizeof(g_cReplayRecordNames[][]) );
 		
 		for( int i = 0; i < g_nExpectedStyleBots; i++ )
 		{
@@ -1016,6 +1139,68 @@ public Action Command_Replay( int client, int args )
 	OpenReplayMenu( client, ZoneTrack_Main, 0 );
 	
 	return Plugin_Handled;
+}
+
+public int Native_GetReplayRecordId( Handle handler, int numParams )
+{	
+	return g_iReplayRecordIds[GetNativeCell( 1 )][GetNativeCell( 2 )];
+}
+
+public int Native_GetReplayTime( Handle handler, int numParams )
+{	
+	return view_as<int>(g_fReplayRecordTimes[GetNativeCell( 1 )][GetNativeCell( 2 )]);
+}
+
+public int Native_GetReplayBotTrack( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	switch( g_iBotType[client] )
+	{
+		case ReplayBot_None:
+		{
+			return ZoneTrack_None;
+		}
+		case ReplayBot_Multireplay:
+		{
+			return g_MultireplayCurrentlyReplayingTrack[g_iBotId[client]];
+		}
+		case ReplayBot_Style:
+		{
+			return g_StyleBotReplayingTrack[g_iBotId[client]];
+		}
+	}
+	
+	return ZoneTrack_None;
+}
+
+public int Native_GetReplayBotStyle( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	
+	switch( g_iBotType[client] )
+	{
+		case ReplayBot_None:
+		{
+			return -1;
+		}
+		case ReplayBot_Multireplay:
+		{
+			return g_MultireplayCurrentlyReplayingStyle[g_iBotId[client]];
+		}
+		case ReplayBot_Style:
+		{
+			return g_StyleBotReplayingStyle[g_iBotId[client]];
+		}
+	}
+	
+	return -1;
+}
+
+public int Native_GetReplayBotType( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	return g_iBotType[client];
 }
 
 public int Native_GetReplayBotCurrentFrame( Handle handler, int numParams )
@@ -1049,6 +1234,19 @@ public int Native_GetReplayBotPlayerName( Handle handler, int numParams )
 	}
 	
 	SetNativeString( 2, g_cBotPlayerName[client], GetNativeCell( 3 ) );
+	
+	return 1;
+}
+
+public int Native_SetReplayBotPlayerName( Handle handler, int numParams )
+{
+	int client = GetNativeCell( 1 );
+	if( g_iBotType[client] == ReplayBot_None || g_aPlayerFrameData[client] == null )
+	{
+		return 0;
+	}
+	
+	GetNativeString( 2, g_cBotPlayerName[client], sizeof(g_cBotPlayerName[]) );
 	
 	return 1;
 }

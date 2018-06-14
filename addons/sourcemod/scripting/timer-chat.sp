@@ -110,9 +110,17 @@ public void OnPluginStart()
 	g_hCookieNameColour = RegClientCookie( "sm_name_colour", "Timer name colour", CookieAccess_Protected );
 
 	RegConsoleCmd( "sm_chatsettings", Command_ChatSettings );
+	
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame( i ) && AreClientCookiesCached( i ) )
+		{
+			OnClientCookiesCached( i );
+		}
+	}
 }
 
-public void OnClientPutInServer( int client )
+public void OnClientCookiesCached( int client )
 {
 	if( !GetClientCookieInt( client, g_hCookiePrimaryColour, g_iColourSettings[client][Colour_Primary] ) )
 	{
