@@ -487,7 +487,12 @@ void DrawPanel( int client )
 			panel.DrawItem( "", ITEMDRAW_RAWLINE );
 		
 			int buttons = GetClientButtons( target );
-			FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s", ( buttons & IN_DUCK ) > 0 ? "DUCK":"     ", ( buttons & IN_FORWARD ) > 0? "W":"-", ( buttons & IN_MOVELEFT ) > 0? "A":"-", ( buttons & IN_BACK ) > 0? "S":"-", ( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
+			FormatEx( buffer, sizeof(buffer), "[%s]\n    %s\n%s   %s   %s",
+											( buttons & IN_DUCK ) > 0 ? "DUCK":"     ",
+											( buttons & IN_FORWARD ) > 0? "W":"-",
+											( buttons & IN_MOVELEFT ) > 0? "A":"-",
+											( buttons & IN_BACK ) > 0? "S":"-",
+											( buttons & IN_MOVERIGHT ) > 0? "D":"-" );
 		
 			panel.DrawItem( buffer, ITEMDRAW_RAWLINE );
 		}

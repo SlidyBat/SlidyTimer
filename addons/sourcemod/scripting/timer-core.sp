@@ -151,6 +151,7 @@ public void OnClientDisconnect( int client )
 	g_iPlayerId[client] = -1;
 	g_iClientBlockTickStart[client] = 0;
 	g_nClientBlockTicks[client] = 0;
+	g_bNoclip[client] = false;
 }
 
 public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[3], float angles[3] )
