@@ -1,0 +1,4 @@
+Time: {time}
+Speed: {speed}
+Sync: {sync}
+Jumps: {jumps}
