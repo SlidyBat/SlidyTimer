@@ -501,7 +501,7 @@ public Action Command_USP( int client, int args )
 	return Plugin_Handled;
 }
 
-public void TryGiveItem( int client, char[] itemname, int slot )
+stock void TryGiveItem( int client, char[] itemname, int slot )
 {
 	if( IsPlayerAlive( client ) )
 	{

@@ -1,7 +1,7 @@
 public void GetSpeedString( int client, char[] output, int maxlen )
 {
 	int speed = RoundFloat( GetClientSpeed( client ) );
-	FormatEx( output, maxlen, "%d%s", speed, (speed < 100) ? "\t" : "" );
+	FormatEx( output, maxlen, "%03d%s", speed, (speed < 100) );
 }
 
 public void GetJumpsString( int client, char[] output, int maxlen )
@@ -19,14 +19,7 @@ public void GetStrafesString( int client, char[] output, int maxlen )
 public void GetSyncString( int client, char[] output, int maxlen )
 {
 	float sync = Timer_GetClientCurrentSync( client );
-	if( sync < 10.0 )
-	{
-		FormatEx( output, maxlen, "%.2f\t", sync );
-	}
-	else
-	{
-		FormatEx( output, maxlen, "%.2f", sync );
-	}
+	FormatEx( output, maxlen, "%.2f", sync );
 }
 
 public void GetStrafeTimeString( int client, char[] output, int maxlen )

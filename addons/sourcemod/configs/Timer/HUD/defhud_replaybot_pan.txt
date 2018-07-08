@@ -1,3 +1,2 @@
-"Time: {time}
-Speed: {speed}
+<pre>Time: {time}	Speed: {speed}
 Player: {replayname}
