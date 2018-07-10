@@ -21,6 +21,8 @@ char g_cSoundTypePath[TOTAL_SOUND_TYPES][] =
 	"timer-wrsounds",
 };
 
+bool g_bLateLoad;
+
 int	g_nSounds[TOTAL_SOUND_TYPES];
 char g_cSounds[TOTAL_SOUND_TYPES][MAX_SOUNDS][PLATFORM_MAX_PATH];
 
@@ -98,6 +100,7 @@ void PrecacheSounds()
 		char line[PLATFORM_MAX_PATH];
 		while( file.ReadLine( line, sizeof(line) ) && g_nSounds[i] < MAX_SOUNDS )
 		{
+			Timer_DebugPrint( "PrecacheSounds: Loading sound %s", line );
 			Format( g_cSounds[i][g_nSounds[i]], sizeof(g_cSounds[][]), "*%s", line );
 			g_nSounds[i]++;
 
@@ -121,6 +124,7 @@ void PlayRandomSound( int soundtype, int client = 0 ) // client=0 means play to 
 
 	int rand = GetRandomInt( 0, g_nSounds[soundtype] - 1 );
 
+	Timer_DebugPrint( "PlayRandomSound: Playing sound %s", g_cSounds[soundtype][rand] );
 	if( client == 0 )
 	{
 		EmitSoundToAll( g_cSounds[soundtype][rand] );
