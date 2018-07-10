@@ -1,0 +1,9 @@
+{primary}Don't like the chat colours? Upgrade to {orchid}VIP {primary}for {secondary}full customizability{primary}!
+{primary}Join our {blue}Discord{primary}! {secondary}https://discord.gg/etdt2Kj
+{primary}Try our all new {secondary}Tag-Team Relay {primary}style with your friends! Type {secondary}!tagteam {primary}to begin.
+{primary}Finding the map too difficult? Use {secondary}!segment {primary}to practice with checkpoints.
+{primary}Type {secondary}!style {primary}to try out different styles.
+{primary}Tip: Type {secondary}!notifications {primary}to disable unwanted chat messages.
+{primary}Make sure to add the {secondary}-maxdownloadfilesizemb 500 {primary}launch option to your game to ensure compatibility with our maps.
+{primary}Enjoying the server? Consider {secondary}donating to help out and get {orchid}VIP{primary}.
+{primary}If you think you've got what it takes, apply to our {secondary}whitelist server{primary}! Check out our {blue}Discord (https://discord.gg/etdt2Kj) {primary}for more details.
