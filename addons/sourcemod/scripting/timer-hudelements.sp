@@ -19,7 +19,14 @@ public void GetStrafesString( int client, char[] output, int maxlen )
 public void GetSyncString( int client, char[] output, int maxlen )
 {
 	float sync = Timer_GetClientCurrentSync( client );
-	FormatEx( output, maxlen, "%.2f", sync );
+	if( sync < 100.0 )
+	{
+		FormatEx( output, maxlen, "%.2f\t", sync );
+	}
+	else
+	{
+		FormatEx( output, maxlen, "%.2f", sync );
+	}
 }
 
 public void GetStrafeTimeString( int client, char[] output, int maxlen )
