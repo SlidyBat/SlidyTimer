@@ -20,6 +20,7 @@ Database		g_hDatabase;
 float			g_fFrameTime;
 char			g_cMapName[PLATFORM_MAX_PATH];
 int			g_iMapId = -1;
+int			g_iMapTier;
 
 Handle		g_hForward_OnDatabaseLoaded;
 Handle		g_hForward_OnMapLoaded;
@@ -80,6 +81,8 @@ public void OnPluginStart()
 	RegConsoleCmd( "sm_style", Command_Styles );
 	RegConsoleCmd( "sm_styles", Command_Styles );
 	
+	RegConsoleCmd( "sm_tier", Command_Tier );
+	
 	/* Hooks */
 	HookEvent( "player_jump", HookEvent_PlayerJump );
 	
@@ -92,6 +95,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 {
 	CreateNative( "Timer_GetDatabase", Native_GetDatabase );
 	CreateNative( "Timer_GetMapId", Native_GetMapId );
+	CreateNative( "Timer_GetMapTier", Native_GetMapTier );
+	CreateNative( "Timer_SetMapTier", Native_SetMapTier );
 	CreateNative( "Timer_IsClientLoaded", Native_IsClientLoaded );
 	CreateNative( "Timer_GetClientPlayerId", Native_GetClientPlayerId );
 	CreateNative( "Timer_GetClientCurrentTime", Native_GetClientCurrentTime );
@@ -810,7 +815,7 @@ void SQL_LoadMap()
 	g_iMapId = -1;
 
 	char query[512];
-	Format( query, sizeof(query), "SELECT mapid FROM `t_maps` WHERE mapname = '%s'", g_cMapName );
+	Format( query, sizeof(query), "SELECT mapid, maptier FROM `t_maps` WHERE mapname = '%s'", g_cMapName );
 	g_hDatabase.Query( LoadMap_Callback, query );
 }
 
@@ -825,6 +830,7 @@ public void LoadMap_Callback( Database db, DBResultSet results, const char[] err
 	if( results.RowCount > 0 && results.FetchRow() )
 	{
 		g_iMapId = results.FetchInt( 0 );
+		g_iMapTier = results.FetchInt( 1 );
 		
 		Call_StartForward( g_hForward_OnMapLoaded );
 		Call_PushCell( g_iMapId );
@@ -868,6 +874,24 @@ public void InsertMap_Callback( Database db, DBResultSet results, const char[] e
 	Call_Finish();
 }
 
+void SQL_SetMapTier( int tier )
+{
+	g_iMapTier = tier;
+
+	char query[512];
+	Format( query, sizeof(query), "UPDATE `t_maps` SET maptier = '%i' WHERE mapid = '%i'", tier, g_iMapId );
+	g_hDatabase.Query( SetMapTier_Callback, query );
+}
+
+public void SetMapTier_Callback( Database db, DBResultSet results, const char[] error, any data )
+{
+	if( results == null )
+	{
+		LogError( "[SQL ERROR] (SetMapTier_Callback) - %s", error );
+		return;
+	}
+}
+
 /* Commands */
 
 public Action Command_Noclip( int client, int args )
@@ -909,6 +933,40 @@ public Action Command_ChangeStyle( int client, int args )
 	return Plugin_Continue;
 }
 
+public Action Command_Tier( int client, int args )
+{
+	if( !CheckCommandAccess( client, "timer_settier", ADMFLAG_CHANGEMAP ) || args == 0 )
+	{
+		char tier[32];
+		if( g_iMapTier == 0 )
+		{
+			tier = "Untiered";
+		}
+		else
+		{
+			IntToString( g_iMapTier, tier, sizeof(tier) );
+		}
+		
+		Timer_ReplyToCommand( client, "{primary}Map tier: {secondary}%s", tier );
+	}
+	else
+	{
+		char tier[8];
+		GetCmdArg( 1, tier, sizeof(tier) );
+		
+		int value = StringToInt( tier );
+		if( !( 0 < value <= 6 ) )
+		{
+			Timer_ReplyToCommand( client, "{primary}Invalid tier {secondary}%i{primary}. Please enter a value in the range of {secondary}1-6", value );
+			return Plugin_Handled;
+		}
+		
+		SQL_SetMapTier( value );
+	}
+	
+	return Plugin_Handled;
+}
+
 /* Natives */
 
 public int Native_GetDatabase( Handle handler, int numParams )
@@ -919,6 +977,23 @@ public int Native_GetDatabase( Handle handler, int numParams )
 public int Native_GetMapId( Handle handler, int numParams )
 {
 	return g_iMapId;
+}
+
+public int Native_GetMapTier( Handle handler, int numParams )
+{
+	return g_iMapTier;
+}
+
+public int Native_SetMapTier( Handle handler, int numParams )
+{
+	int tier = GetNativeCell( 1 );
+	if( !( 0 <= tier <= 6 ) )
+	{
+		return ThrowNativeError( 500, "Invalid tier value %i", tier );
+	}
+	
+	SQL_SetMapTier( tier );
+	return 1;
 }
 
 public int Native_IsClientLoaded( Handle handler, int numParams )

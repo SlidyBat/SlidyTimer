@@ -1001,6 +1001,21 @@ native Database Timer_GetDatabase();
 native int Timer_GetMapId();
 
 /**
+ * Gets the current map tier.
+ * If 0, the map is untiered.
+ *
+ * @return Map id
+ */
+native int Timer_GetMapTier();
+
+/**
+ * Sets the current map tier. Only accepts values from 0-6
+ *
+ * @noreturn
+ */
+native void Timer_SetMapTier( int tier );
+
+/**
  * Native to make sure client has been loaded by timer and has been provided a database id
  * NOTE: This does not guarantee that the clients times and settings have been loaded
  *
@@ -1367,6 +1382,8 @@ public void __pl_slidy_timer_SetNTVOptional()
 	// core
 	MarkNativeAsOptional( "Timer_GetDatabase" );
 	MarkNativeAsOptional( "Timer_GetMapId" );
+	MarkNativeAsOptional( "Timer_GetMapTier" );
+	MarkNativeAsOptional( "Timer_SetMapTier" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentTime" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentJumps" );
 	MarkNativeAsOptional( "Timer_GetClientCurrentStrafes" );
