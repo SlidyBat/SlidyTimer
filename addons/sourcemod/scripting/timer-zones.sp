@@ -476,11 +476,19 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 				{
 					int zoneType = param2 - 1;
 					int zoneTrack = g_iCurrentSelectedTrack[param1];
-					
 					int subindex = ( zoneType >= Zone_Checkpoint ) ? GetZoneTypeCount( zoneType ) : 0;
-					SQL_InsertZone( g_fZonePointCache[param1][0], g_fZonePointCache[param1][1], zoneType, zoneTrack, subindex );
-					g_iZoningStage[param1] = 0;
-					OpenCreateZoneMenu( param1 );
+					int id = ( zoneType >= Zone_Checkpoint ) ? -1 : GetZoneID( zoneType, zoneTrack );
+					
+					if( id != -1 )
+					{
+						OpenConfirmReplaceZoneMenu( param1, zoneType, zoneTrack );
+					}
+					else
+					{
+						SQL_InsertZone( g_fZonePointCache[param1][0], g_fZonePointCache[param1][1], zoneType, zoneTrack, subindex );
+						g_iZoningStage[param1] = 0;
+						OpenCreateZoneMenu( param1 );
+					}
 				}
 			}
 			
@@ -489,6 +497,62 @@ public int CreateZoneMenuHandler( Menu menu, MenuAction action, int param1, int 
 	else if( action == MenuAction_Cancel )
 	{
 		StopZoning( param1 );
+	}
+	else if( action == MenuAction_End )
+	{
+		delete menu;
+	}
+}
+
+void OpenConfirmReplaceZoneMenu( int client, int zoneType, int zoneTrack )
+{
+	Menu menu = new Menu( ConfirmReplaceZoneHandler );
+	
+	char typeName[64];
+	Timer_GetZoneTypeName( zoneType, typeName, sizeof(typeName) );
+	char trackName[64];
+	Timer_GetZoneTrackName( zoneTrack, trackName, sizeof(trackName) );
+	
+	char title[128];
+	Format( title, sizeof(title), "%s %s already exists.\nAre you sure you want to replace it?", typeName, trackName );
+	
+	menu.SetTitle( title );
+	
+	char info[32];
+	Format( info, sizeof(info), "%i;%i", zoneType, zoneTrack );
+	menu.AddItem( info, "Yes" );
+	menu.AddItem( "no", "No" );
+	
+	menu.ExitButton = false;
+	menu.Display( client, MENU_TIME_FOREVER );
+}
+
+public int ConfirmReplaceZoneHandler( Menu menu, MenuAction action, int param1, int param2 )
+{
+	if( action == MenuAction_Select )
+	{
+		if( g_iZoningStage[param1] < 2 )
+		{
+			if( param2 == 0 ) // yes
+			{
+				char info[32];
+				menu.GetItem( param2, info, sizeof(info) );
+				
+				char data[2][16];
+				ExplodeString( info, ";", data, sizeof(data), sizeof(data[]) );
+				
+				int zoneType = StringToInt( data[0] );
+				int zoneTrack = StringToInt( data[1] );
+			
+				SQL_InsertZone( g_fZonePointCache[param1][0], g_fZonePointCache[param1][1], zoneType, zoneTrack, 0 );
+				g_iZoningStage[param1] = 0;
+				OpenCreateZoneMenu( param1 );
+			}
+			else // no
+			{
+				OpenCreateZoneMenu( param1 );
+			}
+		}
 	}
 	else if( action == MenuAction_End )
 	{
