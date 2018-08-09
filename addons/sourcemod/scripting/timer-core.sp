@@ -962,6 +962,8 @@ public Action Command_Tier( int client, int args )
 		}
 		
 		SQL_SetMapTier( value );
+		
+		Timer_ReplyToCommand( client, "{primary}Tier set to: {secondary}%i", value );
 	}
 	
 	return Plugin_Handled;
