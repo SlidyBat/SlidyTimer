@@ -6,6 +6,8 @@
 #pragma newdecls required
 #pragma semicolon 1
 
+#define DIR_PERMISSIONS (FPERM_U_READ | FPERM_U_WRITE | FPERM_U_EXEC | FPERM_G_READ | FPERM_G_EXEC | FPERM_O_READ | FPERM_O_EXEC)
+
 #define REPLAY_VERSION 2
 #define MAGIC_NUMBER 0x59444C53 // "SLDY"
 
@@ -138,9 +140,11 @@ public void OnPluginStart()
 
 	BuildPath( Path_SM, path, sizeof(path), "data/Timer" );
 
+	
+	
 	if( !DirExists( path ) )
 	{
-		CreateDirectory( path, sizeof(path) );
+		CreateDirectory( path, DIR_PERMISSIONS );
 	}
 
 	// 2 folders, replays and replay backups
@@ -150,7 +154,7 @@ public void OnPluginStart()
 		
 		if( !DirExists( path ) )
 		{
-			CreateDirectory( path, sizeof(path) );
+			CreateDirectory( path, DIR_PERMISSIONS );
 		}
 
 		for( int x = 0; x < TOTAL_ZONE_TRACKS; x++ )
@@ -159,7 +163,7 @@ public void OnPluginStart()
 
 			if( !DirExists( path ) )
 			{
-				CreateDirectory( path, sizeof(path) );
+				CreateDirectory( path, DIR_PERMISSIONS );
 			}
 
 			for( int y = 0; y < MAX_STYLES; y++ )
@@ -168,7 +172,7 @@ public void OnPluginStart()
 
 				if( !DirExists( path ) )
 				{
-					CreateDirectory( path, sizeof(path) );
+					CreateDirectory( path, DIR_PERMISSIONS );
 				}
 			}
 		}
