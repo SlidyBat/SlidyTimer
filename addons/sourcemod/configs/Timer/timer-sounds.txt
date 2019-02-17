@@ -1,0 +1,9 @@
+#WR sounds
+Timer/WR1.mp3
+Timer/WR2.mp3
+
+#PB sounds
+Timer/PB.mp3
+
+#Finish sounds
+Timer/NewTime.mp3

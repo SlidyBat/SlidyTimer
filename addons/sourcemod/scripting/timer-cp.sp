@@ -2,12 +2,11 @@
 #pragma semicolon 1
 
 #include <sourcemod>
+#include <clientprefs>
 #include <sdktools>
 #include <slidy-timer>
 
 #define AUTO_SELECT_CP -1
-
-#define DEFAULT_CP_SETTINGS ( (1 << 0) | (1 << 1) | (1 << 2) )
 
 typedef CPSelectCallback = function void ( int client, int cpindex );
 
@@ -21,9 +20,6 @@ bool						g_bUsedCP[MAXPLAYERS + 1];
 int					g_iSelectedCheckpoint[MAXPLAYERS + 1];
 CPSelectCallback	g_CPSelectCallback[MAXPLAYERS + 1];
 
-int					g_iCPSettings[MAXPLAYERS + 1] = { DEFAULT_CP_SETTINGS, ... };
-bool					g_bCPMenuOpen[MAXPLAYERS + 1];
-
 Handle				g_hForward_OnCPSavedPre;
 Handle				g_hForward_OnCPSavedPost;
 Handle				g_hForward_OnCPLoadedPre;
@@ -34,13 +30,21 @@ enum (<<= 1)
 	CPSettings_UsePos = 1,
 	CPSettings_UseAng,
 	CPSettings_UseVel,
+	CPSettings_AutoOpen
 }
+
+#define DEFAULT_CP_SETTINGS ( CPSettings_UsePos | CPSettings_UseAng | CPSettings_UseVel )
+
+int					g_iCPSettings[MAXPLAYERS + 1] = { DEFAULT_CP_SETTINGS, ... };
+Handle				g_hCookieCPSettings;
+bool					g_bCPMenuOpen[MAXPLAYERS + 1];
 
 char g_cCPSettingNames[][] = 
 {
 	"Use Position",
 	"Use Angles",
-	"Use Velocity"
+	"Use Velocity",
+	"Auto-Open"
 };
 
 public Plugin myinfo = 
@@ -68,6 +72,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_hCookieCPSettings = RegClientCookie( "sm_cp_settings", "CP settings", CookieAccess_Protected );
+
 	g_hForward_OnCPSavedPre = CreateGlobalForward( "Timer_OnCPSavedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnCPSavedPost = CreateGlobalForward( "Timer_OnCPSavedPost", ET_Ignore, Param_Cell, Param_Cell, Param_Cell );
 	g_hForward_OnCPLoadedPre = CreateGlobalForward( "Timer_OnCPLoadedPre", ET_Event, Param_Cell, Param_Cell );
@@ -81,6 +87,14 @@ public void OnPluginStart()
 	for( int i = 1; i <= MaxClients; i++ )
 	{
 		g_aCheckpoints[i] = new ArrayList( view_as<int>(eCheckpoint) );
+		if( IsClientInGame( i ) )
+		{
+			OnClientPutInServer( i );
+			if( AreClientCookiesCached( i ) )
+			{
+				OnClientCookiesCached( i );
+			}
+		}
 	}
 	
 	RegConsoleCmd( "sm_cp", Command_OpenCheckpointMenu, "Opens checkpoint menu" );
@@ -111,6 +125,15 @@ public void OnClientPutInServer( int client )
 	g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
 	g_bUsedCP[client] = false;
 	g_bCPMenuOpen[client] = false;
+}
+
+public void OnClientCookiesCached( int client )
+{
+	if( !GetClientCookieInt( client, g_hCookieCPSettings, g_iCPSettings[client] ) )
+	{
+		g_iCPSettings[client] = DEFAULT_CP_SETTINGS;
+		SetClientCookieInt( client, g_hCookieCPSettings, DEFAULT_CP_SETTINGS );
+	}
 }
 
 public Action Timer_OnTimerStart( int client )
@@ -226,7 +249,7 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	
 	g_aCheckpoints[client].SetArray( index, cp[0] );
 	
-	if( g_bCPMenuOpen[client] )
+	if( g_bCPMenuOpen[client] || (g_iCPSettings[client] & CPSettings_AutoOpen) )
 	{
 		OpenCPMenu( client );
 	}
@@ -467,6 +490,13 @@ public int CPMenu_Handler( Menu menu, MenuAction action, int param1, int param2 
 
 void OpenSelectCPMenu( int client, CPSelectCallback cb )
 {
+	int totalcps = g_aCheckpoints[client].Length;
+	if( totalcps == 0 )
+	{
+		Timer_PrintToChat( client, "{primary}No checkpoints found" );
+		OpenCPMenu( client );
+	}
+
 	g_CPSelectCallback[client] = cb;
 
 	Menu menu = new Menu( CPSelect_Handler );
@@ -474,7 +504,6 @@ void OpenSelectCPMenu( int client, CPSelectCallback cb )
 	menu.SetTitle( "Timer - Checkpoints Menu - Select CP\n \n" );
 
 	char buffer[64];
-	int totalcps = g_aCheckpoints[client].Length;
 	for( int i = 1; i <= totalcps; i++ )
 	{
 		Format( buffer, sizeof(buffer), "Checkpoint %i", i );
@@ -722,4 +751,26 @@ stock void CopyVector( const float[] a, float[] b )
 	b[0] = a[0];
 	b[1] = a[1];
 	b[2] = a[2];
+}
+
+stock void SetClientCookieInt( int client, Handle cookie, int value )
+{
+	char sValue[8];
+	IntToString( value, sValue, sizeof(sValue) );
+
+	SetClientCookie( client, cookie, sValue );
+}
+
+stock bool GetClientCookieInt( int client, Handle cookie, int& value )
+{
+	char sValue[8];
+	GetClientCookie( client, cookie, sValue, sizeof(sValue) );
+
+	if( sValue[0] == '\0' )
+	{
+		return false;
+	}
+
+	value = StringToInt( sValue );
+	return true;
 }
