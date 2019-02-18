@@ -62,6 +62,7 @@ public Plugin myinfo =
 public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	// zone natives
+	CreateNative( "Timer_GetZoneCount", Native_GetZoneCount );
 	CreateNative( "Timer_GetClientZoneType", Native_GetClientZoneType );
 	CreateNative( "Timer_SetClientZoneType", Native_SetClientZoneType );
 	CreateNative( "Timer_GetClientZoneTrack", Native_GetClientZoneTrack );
@@ -95,6 +96,9 @@ public void OnPluginStart()
 	RegConsoleCmd( "sm_bonusend", Command_BonusEnd );
 	RegConsoleCmd( "sm_bend", Command_BonusEnd );
 	RegConsoleCmd( "sm_endb", Command_BonusEnd );
+	RegConsoleCmd( "sm_stage", Command_Stage );
+	RegConsoleCmd( "sm_bstage", Command_BonusStage );
+	RegConsoleCmd( "sm_stageb", Command_BonusStage );
 	
 	AddCommandListener( Command_JoinTeam, "jointeam" );
 	
@@ -968,6 +972,32 @@ public Action Command_BonusEnd( int client, int args )
 	return Plugin_Handled;
 }
 
+public Action Command_Stage( int client, int args )
+{
+	if( !IsPlayerAlive( client ) )
+	{
+		ChangeClientTeam( client, CS_TEAM_T );
+	}
+	
+	Timer_BlockTimer( client, 1 );
+	TeleportClientToZone( client, Zone_Checkpoint, ZoneTrack_Main );
+	
+	return Plugin_Handled;
+}
+
+public Action Command_BonusStage( int client, int args )
+{
+	if( !IsPlayerAlive( client ) )
+	{
+		ChangeClientTeam( client, CS_TEAM_T );
+	}
+	
+	Timer_BlockTimer( client, 1 );
+	TeleportClientToZone( client, Zone_Checkpoint, ZoneTrack_Bonus );
+	
+	return Plugin_Handled;
+}
+
 public Action Command_JoinTeam( int client, const char[] command, int args )
 {
 	char arg[32];
@@ -1064,6 +1094,26 @@ public Action Timer_DrawZones( Handle timer, any data )
 
 
 /* Natives */
+
+public int Native_GetZoneCount( Handle handler, int numParams )
+{
+	int targetTrack = GetNativeCell( 1 );
+	int targetType = GetNativeCell( 2 );
+
+	int total = 0;
+	for( int i = 0; i < g_aZones.Length; i++ )
+	{
+		any zone[ZONE_DATA];
+		g_aZones.GetArray( i, zone );
+		
+		if( zone[ZD_ZoneTrack] == targetTrack && zone[ZD_ZoneType] == targetType )
+		{
+			total++;
+		}
+	}
+	
+	return total;
+}
 
 public int Native_GetClientZoneType( Handle handler, int numParams )
 {

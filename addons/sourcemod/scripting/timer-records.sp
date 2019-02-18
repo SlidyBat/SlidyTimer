@@ -264,8 +264,6 @@ public void CreateTable_Callback( Database db, DBResultSet results, const char[]
 		LogError( "[SQL ERROR] (CreateTable_Callback) - %s", error );
 		return;
 	}
-	
-	
 }
 
 void SQL_LoadRecords( int client, int track, int style )
@@ -509,7 +507,6 @@ void SQL_ReloadCache( int track, int style, bool reloadall = false )
 	
 	DataPack pack = new DataPack();
 	pack.WriteCell( track );
-	pack.WriteCell( style );
 	pack.WriteCell( style );
 	
 	Timer_DebugPrint( "SQL_ReloadCache: %s", query );

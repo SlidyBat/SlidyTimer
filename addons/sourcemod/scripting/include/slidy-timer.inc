@@ -968,6 +968,16 @@ native int Timer_GetClientZoneType( int client );
 native void Timer_SetClientZoneType( int client, int type );
 
 /**
+ * Gets number of existing zones for specified track/type
+ *
+ * @param track						Zone track
+ * @param type						Zone type
+ *
+ * @return							Number of existing zones for specified track/type
+ */
+native int Timer_GetZoneCount( int track, int type );
+
+/**
  * Gets track client is currently in (ie. main/bonus)
  *
  * @param client					Client index.
@@ -1414,8 +1424,11 @@ public void __pl_slidy_timer_SetNTVOptional()
 	MarkNativeAsOptional( "Timer_CallOnRecordDeleted" );
 	
 	// zones
+	MarkNativeAsOptional( "Timer_GetZoneCount" );
 	MarkNativeAsOptional( "Timer_GetClientZoneTrack" );
+	MarkNativeAsOptional( "Timer_SetClientZoneTrack" );
 	MarkNativeAsOptional( "Timer_GetClientZoneType" );
+	MarkNativeAsOptional( "Timer_SetClientZoneType" );
 	MarkNativeAsOptional( "Timer_TeleportClientToZone" );
 	MarkNativeAsOptional( "Timer_IsClientInsideZone" );
 	
