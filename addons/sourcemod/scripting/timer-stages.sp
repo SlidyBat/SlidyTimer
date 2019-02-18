@@ -160,7 +160,7 @@ public void Timer_OnEnterZone( int client, int zoneId, int zoneType, int zoneTra
 		{
 			// they didnt beat their pb but we should update their attempts anyway
 			char query[128];
-			FormatEx( query, sizeof( query ), "UPDATE `t_records` SET `attempts` = `attempts` + 1 WHERE recordid = '%i'",
+			FormatEx( query, sizeof( query ), "UPDATE `t_table_records` SET `attempts` = `attempts` + 1 WHERE recordid = '%i'",
 											g_iPlayerRecordId[client][track][style] );
 			
 			g_hDatabase.Query( UpdateAttempts_Callback, query, _, DBPrio_Low );
