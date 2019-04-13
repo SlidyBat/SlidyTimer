@@ -10,6 +10,8 @@
 
 typedef CPSelectCallback = function void ( int client, int cpindex );
 
+EngineVersion g_EngineVersion;
+
 ArrayList				g_aTargetnames;
 StringMap				g_smTargetnames;
 ArrayList				g_aClassnames;
@@ -72,6 +74,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_EngineVersion = GetEngineVersion();
+
 	g_hCookieCPSettings = RegClientCookie( "sm_cp_settings", "CP settings", CookieAccess_Protected );
 
 	g_hForward_OnCPSavedPre = CreateGlobalForward( "Timer_OnCPSavedPre", ET_Event, Param_Cell, Param_Cell, Param_Cell );
@@ -223,8 +227,15 @@ void SaveCheckpoint( int client, int index = AUTO_SELECT_CP )
 	cp[CP_Flags] = GetEntityFlags( target ) | FL_CLIENT | FL_AIMTARGET;
 	cp[CP_Ducked] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucked" ));
 	cp[CP_Ducking] = view_as<bool>(GetEntProp( target, Prop_Send, "m_bDucking" ));
-	cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
-	cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
+	if( g_EngineVersion == Engine_CSGO )
+	{
+		cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDuckAmount" );
+		cp[CP_DuckSpeed] = GetEntPropFloat( target, Prop_Send, "m_flDuckSpeed" );
+	}
+	else
+	{
+		cp[CP_DuckAmount] = GetEntPropFloat( target, Prop_Send, "m_flDucktime" );
+	}
 	cp[CP_GroundEnt] = GetEntPropEnt(target, Prop_Data, "m_hGroundEntity");
 	Timer_GetClientTimerData( target, cp[CP_TimerData] );
 	cp[CP_ReplayFrames] = Timer_GetClientReplayFrames( target );
@@ -306,8 +317,15 @@ public void LoadCheckpoint( int client, int index )
 	SetEntityFlags( client, cp[CP_Flags] );
 	SetEntProp( client, Prop_Send, "m_bDucked", cp[CP_Ducked] );
 	SetEntProp( client, Prop_Send, "m_bDucking", cp[CP_Ducking] );
-	SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
-	SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
+	if( g_EngineVersion == Engine_CSGO )
+	{
+		SetEntPropFloat( client, Prop_Send, "m_flDuckAmount", cp[CP_DuckAmount] );
+		SetEntPropFloat( client, Prop_Send, "m_flDuckSpeed", cp[CP_DuckSpeed] );
+	}
+	else
+	{
+		SetEntPropFloat( client, Prop_Send, "m_flDucktime", cp[CP_DuckAmount] );
+	}
 	SetEntPropEnt(client, Prop_Data, "m_hGroundEntity", cp[CP_GroundEnt]);
 	Timer_SetClientTimerData( client, cp[CP_TimerData] );
 	Timer_SetClientReplayFrames( client, cp[CP_ReplayFrames] );

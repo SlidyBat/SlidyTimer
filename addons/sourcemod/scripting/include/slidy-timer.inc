@@ -61,7 +61,7 @@ enum
 	ZONE_DATA
 }
 
-enum styleSettings
+enum eStyleSettings
 {
 	String:StyleName[64],
 	String:StylePrefix[16],
@@ -69,7 +69,9 @@ enum styleSettings
 	String:SettingString[256],
 	bool:Ranked,
 	bool:AutoBhop,
+	bool:EnableBhop,
 	bool:StartBhop,
+	Float:AirAccelerate,
 	Float:Gravity,
 	Float:Timescale,
 	Float:MaxSpeed,
@@ -844,7 +846,7 @@ native bool Timer_GetStyleCount();
  *
  * @noreturn
  */
-native bool Timer_GetStyleSettings( int style, any buffer[styleSettings] );
+native bool Timer_GetStyleSettings( int style, any buffer[eStyleSettings] );
 
 /**
  * Gets style full name

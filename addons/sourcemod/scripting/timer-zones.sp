@@ -8,6 +8,7 @@
 #include <slidy-timer>
 
 #define DRAW_TIMER_INTERVAL 0.1
+#define ZONE_MODEL "models/props/de_train/barrel.mdl"
 
 enum
 {
@@ -15,7 +16,6 @@ enum
 	HaloSprite,
 	BeamSprite,
 	BlueLightning,
-	Barrel,
 	TOTAL_SPRITES
 }
 
@@ -119,7 +119,7 @@ public void OnMapStart()
 	g_Sprites[HaloSprite] = PrecacheModel( "materials/sprites/glow01.vmt" );
 	g_Sprites[BeamSprite] = PrecacheModel( "materials/sprites/laserbeam.vmt" );
 	g_Sprites[BlueLightning] = PrecacheModel( "materials/sprites/trails/bluelightningscroll3.vmt" );
-	g_Sprites[Barrel] = PrecacheModel( "models/props/de_train/barrel.mdl" );
+	PrecacheModel( ZONE_MODEL );
 	
 	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vmt" );
 	AddFileToDownloadsTable( "materials/sprites/trails/bluelightningscroll3.vtf" );
@@ -613,7 +613,7 @@ stock void AddZoneEntity( const any zone[ZONE_DATA], int index )
 
 	if( IsValidEntity( entity ) )
 	{
-		SetEntityModel( entity, "models/props/de_train/barrel.mdl" );
+		SetEntityModel( entity, ZONE_MODEL );
 
 		char name[128];
 		Format( name, sizeof( name ), "%i: Timer_Zone", index );

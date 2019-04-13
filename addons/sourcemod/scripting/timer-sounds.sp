@@ -82,9 +82,13 @@ void PrecacheSounds()
 	}
 	
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof(path), "configs/Timer/timer-sounds.txt" );
+	BuildPath( Path_SM, path, sizeof(path), "configs/timer/timer-sounds.txt" );
 	
 	File file = OpenFile( path, "r" );
+	if( !file )
+	{
+		LogError( "Failed to open '%s'. Make sure it exists." );
+	}
 
 	char line[PLATFORM_MAX_PATH];
 	while( file.ReadLine( line, sizeof(line) ) )

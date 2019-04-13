@@ -1,0 +1,3 @@
+Time: {time}
+Speed: {speed}
+Player: {replayname}

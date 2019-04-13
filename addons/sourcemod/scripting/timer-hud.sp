@@ -33,18 +33,13 @@ enum
 
 enum
 {
-	CSGOHud_Scaleform,
-	CSGOHud_Panorama,
-	TOTAL_CSGO_HUDS
-}
-
-enum
-{
 	HudType_StartZone,
 	HudType_Timing,
 	HudType_ReplayBot,
 	TOTAL_HUD_TYPES
 }
+
+EngineVersion g_EngineVersion;
 
 float	g_fTickInterval;
 
@@ -62,17 +57,15 @@ int		g_iSelectedHud[MAXPLAYERS + 1];
 Handle	g_hHudSettingsCookie;
 int		g_iHudSettings[MAXPLAYERS + 1];
 
-char		g_cHudCache[TOTAL_CSGO_HUDS][TOTAL_HUD_TYPES][TOTAL_HUDS][256];
+char		g_cHudCache[TOTAL_HUD_TYPES][TOTAL_HUDS][256];
 char		g_cHudNames[TOTAL_HUDS][64];
 int		g_iTotalHuds;
-
-bool		g_bInPanorama[MAXPLAYERS + 1];
 
 StringMap	g_smHudElementCallbacks;
 
 typedef HUDElementCB = function void ( int client, char[] output, int maxlen );
 
-#include "timer-hudelements.sp"
+#include "timer-hudelements.imp"
 
 public Plugin myinfo = 
 {
@@ -92,6 +85,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_EngineVersion = GetEngineVersion();
+
 	g_fTickInterval = GetTickInterval();
 
 	g_bReplays = LibraryExists( "timer-replays" );
@@ -105,7 +100,6 @@ public void OnPluginStart()
 	{
 		if( IsClientInGame( i ) )
 		{
-			OnClientPutInServer( i );
 			if( AreClientCookiesCached( i ) )
 			{
 				OnClientCookiesCached( i );
@@ -175,15 +169,14 @@ public void OnMapStart()
 	CreateTimer( 0.1, Timer_DrawHud, _, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE );
 }
 
-public void OnClientPutInServer( int client )
+public void OnConfigsExecuted()
 {
-	g_bInPanorama[client] = false;
-	QueryClientConVar( client, "@panorama_max_fps", OnConVarRetrieved );
-}
+	ConVar sv_hudhint_sound = FindConVar("sv_hudhint_sound");
 
-public void OnConVarRetrieved( QueryCookie cookie, int client, ConVarQueryResult result, const char[] cvarName, const char[] cvarValue )
-{
-	g_bInPanorama[client] = (result != ConVarQuery_NotFound);
+	if( sv_hudhint_sound != null )
+	{
+		sv_hudhint_sound.BoolValue = false;
+	}
 }
 
 public void OnClientCookiesCached( int client )
@@ -229,6 +222,8 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 		hudtype = (Timer_GetClientZoneType( target ) == Zone_Start) ? HudType_StartZone : HudType_Timing;
 	}
 
+	int clienthud = g_iSelectedHud[client];
+	
 	static char hudtext[256];
 	int curHudChar = 0;
 	
@@ -236,13 +231,11 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	char element[64];
 	int curElementChar = 0;
 	
-	int csgohud = GetCSGOHudType( client );
-	
-	for( int i = 0; g_cHudCache[csgohud][hudtype][g_iSelectedHud[client]][i] != '\0'; i++ )
+	for( int i = 0; g_cHudCache[hudtype][clienthud][i] != '\0'; i++ )
 	{
 		if( bStartedElement )
 		{
-			if( g_cHudCache[csgohud][hudtype][g_iSelectedHud[client]][i] == '}' )
+			if( g_cHudCache[hudtype][clienthud][i] == '}' )
 			{
 				bStartedElement = false;
 				element[curElementChar] = 0;
@@ -266,23 +259,23 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 			}
 			else
 			{
-				element[curElementChar++] = g_cHudCache[csgohud][hudtype][g_iSelectedHud[client]][i];
+				element[curElementChar++] = g_cHudCache[hudtype][clienthud][i];
 			}
 		}
 		else
 		{
-			if( g_cHudCache[csgohud][hudtype][g_iSelectedHud[client]][i] == '{' )
+			if( g_cHudCache[hudtype][clienthud][i] == '{' )
 			{
 				bStartedElement = true;
 			}
 			else
 			{
-				hudtext[curHudChar++] = g_cHudCache[csgohud][hudtype][g_iSelectedHud[client]][i];
+				hudtext[curHudChar++] = g_cHudCache[hudtype][clienthud][i];
 			}
 		}
 		hudtext[curHudChar] = 0;
 	
-		if( !bStartedElement && g_cHudCache[csgohud][hudtype][g_iSelectedHud[client]][i] == '{' )
+		if( !bStartedElement && g_cHudCache[hudtype][clienthud][i] == '{' )
 		{
 			bStartedElement = true;
 		}
@@ -293,13 +286,40 @@ public Action OnPlayerRunCmd( int client, int& buttons )
 	return Plugin_Continue;
 }
 
+stock bool IsCurrentGame( const char[] game )
+{
+	if( StrEqual( game, "all", false ) )
+	{
+		return true;
+	}
+	
+	if( g_EngineVersion == Engine_CSGO && StrEqual( game, "csgo", false ) )
+	{
+		return true;
+	}
+	
+	if( g_EngineVersion == Engine_CSS && StrEqual( game, "css", false ) )
+	{
+		return true;
+	}
+	
+	return false;
+}
+
+File OpenHUDConfigFile( char[] filename )
+{
+	char path[PLATFORM_MAX_PATH];
+	BuildPath( Path_SM, path, sizeof(path), "configs/timer/hud/%s.txt", filename );
+	return OpenFile( path, "r" );
+}
+
 bool LoadHuds()
 {
 	g_iTotalHuds = 0;
 
 	// load styles from cfg file
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof(path), "configs/Timer/timer-hud.cfg" );
+	BuildPath( Path_SM, path, sizeof(path), "configs/timer/timer-hud.cfg" );
 	
 	KeyValues kvHud = new KeyValues( "HUDS" );
 	if( !kvHud.ImportFromFile( path ) || !kvHud.GotoFirstSubKey() )
@@ -309,51 +329,31 @@ bool LoadHuds()
 	
 	do
 	{
+		char game[32];
+		kvHud.GetString( "game", game, sizeof(game), "all" );
+		if( !IsCurrentGame( game ) )
+		{
+			continue;
+		}
+		
 		kvHud.GetString( "name", g_cHudNames[g_iTotalHuds], sizeof(g_cHudNames[]) );
-
+		
 		File hudFile;
 		char sFileName[32];
-
-		kvHud.GetString( "starthud_filename", sFileName, sizeof(sFileName) );
 		
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		hudFile = OpenFile( path, "r" );
-		hudFile.ReadString( g_cHudCache[CSGOHud_Scaleform][HudType_StartZone][g_iTotalHuds], sizeof(g_cHudCache[][][]) );
+		kvHud.GetString( "starthud_filename", sFileName, sizeof(sFileName) );
+		hudFile = OpenHUDConfigFile( sFileName );
+		hudFile.ReadString( g_cHudCache[HudType_StartZone][g_iTotalHuds], sizeof(g_cHudCache[][]) );
 		hudFile.Close();
 
 		kvHud.GetString( "timinghud_filename", sFileName, sizeof(sFileName) );
-		
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		hudFile = OpenFile( path, "r" );
-		hudFile.ReadString( g_cHudCache[CSGOHud_Scaleform][HudType_Timing][g_iTotalHuds], sizeof(g_cHudCache[][][]) );
+		hudFile = OpenHUDConfigFile( sFileName );
+		hudFile.ReadString( g_cHudCache[HudType_Timing][g_iTotalHuds], sizeof(g_cHudCache[][]) );
 		hudFile.Close();
 
 		kvHud.GetString( "replayhud_filename", sFileName, sizeof(sFileName) );
-		
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		hudFile = OpenFile( path, "r" );
-		hudFile.ReadString( g_cHudCache[CSGOHud_Scaleform][HudType_ReplayBot][g_iTotalHuds], sizeof(g_cHudCache[][][]) );
-		hudFile.Close();
-		
-		kvHud.GetString( "pan_starthud_filename", sFileName, sizeof(sFileName) );
-		
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		hudFile = OpenFile( path, "r" );
-		hudFile.ReadString( g_cHudCache[CSGOHud_Panorama][HudType_StartZone][g_iTotalHuds], sizeof(g_cHudCache[][][]) );
-		hudFile.Close();
-
-		kvHud.GetString( "pan_timinghud_filename", sFileName, sizeof(sFileName) );
-		
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		hudFile = OpenFile( path, "r" );
-		hudFile.ReadString( g_cHudCache[CSGOHud_Panorama][HudType_Timing][g_iTotalHuds], sizeof(g_cHudCache[][][]) );
-		hudFile.Close();
-
-		kvHud.GetString( "pan_replayhud_filename", sFileName, sizeof(sFileName) );
-		
-		BuildPath( Path_SM, path, sizeof(path), "configs/Timer/HUD/%s.txt", sFileName );
-		hudFile = OpenFile( path, "r" );
-		hudFile.ReadString( g_cHudCache[CSGOHud_Panorama][HudType_ReplayBot][g_iTotalHuds], sizeof(g_cHudCache[][][]) );
+		hudFile = OpenHUDConfigFile( sFileName );
+		hudFile.ReadString( g_cHudCache[HudType_ReplayBot][g_iTotalHuds], sizeof(g_cHudCache[][]) );
 		hudFile.Close();
 		
 		g_iTotalHuds++;
@@ -613,11 +613,6 @@ void DrawTopLeftOverlay( int client )
 public int PanelHandler_Nothing( Menu menu, MenuAction action, int param1, int param2 )
 {
 	return 0;
-}
-
-int GetCSGOHudType( int client )
-{
-	return g_bInPanorama[client] ? CSGOHud_Panorama : CSGOHud_Scaleform;
 }
 
 void OpenHudSettingsMenu( int client )

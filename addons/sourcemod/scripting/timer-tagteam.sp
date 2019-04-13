@@ -92,7 +92,7 @@ public void OnPluginStart()
 
 	g_cvMaxPasses = CreateConVar( "sm_timer_tagteam_maxpasses", "-1", "Maximum number of passes a team can make or -1 for unlimited passes", _, true, -1.0, false );
 	g_cvMaxUndos = CreateConVar( "sm_timer_tagteam_maxundos", "3", "Maximum number of undos a team can make or -1 for unlimited undos", _, true, -1.0, false );
-	AutoExecConfig( true, "tagteam", "SlidyTimer" );
+	AutoExecConfig( true, "tagteam", "timer" );
 	
 	RegConsoleCmd( "sm_teamname", Command_TeamName );
 	RegConsoleCmd( "sm_exitteam", Command_ExitTeam );
@@ -1622,7 +1622,7 @@ public void ShowTeamStats_Callback( Database db, DBResultSet results, const char
 	char sTrack[16];
 	Timer_GetZoneTrackName( track, sTrack, sizeof(sTrack) );
 	
-	any settings[styleSettings];
+	any settings[eStyleSettings];
 	Timer_GetStyleSettings( style, settings );
 	
 	char sSync[10];
@@ -1720,11 +1720,11 @@ void SQL_DeleteRecord( int track, int style, int recordid )
 		pack.WriteCell( recordid );
 	
 		Format( query, sizeof(query), "DELETE FROM `t_tagteam_pb` WHERE tt_recordid = '%i'", recordid );
-		g_hDatabase.Query( DeletePB_Callback, query, recordid );
+		g_hDatabase.Query( DeletePB_Callback, query, pack );
 	}
 	
 	{
-		Format( query, sizeof(query), "DELETE FROM `t_tagteam_segments` WHERE tt_recordid = '%i'", recordid );
+		Format( query, sizeof(query), "DELETE FROM `t_tagteam_segments` WHERE recordid = '%i'", recordid );
 		g_hDatabase.Query( DeleteSegments_Callback, query );
 	}
 }

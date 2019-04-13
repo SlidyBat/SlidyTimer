@@ -36,7 +36,9 @@ enum Collision_Group_t
 	COLLISION_GROUP_NPC_SCRIPTED		// USed for NPCs in scripts that should not collide with each other
 };
 
+EngineVersion g_EngineVersion;
 bool g_bLateLoad;
+bool g_bProtobuf;
 
 ConVar	g_cvCreateSpawnPoints;
 char		g_cCurrentMap[PLATFORM_MAX_PATH];
@@ -66,6 +68,9 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_EngineVersion = GetEngineVersion();
+	g_bProtobuf = (GetUserMessageType() == UM_Protobuf);
+
 	g_hCookie_HidePlayers = RegClientCookie( "sm_timer_misc_hideplayers", "Hides other players", CookieAccess_Public );
 
 	g_cvCreateSpawnPoints = CreateConVar( "sm_create_spawnpoints", "10", "Number of spawn points to create", _, true, 0.0, true, 2048.0 );
@@ -84,9 +89,12 @@ public void OnPluginStart()
 	HookEvent( "player_spawn", HookEvent_PlayerSpawn, EventHookMode_Post );
 	HookEvent( "player_connect", HookEvent_PlayerConnect, EventHookMode_Pre );
 	HookEvent( "player_disconnect", HookEvent_PlayerDisconnect, EventHookMode_Pre );
-	HookEvent( "player_team", HookEvent_PlayerTeam, EventHookMode_Pre );
+	//HookEvent( "player_team", HookEvent_PlayerTeam, EventHookMode_Pre );
 	
-	HookUserMessage( GetUserMessageId( "TextMsg" ), UserMsg_TextMsg, true );
+	if( g_bProtobuf )
+	{
+		HookUserMessage( GetUserMessageId( "TextMsg" ), UserMsg_TextMsg, true );
+	}
 	HookUserMessage( GetUserMessageId( "SayText2" ), UserMsg_SayText2, true );
 	AddCommandListener( HookEvent_Chat, "say" );
 	AddCommandListener( HookEvent_Chat, "say_team" );
@@ -106,6 +114,8 @@ public void OnPluginStart()
 			}
 		}
 	}
+	
+	AddCommandListener(Command_Drop, "drop");
 }
 
 public void OnMapStart()
@@ -118,9 +128,16 @@ public void OnMapStart()
 	/* Automatically generate nav file if one doesn't exist (from shavits) */
 	if( !FileExists( path ) )
 	{
-		File_Copy( "maps/replay.nav", path );
-		Format( path, sizeof( path ), "%s.nav file generated", g_cCurrentMap );
-		ForceChangeLevel( g_cCurrentMap, path );	
+		if( File_Copy( "maps/replay.nav", path ) )
+		{
+			
+			Format( path, sizeof( path ), "%s.nav file generated", g_cCurrentMap );
+			ForceChangeLevel( g_cCurrentMap, path );
+		}
+		else
+		{
+			LogError( "Could not copy 'maps/replay.nav', failed to auto-generate nav file" );
+		}
 	}
 	
 	if ( g_cvCreateSpawnPoints.IntValue > 0 )
@@ -248,7 +265,7 @@ public void Hook_OnWeaponDropPostCallback( int client, int weapon )
 	}
 }
 
-public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBroadcast )
+public void HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBroadcast )
 {
 	int client = GetClientOfUserId( event.GetInt( "userid" ) );
 
@@ -259,9 +276,12 @@ public Action HookEvent_PlayerSpawn( Event event, const char[] name, bool dontBr
 		if( !IsFakeClient( client ) )
 		{
 			RequestFrame( HideRadar, GetClientUserId( client ) );
-
-			SendConVarValue( client, FindConVar( "mp_playercashawards" ), "0" );
-			SendConVarValue( client, FindConVar( "mp_teamcashawards" ), "0" );
+			
+			if( g_EngineVersion == Engine_CSGO )
+			{
+				SendConVarValue( client, FindConVar( "mp_playercashawards" ), "0" );
+				SendConVarValue( client, FindConVar( "mp_teamcashawards" ), "0" );
+			}
 		}
 	}
 }
@@ -299,11 +319,16 @@ public Action HookEvent_PlayerTeam( Event event, const char[] name, bool dontBro
 	return Plugin_Changed
 }
 
-public Action UserMsg_TextMsg( UserMsg msg_id, Protobuf msg, const int[] players, int playersNum, bool reliable, bool init )
+public Action UserMsg_TextMsg( UserMsg msg_id, any msg, const int[] players, int playersNum, bool reliable, bool init )
 {
 	char buffer[512];
-	msg.ReadString( "params", buffer, sizeof( buffer ), 0 );
-
+	
+	if( g_bProtobuf )
+	{
+		Protobuf pbmsg = UserMessageToProtobuf( msg );
+		pbmsg.ReadString( "params", buffer, sizeof( buffer ), 0 );
+	}
+	
 	if( StrEqual( buffer, "#Player_Cash_Award_ExplainSuicide_YouGotCash" ) )
 		return Plugin_Handled;
 	else if( StrEqual( buffer, "#Player_Cash_Award_ExplainSuicide_Spectators" ) )
@@ -360,10 +385,23 @@ public Action UserMsg_TextMsg( UserMsg msg_id, Protobuf msg, const int[] players
 	return Plugin_Continue;
 }
 
-public Action UserMsg_SayText2( UserMsg msg_id, Protobuf msg, const int[] players, int playersNum, bool reliable, bool init )
+public Action UserMsg_SayText2( UserMsg msg_id, any msg, const int[] players, int playersNum, bool reliable, bool init )
 {
 	char buffer[512];
-	msg.ReadString( "msg_name", buffer, sizeof( buffer ) );
+	
+	if( g_bProtobuf )
+	{
+		Protobuf pbmsg = UserMessageToProtobuf( msg );
+		pbmsg.ReadString( "msg_name", buffer, sizeof(buffer) );
+	}
+	else
+	{
+		BfRead bfmsg = UserMessageToBfRead( msg );
+		
+		bfmsg.ReadByte();
+		bfmsg.ReadByte(); // chat parameter
+		bfmsg.ReadString( buffer, sizeof(buffer) );
+	}
 
 	if( StrEqual( buffer, "#Cstrike_Name_Change" ) )
 	{
@@ -426,7 +464,26 @@ public void HideRadar( int userid )
 		return;
 	}
 	
-	SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
+	if( g_EngineVersion == Engine_CSGO )
+	{
+		SetEntProp( client, Prop_Send, "m_iHideHUD", GetEntProp( client, Prop_Send, "m_iHideHUD" ) | (1 << 12) );
+	}
+	else
+	{
+		SetEntPropFloat(client, Prop_Send, "m_flFlashDuration", 3600.0);
+		SetEntPropFloat(client, Prop_Send, "m_flFlashMaxAlpha", 0.5);
+	}
+}
+
+public Action Command_Drop( int client, const char[] command, int args )
+{
+	int weapon = GetEntPropEnt( client, Prop_Send, "m_hActiveWeapon" );
+	if( weapon != -1 && IsValidEntity( weapon ))
+	{
+		CS_DropWeapon(client, weapon, true);
+	}
+	
+	return Plugin_Handled;
 }
 
 public Action Command_Spec( int client, int args )
@@ -496,7 +553,7 @@ public Action Command_Glock( int client, int args )
 
 public Action Command_USP( int client, int args )
 {
-	TryGiveItem( client, "weapon_usp_silencer", CS_SLOT_SECONDARY );
+	TryGiveItem( client, ( g_EngineVersion == Engine_CSGO ) ? "weapon_usp_silencer" : "weapon_usp", CS_SLOT_SECONDARY );
 	
 	return Plugin_Handled;
 }
@@ -526,7 +583,10 @@ stock void TryGiveItem( int client, char[] itemname, int slot )
 			int ammo = GetEntProp( weapon, Prop_Send, "m_iPrimaryAmmoType" );
 			SetEntData( client, offset + (ammo * 4), 255, 4, true );
 
-			SetEntProp( weapon, Prop_Send, "m_iPrimaryReserveAmmoCount", 255 );
+			if( g_EngineVersion == Engine_CSGO )
+			{
+				SetEntProp( weapon, Prop_Send, "m_iPrimaryReserveAmmoCount", 255 );
+			}
 		}
 	}
 }
@@ -567,28 +627,39 @@ public void TeleportTo( int client, int target )
 
 stock void SetConVars()
 {
+	// CS:GO & CS:S cvars
 	FindConVar( "bot_quota_mode" ).SetString( "normal" );
 	FindConVar( "bot_join_after_player" ).BoolValue = false;
 	FindConVar( "mp_autoteambalance" ).BoolValue = false;
 	FindConVar( "mp_limitteams" ).IntValue = 0;
 	FindConVar( "bot_zombie" ).BoolValue = true;
-	FindConVar( "sv_clamp_unsafe_velocities" ).BoolValue = false;
 	FindConVar( "mp_maxrounds" ).IntValue = 0;
 	FindConVar( "mp_timelimit" ).IntValue = 9999;
 	FindConVar( "mp_roundtime" ).IntValue = 60;
 	FindConVar( "mp_freezetime" ).IntValue = 0;
 	FindConVar( "mp_ignore_round_win_conditions" ).BoolValue = false;
-	FindConVar( "mp_match_end_changelevel" ).BoolValue = true;
-	FindConVar( "mp_do_warmup_period" ).BoolValue = false;
-	FindConVar( "mp_warmuptime" ).IntValue = 0;
-	FindConVar( "sv_accelerate_use_weapon_speed" ).BoolValue = false;
-	FindConVar( "mp_free_armor" ).BoolValue = true;
-	FindConVar( "sv_full_alltalk" ).IntValue = 1;
 	FindConVar( "sv_alltalk" ).BoolValue = true;
-	FindConVar( "sv_talk_enemy_dead" ).BoolValue = true;
 	FindConVar( "sv_friction" ).FloatValue = 4.0;
 	FindConVar( "sv_accelerate" ).FloatValue = 5.0;
 	FindConVar( "sv_airaccelerate" ).FloatValue = 1000.0;
+	
+	// CS:GO only cvars
+	if( g_EngineVersion == Engine_CSGO )
+	{
+		FindConVar( "sv_clamp_unsafe_velocities" ).BoolValue = false;
+		FindConVar( "mp_match_end_changelevel" ).BoolValue = true;
+		FindConVar( "mp_do_warmup_period" ).BoolValue = false;
+		FindConVar( "mp_warmuptime" ).IntValue = 0;
+		FindConVar( "sv_accelerate_use_weapon_speed" ).BoolValue = false;
+		FindConVar( "mp_free_armor" ).BoolValue = true;
+		FindConVar( "sv_full_alltalk" ).IntValue = 1;
+		FindConVar( "sv_talk_enemy_dead" ).BoolValue = true;
+	}
+	// CS:S only cvars
+	else if( g_EngineVersion == Engine_CSS )
+	{
+	
+	}
 }
 
 stock bool File_Copy( const char[] source, const char[] destination )

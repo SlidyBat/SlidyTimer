@@ -782,7 +782,7 @@ void ShowStats( int client, int track, int style, int recordid, const any record
 	char sTrack[16];
 	Timer_GetZoneTrackName( track, sTrack, sizeof( sTrack ) );
 	
-	any settings[styleSettings];
+	any settings[eStyleSettings];
 	Timer_GetStyleSettings( style, settings );
 	
 	char sSync[10];

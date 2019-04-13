@@ -381,32 +381,32 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 
 	if( g_Settings[client] & SSJ_JUMPNUMBER )
 	{
-		Format( message, sizeof(message), "%s{primary}Jump{white}: {secondary}%i {white}| ", message, g_nJumps[target] );
+		Format( message, sizeof(message), "%s{primary}Jump{white}: {secondary}%i {default}| ", message, g_nJumps[target] );
 	}
 	if( g_Settings[client] & SSJ_SPEED )
 	{
-		Format( message, sizeof(message), "%s{primary}Speed{white}: {secondary}%.2f {white}| ", message, stats[SSJ_Speed] );
+		Format( message, sizeof(message), "%s{primary}Speed{white}: {secondary}%.2f {default}| ", message, stats[SSJ_Speed] );
 	}
 	if( g_Settings[client] & SSJ_DELTASPEED )
 	{
 		float deltaspeed = stats[SSJ_Speed] - lastStats[SSJ_Speed];
-		Format( message, sizeof(message), "%s{primary}Δ Speed{white}: %s%.2f {white}| ", message, (deltaspeed > 0.0) ? "{lime}+" : "{darkred}", deltaspeed );
+		Format( message, sizeof(message), "%s{primary}Δ Speed{white}: %s%.2f {default}| ", message, (deltaspeed > 0.0) ? "{lime}+" : "{darkred}", deltaspeed );
 	}
 	if( g_Settings[client] & SSJ_SYNC )
 	{
 		int syncedticks = stats[SSJ_SyncedTicks] - lastStats[SSJ_SyncedTicks];
 		float sync = float(syncedticks) / tickcount;
-		Format( message, sizeof(message), "%s{primary}Sync{white}: {secondary}%.2f {white}| ", message, sync * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Sync{white}: {secondary}%.2f {default}| ", message, sync * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_STRAFETIME )
 	{
 		int strafedticks = stats[SSJ_StrafedTicks] - lastStats[SSJ_StrafedTicks];
 		float strafetime = float(strafedticks) / tickcount;
-		Format( message, sizeof(message), "%s{primary}Strafe %{white}: {secondary}%.2f {white}| ", message, strafetime * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Strafe %{white}: {secondary}%.2f {default}| ", message, strafetime * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_GAIN )
 	{
-		Format( message, sizeof(message), "%s{primary}Gain{white}: {secondary}%.2f {white}| ", message, gain * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Gain{white}: {secondary}%.2f {default}| ", message, gain * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_EFFICIENCY )
 	{
@@ -419,21 +419,21 @@ void PrintStats( int client, int target, any stats[SSJStats] )
 		
 		float efficiency = displacementLength / distanceTravelled;
 
-		Format( message, sizeof(message), "%s{primary}Efficiency{white}: {secondary}%.2f {white}| ", message, efficiency * 100.0 );
+		Format( message, sizeof(message), "%s{primary}Efficiency{white}: {secondary}%.2f {default}| ", message, efficiency * 100.0 );
 	}
 	if( g_Settings[client] & SSJ_DELTAHEIGHT )
 	{
 		float deltaheight = stats[SSJ_Pos][2] - lastStats[SSJ_Pos][2];
-		Format( message, sizeof(message), "%s{primary}Δ Height{white}: {secondary}%s%.2f {white}| ", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
+		Format( message, sizeof(message), "%s{primary}Δ Height{white}: {secondary}%s%.2f {default}| ", message, (deltaheight > 0.0) ? "+" : "", deltaheight );
 	}
 	if( g_Settings[client] & SSJ_TIME )
 	{
-		Format( message, sizeof(message), "%s{primary}Time{white}: {secondary}%.2f {white}| ", message, Timer_GetClientCurrentTime( target ) );
+		Format( message, sizeof(message), "%s{primary}Time{white}: {secondary}%.2f {default}| ", message, Timer_GetClientCurrentTime( target ) );
 	}
 	if( g_Settings[client] & SSJ_DELTATIME )
 	{
 		float time = tickcount * GetTickInterval();
-		Format( message, sizeof(message), "%s{primary}Δ Time{white}: {secondary}%.2f {white}| ", message, time );
+		Format( message, sizeof(message), "%s{primary}Δ Time{white}: {secondary}%.2f {default}| ", message, time );
 	}
 	
 	message[strlen(message) - 2] = '\0';

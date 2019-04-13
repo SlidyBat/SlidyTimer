@@ -127,7 +127,7 @@ public void OnPluginStart()
 	
 	g_cvStartDelay = CreateConVar( "sm_timer_replay_start_delay", "3.0", "Delay at beginning of replays before bots start", _, true, 0.0, false );
 	g_cvEndDelay = CreateConVar( "sm_timer_replay_end_delay", "3.0", "Delay at end of replays before bots restart", _, true, 0.0, false );
-	AutoExecConfig( true, "timer-replays", "Timer" );
+	AutoExecConfig( true, "timer-replays", "timer" );
 	
 	g_fFrameTime = GetTickInterval();
 	g_fTickRate = 1.0 / g_fFrameTime;
@@ -137,11 +137,7 @@ public void OnPluginStart()
 	GetCurrentMap( g_cCurrentMap, sizeof(g_cCurrentMap) );
 	
 	char path[PLATFORM_MAX_PATH];
-
-	BuildPath( Path_SM, path, sizeof(path), "data/Timer" );
-
-	
-	
+	BuildPath( Path_SM, path, sizeof(path), "data/timer" );
 	if( !DirExists( path ) )
 	{
 		CreateDirectory( path, DIR_PERMISSIONS );
@@ -150,7 +146,7 @@ public void OnPluginStart()
 	// 2 folders, replays and replay backups
 	for( int i = 0; i < 2; i++ )
 	{
-		BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s", g_cReplayFolders[i] );
+		BuildPath( Path_SM, path, sizeof(path), "data/timer/%s", g_cReplayFolders[i] );
 		
 		if( !DirExists( path ) )
 		{
@@ -159,7 +155,7 @@ public void OnPluginStart()
 
 		for( int x = 0; x < TOTAL_ZONE_TRACKS; x++ )
 		{
-			BuildPath( Path_SM, path, 512, "data/Timer/%s/%i", g_cReplayFolders[i], x );
+			BuildPath( Path_SM, path, 512, "data/timer/%s/%i", g_cReplayFolders[i], x );
 
 			if( !DirExists( path ) )
 			{
@@ -168,7 +164,7 @@ public void OnPluginStart()
 
 			for( int y = 0; y < MAX_STYLES; y++ )
 			{
-				BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i", g_cReplayFolders[i], x, y );
+				BuildPath( Path_SM, path, sizeof(path), "data/timer/%s/%i/%i", g_cReplayFolders[i], x, y );
 
 				if( !DirExists( path ) )
 				{
@@ -392,7 +388,7 @@ void CreateStyleBots()
 	int totalstyles = Timer_GetStyleCount();
 	for( int i = 0; i < totalstyles; i++ )
 	{
-		any settings[styleSettings];
+		any settings[eStyleSettings];
 		Timer_GetStyleSettings( i, settings );
 		
 		if( settings[MainReplayBot] || settings[BonusReplayBot] )
@@ -426,7 +422,7 @@ void InitializeBot( int client, int replaytype, int botid )
 		
 			for( int style; style < totalstyles; style++ )
 			{
-				any settings[styleSettings];
+				any settings[eStyleSettings];
 				Timer_GetStyleSettings( style, settings );
 			
 				int tracksetting = (track == ZoneTrack_Main) ? MainReplayBot : BonusReplayBot;
@@ -591,7 +587,7 @@ void LoadReplay( int track, int style )
 	}
 
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	BuildPath( Path_SM, path, sizeof(path), "data/timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
 	if( FileExists( path ) )
 	{
@@ -700,7 +696,7 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 	header[HD_Timestamp] = GetTime();
 	
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	BuildPath( Path_SM, path, sizeof(path), "data/timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
 	if( FileExists( path ) )
 	{
@@ -710,7 +706,7 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 		do
 		{
 			temp++;
-			BuildPath( Path_SM, copypath, sizeof(copypath), "data/Timer/%s/%i/%i/%s-%i.rec", g_cReplayFolders[1], track, style, g_cCurrentMap, temp );
+			BuildPath( Path_SM, copypath, sizeof(copypath), "data/timer/%s/%i/%i/%s-%i.rec", g_cReplayFolders[1], track, style, g_cCurrentMap, temp );
 		} while( FileExists( copypath ) );
 
 		File_Copy( path, copypath );
@@ -772,7 +768,7 @@ void SaveReplay( int client, float time, int track, int style, int recordid )
 void DeleteReplay( int track, int style )
 {
 	char path[PLATFORM_MAX_PATH];
-	BuildPath( Path_SM, path, sizeof(path), "data/Timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
+	BuildPath( Path_SM, path, sizeof(path), "data/timer/%s/%i/%i/%s.rec", g_cReplayFolders[0], track, style, g_cCurrentMap );
 	
 	if( FileExists( path ) )
 	{
@@ -904,6 +900,11 @@ void StartReplay( int botid, int track, int style )
 	g_iCurrentFrame[idx] = 0;
 	
 	SetBotName( idx );
+	
+	if( !IsPlayerAlive( idx ) )
+	{
+		CS_RespawnPlayer( idx );
+	}
 }
 
 void StartOwnReplay( int botid, int client )

@@ -4,6 +4,7 @@
 #include <sourcemod>
 #include <slidy-timer>
 #include <sdktools>
+#include <sdkhooks>
 #include <geoip>
 
 public Plugin myinfo = 
@@ -33,7 +34,7 @@ Handle		g_hForward_OnTimerFinishPre;
 Handle		g_hForward_OnTimerFinishPost;
 Handle		g_hForward_OnTimerStart;
 
-any			g_StyleSettings[MAX_STYLES][styleSettings];
+any			g_StyleSettings[MAX_STYLES][eStyleSettings];
 StringMap	g_StyleSettingStrings[MAX_STYLES];
 StringMap		g_smStyleCommands;
 int			g_iTotalStyles;
@@ -59,7 +60,9 @@ bool			g_bNoclip[MAXPLAYERS + 1];
 int			g_iClientBlockTickStart[MAXPLAYERS + 1];
 int			g_nClientBlockTicks[MAXPLAYERS + 1];
 
-ConVar		sv_autobunnyhopping;
+ConVar		sv_autobunnyhopping = null;
+ConVar		sv_enablebunnyhopping = null;
+ConVar		sv_airaccelerate = null;
 
 public void OnPluginStart()
 {
@@ -122,7 +125,18 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 	RegPluginLibrary( "timer-core" );
 	
 	sv_autobunnyhopping = FindConVar( "sv_autobunnyhopping" );
-	sv_autobunnyhopping.BoolValue = false;
+	if( sv_autobunnyhopping )
+	{
+		sv_autobunnyhopping.BoolValue = false;
+	}
+	
+	sv_enablebunnyhopping = FindConVar( "sv_enablebunnyhopping" );
+	if( sv_enablebunnyhopping )
+	{
+		sv_enablebunnyhopping.Flags &= ~(FCVAR_NOTIFY | FCVAR_REPLICATED);
+	}
+	
+	sv_airaccelerate = FindConVar( "sv_airaccelerate" );
 
 	return APLRes_Success;
 }
@@ -144,11 +158,22 @@ public void OnClientAuthorized( int client, const char[] auth )
 	if( !IsFakeClient( client ) )
 	{
 		SQL_LoadPlayerID( client );
-		sv_autobunnyhopping.ReplicateToClient( client, "1" );
+		if( sv_autobunnyhopping )
+		{
+			sv_autobunnyhopping.ReplicateToClient( client, "1" );
+		}
 	}
 	
 	StopTimer( client );
 	ClearPlayerData( client );
+}
+
+public void OnClientPutInServer( int client )
+{
+	if( !IsFakeClient( client ) )
+	{
+		SDKHook( client, SDKHook_PreThinkPost, Hook_PreThinkPost );
+	}
 }
 
 public void OnClientDisconnect( int client )
@@ -163,7 +188,7 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 {
 	if( IsPlayerAlive( client ) )
 	{	
-		static any settings[styleSettings];
+		static any settings[eStyleSettings];
 		settings = g_StyleSettings[g_PlayerCurrentStyle[client]];
 		
 		int lastButtons = GetEntProp( client, Prop_Data, "m_nOldButtons" );
@@ -307,6 +332,19 @@ public Action OnPlayerRunCmd( int client, int& buttons, int& impulse, float vel[
 	Call_Finish();
 }
 
+public void Hook_PreThinkPost( int client )
+{
+	if( IsPlayerAlive( client ) )
+	{
+		sv_airaccelerate.FloatValue = g_StyleSettings[g_PlayerCurrentStyle[client]][AirAccelerate];
+		
+		if( sv_enablebunnyhopping )
+		{
+			sv_enablebunnyhopping.BoolValue = g_StyleSettings[g_PlayerCurrentStyle[client]][EnableBhop];
+		}
+	}
+}
+
 void ClearPlayerData( int client )
 {
 	g_nPlayerFrames[client] = 0;
@@ -385,7 +423,7 @@ void FinishTimer( int client )
 	
 		char sZoneTrack[64];
 		Timer_GetZoneTrackName( track, sZoneTrack, sizeof( sZoneTrack ) );
-		Timer_PrintToChatAll( "[{secondary}%s{white}] {name}%N {primary}finished on {secondary}%s {primary}timer in {secondary}%ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
+		Timer_PrintToChatAll( "[{secondary}%s{default}] {name}%N {primary}finished on {secondary}%s {primary}timer in {secondary}%ss", g_StyleSettings[style][StyleName], client, sZoneTrack, sTime );
 	}
 	
 	Call_StartForward( g_hForward_OnTimerFinishPost );
@@ -437,37 +475,39 @@ bool LoadStyles()
 			g_StyleSettingStrings[g_iTotalStyles].SetValue( settings[i], 0 ); // value isnt used, SM doesn't have a set type though so just use 0
 		}
 
-		g_StyleSettings[g_iTotalStyles][Ranked] = 			kvStyles.GetNum( "ranked", 1 ) != 0;
-		g_StyleSettings[g_iTotalStyles][AutoBhop] =			kvStyles.GetNum( "autobhop", 1 ) != 0;
-		g_StyleSettings[g_iTotalStyles][StartBhop] =			kvStyles.GetNum( "startbhop", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][Ranked]         = kvStyles.GetNum( "ranked", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][AutoBhop]       = kvStyles.GetNum( "autobhop", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][EnableBhop]     = kvStyles.GetNum( "enablebhop", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][StartBhop]      = kvStyles.GetNum( "startbhop", 0 ) != 0;
 
-		g_StyleSettings[g_iTotalStyles][Gravity] =			kvStyles.GetFloat( "gravity", 0.0 );
-		g_StyleSettings[g_iTotalStyles][Timescale] =			kvStyles.GetFloat( "timescale", 1.0 );
-		g_StyleSettings[g_iTotalStyles][MaxSpeed] =			kvStyles.GetFloat( "maxspeed", 0.0 );
-		g_StyleSettings[g_iTotalStyles][Fov] =				kvStyles.GetNum( "fov", 90 );
+		g_StyleSettings[g_iTotalStyles][AirAccelerate]  = kvStyles.GetFloat( "airaccelerate", 1000.0 );
+		g_StyleSettings[g_iTotalStyles][Gravity]        = kvStyles.GetFloat( "gravity", 0.0 );
+		g_StyleSettings[g_iTotalStyles][Timescale]      = kvStyles.GetFloat( "timescale", 1.0 );
+		g_StyleSettings[g_iTotalStyles][MaxSpeed]       = kvStyles.GetFloat( "maxspeed", 0.0 );
+		g_StyleSettings[g_iTotalStyles][Fov]            = kvStyles.GetNum( "fov", 90 );
 
-		g_StyleSettings[g_iTotalStyles][Sync] =				kvStyles.GetNum( "sync", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][Sync]           = kvStyles.GetNum( "sync", 1 ) != 0;
 
-		g_StyleSettings[g_iTotalStyles][PreventLeft] =		kvStyles.GetNum( "prevent_left", 0 ) != 0;
-		g_StyleSettings[g_iTotalStyles][PreventRight] =		kvStyles.GetNum( "prevent_right", 0 ) != 0;
-		g_StyleSettings[g_iTotalStyles][PreventForward] =	kvStyles.GetNum( "prevent_forward", 0 ) != 0;
-		g_StyleSettings[g_iTotalStyles][PreventBack] =		kvStyles.GetNum( "prevent_back", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventLeft]    = kvStyles.GetNum( "prevent_left", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventRight]   = kvStyles.GetNum( "prevent_right", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventForward] = kvStyles.GetNum( "prevent_forward", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][PreventBack]    = kvStyles.GetNum( "prevent_back", 0 ) != 0;
 
-		g_StyleSettings[g_iTotalStyles][CountLeft] =			kvStyles.GetNum( "count_left", 1 ) != 0;
-		g_StyleSettings[g_iTotalStyles][CountRight] =		kvStyles.GetNum( "count_right", 1 ) != 0;
-		g_StyleSettings[g_iTotalStyles][CountForward] =		kvStyles.GetNum( "count_forward", 0 ) != 0;
-		g_StyleSettings[g_iTotalStyles][CountBack] = 		kvStyles.GetNum( "count_back", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountLeft]      = kvStyles.GetNum( "count_left", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountRight]     = kvStyles.GetNum( "count_right", 1 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountForward]   = kvStyles.GetNum( "count_forward", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][CountBack]      = kvStyles.GetNum( "count_back", 0 ) != 0;
 		
-		g_StyleSettings[g_iTotalStyles][HSW] = 				kvStyles.GetNum( "hsw", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][HSW]            = kvStyles.GetNum( "hsw", 0 ) != 0;
 		
-		g_StyleSettings[g_iTotalStyles][PreSpeed] = 			kvStyles.GetFloat( "prespeed", 290.0 );
+		g_StyleSettings[g_iTotalStyles][PreSpeed]       = kvStyles.GetFloat( "prespeed", 290.0 );
 
-		g_StyleSettings[g_iTotalStyles][MainReplayBot] = 	kvStyles.GetNum( "main_bot", 0 ) != 0;
-		g_StyleSettings[g_iTotalStyles][BonusReplayBot] =	kvStyles.GetNum( "bonus_bot", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][MainReplayBot]  = kvStyles.GetNum( "main_bot", 0 ) != 0;
+		g_StyleSettings[g_iTotalStyles][BonusReplayBot] = kvStyles.GetNum( "bonus_bot", 0 ) != 0;
 		
-		g_StyleSettings[g_iTotalStyles][ExpMultiplier] = 	kvStyles.GetFloat( "expmultiplier", 1.0 );
+		g_StyleSettings[g_iTotalStyles][ExpMultiplier]  = kvStyles.GetFloat( "expmultiplier", 1.0 );
 
-		g_StyleSettings[g_iTotalStyles][StyleId] = 			g_iTotalStyles;
+		g_StyleSettings[g_iTotalStyles][StyleId]        = g_iTotalStyles;
 
 		
 		char splitString[16][32];
@@ -524,8 +564,11 @@ public void SetClientStyle( int client, int style )
 	
 	SetEntPropFloat( client, Prop_Data, "m_flLaggedMovementValue", view_as<float>( g_StyleSettings[style][Timescale] ) );
 	
-	sv_autobunnyhopping.ReplicateToClient( client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
-	Timer_DebugPrint( "SetClientStyle: Set %N sv_autobunnyhopping=%s", client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
+	if( sv_autobunnyhopping )
+	{
+		sv_autobunnyhopping.ReplicateToClient( client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
+		Timer_DebugPrint( "SetClientStyle: Set %N sv_autobunnyhopping=%s", client, g_StyleSettings[style][AutoBhop] ? "1" : "0" );
+	}
 	
 	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 	
@@ -617,6 +660,11 @@ public Action HookEvent_PlayerJump( Event event, const char[] name, bool dontBro
 			RequestFrame( LimitSpeed, pack );
 		}
 	}
+	
+	if( g_StyleSettings[g_PlayerCurrentStyle[client]][EnableBhop] )
+	{
+		SetEntPropFloat( client, Prop_Send, "m_flStamina", 0.0 );
+	}
 }
 
 public void LimitSpeed( DataPack pack )
@@ -643,7 +691,7 @@ void SQL_DBConnect()
 	delete g_hDatabase;
 	
 	char error[256];
-	g_hDatabase = SQL_Connect( "Slidy-Timer", true, error, sizeof(error) );
+	g_hDatabase = SQL_Connect( "slidy-timer", true, error, sizeof(error) );
 
 	if( g_hDatabase == null )
 	{
@@ -1143,7 +1191,7 @@ public int Native_GetStyleCount( Handle handler, int numParams )
 
 public int Native_GetStyleSettings( Handle handler, int numParams )
 {
-	SetNativeArray( 2, g_StyleSettings[GetNativeCell( 1 )], styleSettings );
+	SetNativeArray( 2, g_StyleSettings[GetNativeCell( 1 )], eStyleSettings );
 }
 
 public int Native_GetStyleName( Handle handler, int numParams )

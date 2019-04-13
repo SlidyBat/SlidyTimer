@@ -1,3 +1,0 @@
-	<font color='{rainbow}'>c00l<font color='#FFFFFF'>Timer</font></font><b>
-<font size='15' face='Arial'>Time: {time}	Speed: {speed}
-Player: {replayname}

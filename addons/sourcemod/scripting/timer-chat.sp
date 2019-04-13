@@ -2,10 +2,13 @@
 #include <slidy-timer>
 #include <clientprefs>
 
+#define TIMER_PREFIX "\x01[{blue}Timer{default}] "
+
 typedef SelectColourCB = function void ( int client, int colour, any data );
 
-char g_cColourCodes[][] = 
+char g_cCSGOColourCodes[][] = 
 {
+	"\x01",
 	"\x01",
 	"\x07",
 	"\x0F",
@@ -24,8 +27,30 @@ char g_cColourCodes[][] =
 	"\x03",
 }
 
+char g_cCSSColourCodes[][] = 
+{
+	"\x01",
+	"\x07ffffff",
+	"\x07ff0000",
+	"\x07ff3333",
+	"\x07660000",
+	"\x0799ccff",
+	"\x070080ff",
+	"\x070000ff",
+	"\x07ff00ff",
+	"\x07ffff00",
+	"\x07ffd700",
+	"\x0766ff66",
+	"\x0700ff00",
+	"\x07009900",
+	"\x07a0a0a0",
+	"\x07808080",
+	"\x03",
+}
+
 char g_cColourNames[][] = 
 {
+	"{default}",
 	"{white}",
 	"{red}",
 	"{lightred}",
@@ -46,6 +71,7 @@ char g_cColourNames[][] =
 
 char g_cColourDisplayNames[][] = 
 {
+	"Default",
 	"White",
 	"Red",
 	"Light Red",
@@ -72,6 +98,8 @@ enum
 	Colour_Message,
 	TOTAL_COLOUR_SETTINGS
 }
+
+EngineVersion g_EngineVersion;
 
 SelectColourCB g_SelectColourCB[MAXPLAYERS + 1];
 any g_SelectColourData[MAXPLAYERS + 1];
@@ -105,6 +133,8 @@ public APLRes AskPluginLoad2( Handle myself, bool late, char[] error, int err_ma
 
 public void OnPluginStart()
 {
+	g_EngineVersion = GetEngineVersion();
+	
 	g_hCookiePrimaryColour = RegClientCookie( "sm_primary_colour", "Timer primary colour", CookieAccess_Protected );
 	g_hCookieSecondaryColour = RegClientCookie( "sm_secondary_colour", "Timer secondary colour", CookieAccess_Protected );
 	g_hCookieNameColour = RegClientCookie( "sm_name_colour", "Timer name colour", CookieAccess_Protected );
@@ -149,7 +179,14 @@ void OpenSelectColourMenu( int client, SelectColourCB callback, any data = 0 )
 	
 	for( int i = 0; i < sizeof(g_cColourDisplayNames); i++ )
 	{
-		menu.AddItem( g_cColourCodes[i], g_cColourDisplayNames[i] );
+		if( g_EngineVersion == Engine_CSGO )
+		{
+			menu.AddItem( g_cCSGOColourCodes[i], g_cColourDisplayNames[i] );
+		}
+		else
+		{
+			menu.AddItem( g_cCSSColourCodes[i], g_cColourDisplayNames[i] );
+		}
 	}
 	
 	menu.Display( client, MENU_TIME_FOREVER );
@@ -231,17 +268,36 @@ void RemoveColours( char[] message, int maxlen )
 
 void InsertColours( char[] message, int maxlen )
 {
-	for( int i = 0; i < sizeof(g_cColourNames); i++ )
+	if( g_EngineVersion == Engine_CSGO )
 	{
-		ReplaceString( message, maxlen, g_cColourNames[i], g_cColourCodes[i] );
+		for( int i = 0; i < sizeof(g_cColourNames); i++ )
+		{
+			ReplaceString( message, maxlen, g_cColourNames[i], g_cCSGOColourCodes[i] );
+		}
 	}
+	else
+	{
+		for( int i = 0; i < sizeof(g_cColourNames); i++ )
+		{
+			ReplaceString( message, maxlen, g_cColourNames[i], g_cCSSColourCodes[i] );
+		}
+	}	
 }
 
 void InsertClientColours( int client, char[] message, int maxlen )
 {
-	ReplaceString( message, maxlen, "{primary}", g_cColourCodes[g_iColourSettings[client][Colour_Primary]] );
-	ReplaceString( message, maxlen, "{secondary}", g_cColourCodes[g_iColourSettings[client][Colour_Secondary]] );
-	ReplaceString( message, maxlen, "{name}", g_cColourCodes[g_iColourSettings[client][Colour_Name]] );
+	if( g_EngineVersion == Engine_CSGO )
+	{
+		ReplaceString( message, maxlen, "{primary}", g_cCSGOColourCodes[g_iColourSettings[client][Colour_Primary]] );
+		ReplaceString( message, maxlen, "{secondary}", g_cCSGOColourCodes[g_iColourSettings[client][Colour_Secondary]] );
+		ReplaceString( message, maxlen, "{name}", g_cCSGOColourCodes[g_iColourSettings[client][Colour_Name]] );
+	}
+	else
+	{
+		ReplaceString( message, maxlen, "{primary}", g_cCSSColourCodes[g_iColourSettings[client][Colour_Primary]] );
+		ReplaceString( message, maxlen, "{secondary}", g_cCSSColourCodes[g_iColourSettings[client][Colour_Secondary]] );
+		ReplaceString( message, maxlen, "{name}", g_cCSSColourCodes[g_iColourSettings[client][Colour_Name]] );
+	}
 }
 
 // Commands
@@ -264,7 +320,7 @@ public int Native_PrintToChat( Handle handler, int numParams )
 	
 	Timer_DebugPrint( buffer );
 	
-	Format( buffer, sizeof(buffer), "[{blue}Timer{white}] %s", buffer );
+	Format( buffer, sizeof(buffer), TIMER_PREFIX ... "%s", buffer );
 	InsertColours( buffer, sizeof(buffer) );
 	
 	int client = GetNativeCell( 1 );
@@ -280,7 +336,7 @@ public int Native_PrintToChatAll( Handle handler, int numParams )
 	char buffer[512];
 	FormatNativeString( 0, 1, 2, sizeof(buffer), _, buffer );
 	
-	Format( buffer, sizeof(buffer), "[{blue}Timer{white}] %s", buffer );
+	Format( buffer, sizeof(buffer), TIMER_PREFIX ... "%s", buffer );
 	InsertColours( buffer, sizeof(buffer) );
 	
 	char buffer2[256];
@@ -303,7 +359,7 @@ public int Native_PrintToAdmins( Handle handler, int numParams )
 	char buffer[512];
 	FormatNativeString( 0, 1, 2, sizeof(buffer), _, buffer );
 	
-	Format( buffer, sizeof(buffer), "[{blue}Timer{white}] %s", buffer );
+	Format( buffer, sizeof(buffer), TIMER_PREFIX ... "%s", buffer );
 	InsertColours( buffer, sizeof(buffer) );
 	
 	int flags = GetNativeCell( 1 );
@@ -331,7 +387,7 @@ public int Native_ReplyToCommand( Handle handler, int numParams )
 	int client = GetNativeCell( 1 );
 	if( GetCmdReplySource() == SM_REPLY_TO_CHAT )
 	{
-		Format( buffer, sizeof(buffer), "[{blue}Timer{white}] %s", buffer );
+		Format( buffer, sizeof(buffer), TIMER_PREFIX ... "%s", buffer );
 		InsertColours( buffer, sizeof(buffer) );
 		InsertClientColours( client, buffer, sizeof(buffer) );
 		
