@@ -86,7 +86,6 @@ public void OnPluginStart()
 	
 	for( int i = 1; i <= MaxClients; i++ )
 	{
-		g_aCheckpoints[i] = new ArrayList( view_as<int>(eCheckpoint) );
 		if( IsClientInGame( i ) )
 		{
 			OnClientPutInServer( i );
@@ -113,6 +112,7 @@ public void OnMapStart()
 
 public void OnClientPutInServer( int client )
 {
+	g_aCheckpoints[client] = new ArrayList( view_as<int>(eCheckpoint) );
 	int length = g_aCheckpoints[client].Length;
 	for( int i = 0; i < length; i++ )
 	{
