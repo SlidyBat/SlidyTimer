@@ -458,7 +458,7 @@ void InitializeBot( int client, int replaytype, int botid )
 	g_iBotType[client] = replaytype;
 	
 	SetBotName( client );
-	ChangeClientTeam( client, CS_TEAM_CT );
+	CS_SwitchTeam( client, CS_TEAM_CT );
 	Timer_TeleportClientToZone( client, Zone_Start, ZoneTrack_Main );
 }
 

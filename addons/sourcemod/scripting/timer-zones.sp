@@ -920,7 +920,7 @@ public Action Command_Restart( int client, int args )
 {
 	if( !IsPlayerAlive( client ) )
 	{
-		ChangeClientTeam( client, CS_TEAM_T );
+		CS_SwitchTeam( client, CS_TEAM_T );
 	}
 	
 	Timer_BlockTimer( client, 1 );
@@ -933,7 +933,7 @@ public Action Command_Bonus( int client, int args )
 {
 	if( !IsPlayerAlive( client ) )
 	{
-		ChangeClientTeam( client, CS_TEAM_T );
+		CS_SwitchTeam( client, CS_TEAM_T );
 	}
 	
 	Timer_BlockTimer( client, 1 );
@@ -946,7 +946,7 @@ public Action Command_End( int client, int args )
 {
 	if( !IsPlayerAlive( client ) )
 	{
-		ChangeClientTeam( client, CS_TEAM_T );
+		CS_SwitchTeam( client, CS_TEAM_T );
 	}
 	
 	Timer_BlockTimer( client, 1 );
@@ -959,7 +959,7 @@ public Action Command_BonusEnd( int client, int args )
 {
 	if( !IsPlayerAlive( client ) )
 	{
-		ChangeClientTeam( client, CS_TEAM_T );
+		CS_SwitchTeam( client, CS_TEAM_T );
 	}
 	
 	Timer_BlockTimer( client, 1 );
@@ -974,7 +974,7 @@ public Action Command_JoinTeam( int client, const char[] command, int args )
 	GetCmdArg( 1, arg, 32 );
 	
 	int value = StringToInt( arg );
-	ChangeClientTeam( client, value );
+	CS_SwitchTeam( client, value );
 
 	if( value > 1 )
 	{

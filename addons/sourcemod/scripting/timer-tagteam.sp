@@ -1891,8 +1891,9 @@ void PassToNext( int client, int next, any checkpoint[eCheckpoint], bool usecp =
 	{
 		Timer_SetClientCheckpoint( next, -1, checkpoint );
 	}
+	
 	ChangeClientTeam( next, CS_TEAM_SPECTATOR );
-	ChangeClientTeam( next, CS_TEAM_T );
+	CS_SwitchTeam( next, CS_TEAM_T );
 	CS_RespawnPlayer( next );
 	
 	for( int i = 1; i <= MaxClients; i++ )
