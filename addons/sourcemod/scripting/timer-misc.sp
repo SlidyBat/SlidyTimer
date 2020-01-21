@@ -121,24 +121,6 @@ public void OnPluginStart()
 public void OnMapStart()
 {
 	GetCurrentMap( g_cCurrentMap, sizeof( g_cCurrentMap ) );
-
-	char path[PLATFORM_MAX_PATH];
-	FormatEx( path, sizeof( path ), "maps/%s.nav", g_cCurrentMap );
-
-	/* Automatically generate nav file if one doesn't exist (from shavits) */
-	if( !FileExists( path ) )
-	{
-		if( File_Copy( "maps/replay.nav", path ) )
-		{
-			
-			Format( path, sizeof( path ), "%s.nav file generated", g_cCurrentMap );
-			ForceChangeLevel( g_cCurrentMap, path );
-		}
-		else
-		{
-			LogError( "Could not copy 'maps/replay.nav', failed to auto-generate nav file" );
-		}
-	}
 	
 	if ( g_cvCreateSpawnPoints.IntValue > 0 )
 	{

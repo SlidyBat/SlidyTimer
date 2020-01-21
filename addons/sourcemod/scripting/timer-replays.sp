@@ -352,9 +352,28 @@ public void Timer_OnRecordDeleted( int track, int style, int recordid )
 	}
 }
 
+// NOTE: Can run before OnMapStart
 public void Timer_OnStylesLoaded( int totalstyles )
 {
 	GetCurrentMap( g_cCurrentMap, sizeof(g_cCurrentMap) );
+
+	char path[PLATFORM_MAX_PATH];
+	FormatEx( path, sizeof( path ), "maps/%s.nav", g_cCurrentMap );
+
+	/* Automatically generate nav file if one doesn't exist (from shavits) */
+	if( !FileExists( path ) )
+	{
+		if( File_Copy( "maps/replay.nav", path ) )
+		{
+			
+			Format( path, sizeof( path ), "%s.nav file generated", g_cCurrentMap );
+			ForceChangeLevel( g_cCurrentMap, path );
+		}
+		else
+		{
+			LogError( "Could not copy 'maps/replay.nav', failed to auto-generate nav file" );
+		}
+	}
 
 	// load specific bots
 	for( int i = 0; i < TOTAL_ZONE_TRACKS; i++ )
